@@ -1,7 +1,7 @@
-// Vul deze twee publieke waarden in na het aanmaken van je Supabase-project.
-// De service-role key en de voetbal-API-key horen NOOIT in dit bestand.
+// Publieke Supabase browserconfig.
+// De service-role/secret key en de voetbal-API-key horen NOOIT in dit bestand.
 window.FANTASY_CONFIG = {
-  supabaseUrl: "",
-  supabaseAnonKey: "",
+  supabaseUrl: "https://wjjtbnvushxjlqdkqbls.supabase.co",
+  supabaseAnonKey: "sb_publishable_3KhrPLXEBo2WdbzpRmQ80w_-XxO6cfZ",
   season: 2026
 };
