@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#071421" />
+  <title>Fantasy Jupiler Pro League</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">FJ</div>
+      <div>
+        <h1>Fantasy Jupiler Pro League</h1>
+        <p>Seizoen 2026/27</p>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div><span>Budget</span><strong id="budgetDisplay">€100,0M</strong></div>
+      <div><span>Selectie</span><strong id="squadDisplay">0 / 8</strong></div>
+      <div><span>Punten</span><strong id="pointsDisplay">0</strong></div>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Hoofdnavigatie">
+    <button class="tab active" data-tab="team">Mijn team</button>
+    <button class="tab" data-tab="market">Transfermarkt</button>
+    <button class="tab" data-tab="leaderboard">Leaderboard</button>
+    <button class="tab" data-tab="matches">Wedstrijden</button>
+    <button class="tab" data-tab="rules">Regels</button>
+  </nav>
+
+  <main>
+    <section id="team" class="panel tab-panel active">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">TEAMBUILDER</p>
+          <h2>Mijn selectie</h2>
+          <p class="muted">Koop exact 2 keepers, 2 verdedigers, 2 middenvelders en 2 aanvallers. Kies daarna 6 basisspelers en 2 bankspelers.</p>
+        </div>
+        <div class="team-name-wrap">
+          <label for="teamName">Teamnaam</label>
+          <input id="teamName" maxlength="28" value="Mijn Fantasy Team" />
+        </div>
+      </div>
+
+      <div class="squad-requirements" id="requirements"></div>
+
+      <div class="lineup-grid">
+        <section class="lineup-card">
+          <div class="card-title-row">
+            <h3>Basis · 6 spelers</h3>
+            <span class="pill">1 GK + 5 veldspelers</span>
+          </div>
+          <div id="startingXI" class="pitch-list empty-state">Koop spelers op de transfermarkt om je team te bouwen.</div>
+        </section>
+        <section class="lineup-card">
+          <div class="card-title-row">
+            <h3>Bank · 2 spelers</h3>
+            <span class="pill secondary">1 GK + 1 veldspeler</span>
+          </div>
+          <div id="bench" class="bench-list empty-state">Je bank wordt zichtbaar zodra je spelers hebt gekocht.</div>
+          <p class="bench-note">De bank scoort alleen wanneer een basisspeler niet speelt. De reservekeeper kan alleen de keeper vervangen; de veldspeler kan alleen DEF/MID/FWD vervangen.</p>
+        </section>
+      </div>
+
+      <div class="team-actions">
+        <button id="autoLineupBtn" class="btn secondary-btn" disabled>Automatische opstelling</button>
+        <button id="resetBtn" class="btn danger-btn">Selectie wissen</button>
+      </div>
+    </section>
+
+    <section id="market" class="panel tab-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">TRANSFERMARKT</p>
+          <h2>Koop spelers</h2>
+          <p class="muted">Startbudget €100M. De prijzen hieronder zijn voorlopige fantasy-prijzen en geen officiële marktwaarden.</p>
+        </div>
+      </div>
+
+      <div class="filters">
+        <label class="search-box">
+          <span>Zoeken</span>
+          <input id="playerSearch" type="search" placeholder="Naam of club..." />
+        </label>
+        <label>
+          <span>Positie</span>
+          <select id="positionFilter">
+            <option value="ALL">Alle posities</option>
+            <option value="GK">Keeper</option>
+            <option value="DEF">Verdediger</option>
+            <option value="MID">Middenvelder</option>
+            <option value="FWD">Aanvaller</option>
+          </select>
+        </label>
+        <label>
+          <span>Club</span>
+          <select id="clubFilter"><option value="ALL">Alle clubs</option></select>
+        </label>
+        <label>
+          <span>Sorteren</span>
+          <select id="sortFilter">
+            <option value="price-desc">Prijs hoog → laag</option>
+            <option value="price-asc">Prijs laag → hoog</option>
+            <option value="minutes-desc">Minuten hoog → laag</option>
+            <option value="name">Naam A → Z</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="market-summary">
+        <span id="marketCount"></span>
+        <span id="selectionWarning" class="warning-text"></span>
+      </div>
+      <div id="playerGrid" class="player-grid"></div>
+    </section>
+
+    <section id="leaderboard" class="panel tab-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">VRIENDEN</p>
+          <h2>Leaderboard</h2>
+          <p class="muted">In deze eerste GitHub Pages-versie wordt jouw team lokaal bewaard. Het gedeelde vriendenleaderboard wordt gekoppeld zodra de backend/database actief is.</p>
+        </div>
+      </div>
+      <div class="leaderboard-card">
+        <div class="leader-row current-user">
+          <span class="rank">1</span>
+          <div><strong id="leaderTeamName">Mijn Fantasy Team</strong><small>Jij</small></div>
+          <strong id="leaderPoints">0 pts</strong>
+        </div>
+        <div class="leader-row demo"><span class="rank">–</span><div><strong>Vriendenteams</strong><small>Wachten op multiplayer database</small></div><strong>—</strong></div>
+      </div>
+    </section>
+
+    <section id="matches" class="panel tab-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">JUPILER PRO LEAGUE</p>
+          <h2>Vorige wedstrijden</h2>
+          <p class="muted">Recente 2026/27-resultaten als startdata. Later wordt deze pagina automatisch uit de voetbal-API gevuld.</p>
+        </div>
+      </div>
+      <div id="matchesList" class="matches-list"></div>
+    </section>
+
+    <section id="rules" class="panel tab-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">SPELREGELS</p>
+          <h2>Fantasyregels & puntentelling</h2>
+        </div>
+      </div>
+
+      <div class="rule-cards">
+        <article><strong>€100M</strong><span>Startbudget per manager</span></article>
+        <article><strong>8</strong><span>Spelers in je selectie</span></article>
+        <article><strong>6 + 2</strong><span>Basis + bank</span></article>
+        <article><strong>∞</strong><span>Geen maximumscore</span></article>
+      </div>
+
+      <div class="rules-copy">
+        <p><strong>Selectie:</strong> exact 2 GK, 2 DEF, 2 MID en 2 FWD. Iedere speler start op 0 fantasy-punten.</p>
+        <p><strong>Bank:</strong> exact één keeper en één veldspeler. Bankpunten tellen niet tenzij een basisspeler niet speelt en de bankspeler volgens de positie-regels mag invallen.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table id="scoringTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
