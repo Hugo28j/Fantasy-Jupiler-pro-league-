@@ -138,6 +138,24 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56
 .match-row .home{text-align:right}
 .match-score{font-size:18px;font-weight:900;background:#06131e;border-radius:9px;padding:7px 10px}
 .matchweek{color:var(--muted);font-size:11px;text-align:right}
+.balance-panel{margin-top:22px;padding:18px;background:linear-gradient(180deg,rgba(17,38,56,.95),rgba(10,27,41,.95));border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow)}
+.balance-panel h3{margin:3px 0 0;font-size:clamp(20px,3vw,28px)}
+.pill.live{color:#8df0b5;border-color:rgba(56,210,122,.4);background:rgba(56,210,122,.08)}
+.balance-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}
+.balance-summary article{padding:14px;border:1px solid var(--border);border-radius:13px;background:#0b1d2c}
+.balance-summary span,.balance-summary small{display:block;color:var(--muted);font-size:11px}
+.balance-summary strong{display:block;margin-top:4px;font-size:21px}
+.balance-summary small{margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.position-balance{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:14px}
+.position-balance article{display:flex;align-items:center;gap:9px;padding:11px;border:1px solid var(--border);border-radius:12px;background:rgba(0,0,0,.14)}
+.position-balance strong,.position-balance small{display:block}
+.position-balance small{color:var(--muted);font-size:10px;margin-top:3px}
+.balance-notice{margin:12px 0;color:#b9c7d2;line-height:1.5;font-size:13px}
+.balance-notice.warning{color:#f7d985}
+.balance-table-wrap{max-height:560px;border:1px solid var(--border);border-radius:12px}
+.balance-table-wrap th{top:0}
+.balance-player-link{border:0;background:transparent;color:var(--text);font-weight:900;padding:0;white-space:nowrap}
+.balance-player-link:hover{color:var(--accent);text-decoration:underline}
 .rule-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .rule-cards article{padding:17px;border:1px solid var(--border);background:var(--panel);border-radius:14px}
 .rule-cards strong{font-size:26px;color:var(--accent);display:block}
@@ -171,6 +189,7 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .match-row .date,.matchweek{display:none}
   .filters{grid-template-columns:1fr 1fr}
   .profile-stats{grid-template-columns:repeat(2,1fr)}
+  .balance-summary,.position-balance{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:500px){
   .player-grid{grid-template-columns:1fr}
@@ -184,4 +203,5 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .profile-match{grid-template-columns:1fr auto}
   .profile-match>strong{grid-column:2}
   .history-lineup{grid-template-columns:1fr}
+  .balance-summary,.position-balance{grid-template-columns:1fr}
 }

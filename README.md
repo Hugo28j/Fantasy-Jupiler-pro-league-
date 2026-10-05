@@ -8,4 +8,6 @@ Spelregels: €100M budget, gebalanceerde prijzen van €1M tot €25M met Hans 
 
 De demodata bevat minstens 15 spelers per club en de volledige officiële selectie van Club Brugge. Met de backend actief toont het leaderboard totaal- en speeldagscores, klikbare teamhistoriek en spelersfiches met statistieken per wedstrijd.
 
+De pagina **Wedstrijden** bevat de negen uitslagen van de laatste afgewerkte JPL-speeldag en een balansdashboard. De beveiligde API‑Football-sync importeert de nieuwste volledige speeldag, berekent de fantasy-score van iedere speler en vergelijkt de gemiddelden van keepers, verdedigers, middenvelders en aanvallers.
+
 Zie [BACKEND_SETUP.md](BACKEND_SETUP.md) om de online functies te activeren.

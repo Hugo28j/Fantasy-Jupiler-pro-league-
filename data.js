@@ -384,13 +384,15 @@ const EXTRA_PLAYERS = [
 PLAYERS.push(...EXTRA_PLAYERS);
 
 const MATCHES = [
-  {date:"7 aug 2026",week:"Speeldag 1",home:"Club Brugge",away:"KV Kortrijk",homeScore:3,awayScore:0},
-  {date:"8 aug 2026",week:"Speeldag 1",home:"Standard de Liège",away:"Cercle Brugge",homeScore:2,awayScore:2},
-  {date:"15 aug 2026",week:"Speeldag 2",home:"KV Kortrijk",away:"Royal Antwerp FC",homeScore:0,awayScore:3},
-  {date:"20 sep 2026",week:"Speeldag 7",home:"KV Kortrijk",away:"SK Beveren",homeScore:1,awayScore:0},
-  {date:"Recent",week:"Speeldag 7",home:"Royal Antwerp FC",away:"Royale Union Saint-Gilloise",homeScore:0,awayScore:2},
-  {date:"Recent",week:"Speeldag 7",home:"STVV",away:"KVC Westerlo",homeScore:0,awayScore:2},
-  {date:"Recent",week:"Speeldag 7",home:"Sporting Charleroi",away:"Cercle Brugge",homeScore:3,awayScore:2}
+  {date:"18 sep 2026",week:"Speeldag 7",home:"KAA Gent",away:"Standard de Liège",homeScore:2,awayScore:1},
+  {date:"19 sep 2026",week:"Speeldag 7",home:"OH Leuven",away:"RAAL La Louvière",homeScore:2,awayScore:0},
+  {date:"19 sep 2026",week:"Speeldag 7",home:"Sporting Charleroi",away:"Cercle Brugge",homeScore:3,awayScore:2},
+  {date:"19 sep 2026",week:"Speeldag 7",home:"Lommel SK",away:"KV Mechelen",homeScore:0,awayScore:0},
+  {date:"19 sep 2026",week:"Speeldag 7",home:"RSC Anderlecht",away:"SV Zulte Waregem",homeScore:3,awayScore:0},
+  {date:"20 sep 2026",week:"Speeldag 7",home:"Royal Antwerp FC",away:"Royale Union Saint-Gilloise",homeScore:0,awayScore:2},
+  {date:"20 sep 2026",week:"Speeldag 7",home:"STVV",away:"KVC Westerlo",homeScore:0,awayScore:2},
+  {date:"20 sep 2026",week:"Speeldag 7",home:"Club Brugge",away:"KRC Genk",homeScore:3,awayScore:0},
+  {date:"20 sep 2026",week:"Speeldag 7",home:"KV Kortrijk",away:"SK Beveren",homeScore:1,awayScore:0}
 ];
 
 const SCORING = {

@@ -143,11 +143,35 @@
       <div class="section-head">
         <div>
           <p class="eyebrow">JUPILER PRO LEAGUE</p>
-          <h2>Vorige wedstrijden</h2>
-          <p class="muted">Recente 2026/27-resultaten als startdata. Later wordt deze pagina automatisch uit de voetbal-API gevuld.</p>
+          <h2>Speeldag 7 · balansproef</h2>
+          <p class="muted">De 9 wedstrijden van de laatste volledig afgewerkte speeldag. Met de backend actief worden alle beschikbare spelerstatistieken via API‑Football ingelezen en door jullie eigen puntentabel berekend.</p>
         </div>
       </div>
       <div id="matchesList" class="matches-list"></div>
+
+      <section class="balance-panel" aria-labelledby="balanceTitle">
+        <div class="card-title-row">
+          <div>
+            <p class="eyebrow">PUNTENBALANS</p>
+            <h3 id="balanceTitle">Wat doet het puntensysteem met één volledige speeldag?</h3>
+          </div>
+          <span id="balanceSource" class="pill secondary">Wacht op API-data</span>
+        </div>
+        <div id="balanceSummary" class="balance-summary">
+          <article><span>Wedstrijden</span><strong>9</strong></article>
+          <article><span>Spelers met minuten</span><strong>—</strong></article>
+          <article><span>Gemiddelde score</span><strong>—</strong></article>
+          <article><span>Hoogste score</span><strong>—</strong></article>
+        </div>
+        <div id="positionBalance" class="position-balance"></div>
+        <p id="balanceNotice" class="balance-notice">Voer migratie 004 en de beveiligde API‑Football-sync uit om de echte spelersscores te zien.</p>
+        <div class="table-wrap balance-table-wrap">
+          <table id="balanceTable">
+            <thead></thead>
+            <tbody><tr><td>Nog geen verwerkte spelerstatistieken.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <section id="rules" class="panel tab-panel">

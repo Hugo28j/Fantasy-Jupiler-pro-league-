@@ -120,6 +120,11 @@ Deno.serve(async request => {
       if(!byRound.has(number)) byRound.set(number,[]);
       byRound.get(number)!.push(item);
     }
+    const latestCompletedRound = [...byRound.entries()]
+      .filter(([,games]) => games.length === 9 && games.every(game => FINISHED.has(game.fixture.status.short)))
+      .sort(([a],[b]) => b-a)[0];
+    if(!latestCompletedRound) throw new Error("Geen volledig afgewerkte JPL-speeldag met 9 wedstrijden gevonden.");
+    const [latestCompletedNumber] = latestCompletedRound;
 
     const gameweekIds = new Map<number,number>();
     for(const [number,games] of byRound){
@@ -170,14 +175,26 @@ Deno.serve(async request => {
       if(error) throw error;
     }
 
-    const {data:pending,error:pendingError} = await db.from("fixtures").select("id,gameweek_id").in("status",[...FINISHED]).eq("stats_processed",false).limit(25);
+    const latestCompletedId = gameweekIds.get(latestCompletedNumber);
+    if(!latestCompletedId) throw new Error(`Speeldag ${latestCompletedNumber} ontbreekt in de database.`);
+    const {data:pending,error:pendingError} = await db
+      .from("fixtures")
+      .select("id,gameweek_id,kickoff")
+      .eq("gameweek_id",latestCompletedId)
+      .in("status",[...FINISHED])
+      .order("kickoff",{ascending:true});
     if(pendingError) throw pendingError;
     const rawFixture = new Map(fixtures.map((f:any) => [f.fixture.id,f]));
     const touchedGameweeks = new Set<number>();
+    let processedFixtures = 0;
+    let importedPlayerRows = 0;
 
     for(const fixture of pending || []){
       const payload = await football(`/fixtures/players?fixture=${fixture.id}`);
       const sourceFixture:any = rawFixture.get(fixture.id);
+      if(!payload.response?.length){
+        throw new Error(`API-FOOTBALL heeft nog geen spelerstatistieken voor wedstrijd ${fixture.id}.`);
+      }
       const rows:any[] = [];
       for(const teamBlock of payload.response || []){
         const isHome = sourceFixture && teamBlock.team.id === sourceFixture.teams.home.id;
@@ -199,10 +216,12 @@ Deno.serve(async request => {
       if(rows.length){
         const {error} = await db.from("player_match_stats").upsert(rows,{onConflict:"fixture_id,player_id"});
         if(error) throw error;
+        importedPlayerRows += rows.length;
       }
       const {error} = await db.from("fixtures").update({stats_processed:true,updated_at:new Date().toISOString()}).eq("id",fixture.id);
       if(error) throw error;
       touchedGameweeks.add(fixture.gameweek_id);
+      processedFixtures += 1;
     }
 
     for(const [number,id] of gameweekIds){
@@ -213,7 +232,18 @@ Deno.serve(async request => {
     for(const id of touchedGameweeks) await db.rpc("recalculate_gameweek_scores",{p_gameweek_id:id});
     await db.rpc("refresh_player_totals");
 
-    return Response.json({ok:true,season,league,fixtures:fixtureRows.length,players:playerRows.length,processedFixtures:(pending || []).length,durationMs:Date.now()-started});
+    return Response.json({
+      ok:true,
+      season,
+      league,
+      latestCompletedGameweek:latestCompletedNumber,
+      latestCompletedFixtures:(pending || []).length,
+      fixtures:fixtureRows.length,
+      players:playerRows.length,
+      processedFixtures,
+      importedPlayerRows,
+      durationMs:Date.now()-started
+    });
   }catch(error){
     console.error(error);
     return Response.json({ok:false,error:error instanceof Error ? error.message : String(error)},{status:500});

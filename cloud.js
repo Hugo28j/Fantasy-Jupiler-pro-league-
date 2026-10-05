@@ -225,6 +225,16 @@
     renderMatches();
   }
 
+  async function loadGameweekBalance(){
+    const {data,error} = await cloud.client.rpc("latest_gameweek_balance");
+    if(error){
+      console.warn("Balansdata nog niet beschikbaar",error.message);
+      renderGameweekBalance([]);
+      return;
+    }
+    renderGameweekBalance(data || []);
+  }
+
   async function loadTeam(){
     if(!cloud.user) return;
     const {data,error} = await cloud.client.from("teams").select("team_name,squad_ids,bench_gk_id,bench_outfield_id,total_points").eq("user_id",cloud.user.id).maybeSingle();
@@ -361,7 +371,7 @@
     try{
       setStatus("Gegevens laden…","");
       await loadPlayers();
-      await Promise.all([loadFixtures(),loadDeadline(),loadTransferStatus()]);
+      await Promise.all([loadFixtures(),loadDeadline(),loadTransferStatus(),loadGameweekBalance()]);
       await loadTeam();
       await loadLeaderboard();
       if(!cloud.locked) setStatus("Online opgeslagen","online");
@@ -394,6 +404,12 @@
       original.saveState();
       renderAll();
       updateEditability();
+      try{
+        await Promise.all([loadPlayers(),loadFixtures(),loadGameweekBalance()]);
+        renderAll();
+      }catch(error){
+        console.warn("Publieke voetbaldata kon niet worden geladen",error);
+      }
     }
   }
 

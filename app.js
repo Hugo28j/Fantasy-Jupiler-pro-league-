@@ -280,6 +280,68 @@ function renderMatches(){
   ).join("");
 }
 
+function renderGameweekBalance(balanceRows=[]){
+  const rows = (Array.isArray(balanceRows) ? balanceRows : [])
+    .filter(row => Number(row.minutes || 0) > 0)
+    .sort((a,b) => Number(b.fantasy_points || 0)-Number(a.fantasy_points || 0));
+  const source = document.getElementById("balanceSource");
+  const summary = document.getElementById("balanceSummary");
+  const positions = document.getElementById("positionBalance");
+  const notice = document.getElementById("balanceNotice");
+  const table = document.getElementById("balanceTable");
+  if(!source || !summary || !positions || !notice || !table) return;
+
+  if(!rows.length){
+    source.textContent = "Wacht op API-data";
+    source.classList.remove("live");
+    positions.innerHTML = "";
+    return;
+  }
+
+  const average = values => values.length ? values.reduce((sum,value) => sum+value,0)/values.length : 0;
+  const scoreValues = rows.map(row => Number(row.fantasy_points || 0));
+  const top = rows[0];
+  const gameweek = rows[0].gameweek_number;
+  source.textContent = "API‑Football · speeldag " + gameweek;
+  source.classList.add("live");
+  summary.innerHTML =
+    '<article><span>Wedstrijden</span><strong>9</strong></article>' +
+    '<article><span>Spelers met minuten</span><strong>' + rows.length + '</strong></article>' +
+    '<article><span>Gemiddelde score</span><strong>' + points(average(scoreValues)) + '</strong></article>' +
+    '<article><span>Hoogste score</span><strong>' + points(top.fantasy_points) + '</strong><small>' + escapeHtml(top.player_name) + '</small></article>';
+
+  const positionAverages = {};
+  positions.innerHTML = Object.keys(POSITION_LABELS).map(position => {
+    const group = rows.filter(row => row.position === position);
+    const values = group.map(row => Number(row.fantasy_points || 0));
+    const avg = average(values);
+    positionAverages[position] = avg;
+    const minimum = values.length ? Math.min(...values) : 0;
+    const maximum = values.length ? Math.max(...values) : 0;
+    return '<article><span class="role-badge role-' + position + '">' + position + '</span><div><strong>' + points(avg) + ' gemiddeld</strong><small>' + group.length + ' spelers · ' + points(minimum) + ' tot ' + points(maximum) + '</small></div></article>';
+  }).join("");
+
+  const averages = Object.values(positionAverages);
+  const spread = Math.max(...averages)-Math.min(...averages);
+  const negative = rows.filter(row => Number(row.fantasy_points || 0) < 0).length;
+  notice.textContent = "Positieverschil in gemiddelde: " + points(spread) + " · " + negative + " spelers eindigen onder 0. " +
+    (spread > 10 ? "Dit wijst op een mogelijke scheeftrekking die we na meerdere speeldagen moeten bijsturen." : "Voor deze speeldag liggen de positie-gemiddelden redelijk dicht bij elkaar.");
+  notice.classList.toggle("warning",spread > 10);
+
+  const statColumns = SCORING.columns.filter(([key]) => key !== "minutes");
+  table.querySelector("thead").innerHTML = '<tr><th>Speler</th><th>Pos.</th><th>Club</th><th>Prijs</th><th>Min.</th><th>Score</th>' +
+    statColumns.map(([,label]) => '<th>' + escapeHtml(label) + '</th>').join("") + '</tr>';
+  table.querySelector("tbody").innerHTML = rows.map(row => {
+    const stats = row.stats || {};
+    return '<tr><td><button class="balance-player-link" data-player-id="' + escapeHtml(row.player_id) + '">' + escapeHtml(row.player_name) + '</button></td>' +
+      '<td><span class="role-badge role-' + escapeHtml(row.position) + '">' + escapeHtml(row.position) + '</span></td>' +
+      '<td>' + escapeHtml(row.club_name) + '</td><td>' + money(Number(row.price || 0)) + '</td><td>' + Number(row.minutes || 0) + '</td>' +
+      '<td class="' + (Number(row.fantasy_points || 0) < 0 ? "negative" : "positive") + '"><strong>' + points(row.fantasy_points) + '</strong></td>' +
+      statColumns.map(([key]) => '<td>' + Number(stats[key] || 0) + '</td>').join("") + '</tr>';
+  }).join("");
+  table.querySelectorAll(".balance-player-link").forEach(button => button.addEventListener("click",() => openPlayerProfile(button.dataset.playerId)));
+}
+
 function scoreLabel(v){
   if(v == null) return "—";
   const str = String(v).replace(".",",");
@@ -341,6 +403,7 @@ function calculatePlayerScore(position,stats){
 loadState();
 renderClubFilter();
 renderMatches();
+renderGameweekBalance();
 renderScoring();
 renderAll();
 

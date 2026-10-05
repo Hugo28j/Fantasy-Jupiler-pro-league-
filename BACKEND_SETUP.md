@@ -13,7 +13,7 @@ De publieke sleutel mag in de website staan. De `service_role`-sleutel en voetba
 
 ## 2. Automatische JPL-data
 
-1. Maak een API-FOOTBALL-account en sleutel aan.
+1. Maak een gratis API‑Football/API‑Sports-account en sleutel aan. De gratis formule heeft 100 requests per dag; één volledige JPL-speeldag gebruikt ongeveer 10 requests voor wedstrijden en spelerstatistieken, plus de seizoenspagina's voor de spelerslijst.
 2. Installeer de Supabase CLI en koppel het project.
 3. Voeg de geheime sleutel toe en deploy de functie:
 
@@ -22,10 +22,12 @@ supabase secrets set API_FOOTBALL_KEY=JOUW_SLEUTEL API_FOOTBALL_LEAGUE_ID=144 AP
 supabase functions deploy sync-jpl
 ```
 
-4. Roep `sync-jpl` één keer aan vanuit **Edge Functions** om spelers, speeldagen, wedstrijden en afgewerkte wedstrijdstatistieken te importeren.
+4. Roep `sync-jpl` één keer aan vanuit **Edge Functions**. De functie zoekt automatisch de nieuwste volledig afgewerkte speeldag met exact 9 wedstrijden, importeert alle beschikbare spelerstatistieken en berekent meteen de fantasy-punten.
 5. Plan de functie daarna iedere 15 minuten via **Integrations → Cron → Create job → Supabase Edge Function → sync-jpl**.
 
 API-FOOTBALL levert de meeste waarden uit de huidige puntentabel rechtstreeks. De velden `savesInsideBox`, `punches`, `clearances`, `possessionLost` en `successfulLongPass` zitten niet in zijn standaard player-fixture response en blijven daarom bewust 0; ze worden niet geschat. Als die vijf statistieken moeten meetellen, is een databron met die expliciete velden nodig en moet alleen de mapping in `supabase/functions/sync-jpl/index.ts` worden aangepast.
+
+Na de sync toont **Wedstrijden → Puntenbalans** alle spelers van die speeldag, hun minuten, score en iedere statistiek uit de puntentabel. Sorare is niet als hoofdbron gebruikt: toegang tot player-game-statistieken vereist daar authenticatie met een persoonlijk account/JWT, terwijl API‑Football een aparte serversleutel ondersteunt.
 
 ## 3. Wat server-side wordt afgedwongen
 
@@ -42,6 +44,7 @@ API-FOOTBALL levert de meeste waarden uit de huidige puntentabel rechtstreeks. D
 - het leaderboard toont de totaalscore, de laatste speeldagscore en na een klik alle eerder vastgezette teams;
 - spelersfiches lezen de verwerkte wedstrijdstatistieken rechtstreeks uit `player_match_stats`;
 - actieve spelers zonder speelminuten kunnen als budgetoptie vanaf €1M geprijsd worden.
+- de balansproef toont per positie het gemiddelde, minimum en maximum en markeert een verschil van meer dan 10 punten als mogelijke scheeftrekking.
 
 ## 4. Productiecontrole
 
