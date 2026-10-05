@@ -4,6 +4,7 @@ const API_ROOT = "https://v3.football.api-sports.io";
 const FINISHED = new Set(["FT","AET","PEN"]);
 const TERMINAL = new Set(["FT","AET","PEN","PST","CANC","ABD","AWD","WO"]);
 const LIVE = new Set(["1H","HT","2H","ET","BT","P","SUSP","INT"]);
+const PLAYER_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 const weights: Record<string,Record<string,number>> = {
   GK:{minutes:.1,save:3,cleanSheet:20,savesInsideBox:5,punches:2,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:2,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
@@ -107,11 +108,35 @@ Deno.serve(async request => {
     const season = Number(env("API_FOOTBALL_SEASON","2026"));
     const league = Number(env("API_FOOTBALL_LEAGUE_ID","144"));
     const db = createClient(env("SUPABASE_URL"),env("SUPABASE_SERVICE_ROLE_KEY"),{auth:{persistSession:false}});
-    const {data:existingPlayers,error:existingPlayersError} = await db.from("players").select("provider_player_id,price");
+    let apiCalls = 0;
+    const fetchFootball = async (path:string) => {
+      apiCalls += 1;
+      return football(path);
+    };
+
+    let forcePlayers = false;
+    try{
+      const body = await request.json();
+      forcePlayers = body?.refreshPlayers === true;
+    }catch{
+      // Een lege POST-body is normaal voor geplande synchronisaties.
+    }
+
+    const {data:existingPlayers,error:existingPlayersError} = await db
+      .from("players")
+      .select("provider_player_id,price,updated_at");
     if(existingPlayersError) throw existingPlayersError;
     const existingPrices = new Map((existingPlayers || []).map(p => [Number(p.provider_player_id),Number(p.price)]));
+    const latestPlayerUpdate = (existingPlayers || []).reduce((latest,p) => {
+      const value = new Date(p.updated_at || 0).getTime();
+      return Math.max(latest,Number.isFinite(value) ? value : 0);
+    },0);
+    const playersNeedRefresh = forcePlayers
+      || (existingPlayers || []).length === 0
+      || !latestPlayerUpdate
+      || Date.now() - latestPlayerUpdate >= PLAYER_REFRESH_MS;
 
-    const fixturesPayload = await football(`/fixtures?league=${league}&season=${season}`);
+    const fixturesPayload = await fetchFootball(`/fixtures?league=${league}&season=${season}`);
     const fixtures = fixturesPayload.response || [];
     const byRound = new Map<number,any[]>();
     for(const item of fixtures){
@@ -151,28 +176,30 @@ Deno.serve(async request => {
       if(error) throw error;
     }
 
-    let page = 1;
     const playerRows:any[] = [];
-    do{
-      const payload = await football(`/players?league=${league}&season=${season}&page=${page}`);
-      for(const entry of payload.response || []){
-        const stat = entry.statistics?.[0] || {};
-        const position = positionCode(stat.games?.position);
-        const minutes = num(stat.games?.minutes);
-        playerRows.push({
-          id:`af-${entry.player.id}`,provider_player_id:entry.player.id,name:entry.player.name,
-          club_id:stat.team?.id,club_name:stat.team?.name || "Onbekende club",position,minutes,
-          price:existingPrices.get(Number(entry.player.id)) ?? startingPrice(position,minutes,entry.player.name,stat),
-          active:true,updated_at:new Date().toISOString()
-        });
+    if(playersNeedRefresh){
+      let page = 1;
+      do{
+        const payload = await fetchFootball(`/players?league=${league}&season=${season}&page=${page}`);
+        for(const entry of payload.response || []){
+          const stat = entry.statistics?.[0] || {};
+          const position = positionCode(stat.games?.position);
+          const minutes = num(stat.games?.minutes);
+          playerRows.push({
+            id:`af-${entry.player.id}`,provider_player_id:entry.player.id,name:entry.player.name,
+            club_id:stat.team?.id,club_name:stat.team?.name || "Onbekende club",position,minutes,
+            price:existingPrices.get(Number(entry.player.id)) ?? startingPrice(position,minutes,entry.player.name,stat),
+            active:true,updated_at:new Date().toISOString()
+          });
+        }
+        const total = num(payload.paging?.total) || 1;
+        page += 1;
+        if(page > total) break;
+      }while(page <= 50);
+      if(playerRows.length){
+        const {error} = await db.from("players").upsert(playerRows,{onConflict:"provider_player_id",ignoreDuplicates:false});
+        if(error) throw error;
       }
-      const total = num(payload.paging?.total) || 1;
-      page += 1;
-      if(page > total) break;
-    }while(page <= 50);
-    if(playerRows.length){
-      const {error} = await db.from("players").upsert(playerRows,{onConflict:"provider_player_id",ignoreDuplicates:false});
-      if(error) throw error;
     }
 
     const latestCompletedId = gameweekIds.get(latestCompletedNumber);
@@ -181,6 +208,7 @@ Deno.serve(async request => {
       .from("fixtures")
       .select("id,gameweek_id,kickoff")
       .eq("gameweek_id",latestCompletedId)
+      .eq("stats_processed",false)
       .in("status",[...FINISHED])
       .order("kickoff",{ascending:true});
     if(pendingError) throw pendingError;
@@ -190,7 +218,7 @@ Deno.serve(async request => {
     let importedPlayerRows = 0;
 
     for(const fixture of pending || []){
-      const payload = await football(`/fixtures/players?fixture=${fixture.id}`);
+      const payload = await fetchFootball(`/fixtures/players?fixture=${fixture.id}`);
       const sourceFixture:any = rawFixture.get(fixture.id);
       if(!payload.response?.length){
         throw new Error(`API-FOOTBALL heeft nog geen spelerstatistieken voor wedstrijd ${fixture.id}.`);
@@ -230,18 +258,20 @@ Deno.serve(async request => {
       if(Date.now() >= lockAt) await db.rpc("lock_gameweek",{p_gameweek_id:id});
     }
     for(const id of touchedGameweeks) await db.rpc("recalculate_gameweek_scores",{p_gameweek_id:id});
-    await db.rpc("refresh_player_totals");
+    if(touchedGameweeks.size) await db.rpc("refresh_player_totals");
 
     return Response.json({
       ok:true,
       season,
       league,
       latestCompletedGameweek:latestCompletedNumber,
-      latestCompletedFixtures:(pending || []).length,
+      pendingFixtures:(pending || []).length,
       fixtures:fixtureRows.length,
-      players:playerRows.length,
+      playerRefresh:playersNeedRefresh,
+      playersImported:playerRows.length,
       processedFixtures,
       importedPlayerRows,
+      apiCalls,
       durationMs:Date.now()-started
     });
   }catch(error){
