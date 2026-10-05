@@ -13,7 +13,7 @@ De publieke sleutel mag in de website staan. De `service_role`-sleutel en voetba
 
 ## 2. Automatische JPL-data
 
-1. Maak een gratis API‑Football/API‑Sports-account en sleutel aan. De gratis formule heeft 100 requests per dag; één volledige JPL-speeldag gebruikt ongeveer 10 requests voor wedstrijden en spelerstatistieken, plus de seizoenspagina's voor de spelerslijst.
+1. Maak een gratis API‑Football/API‑Sports-account en sleutel aan. De gratis formule heeft 100 requests per dag. De sync is daarom zo opgebouwd dat reeds verwerkte wedstrijden worden overgeslagen en de volledige spelerslijst niet bij iedere run opnieuw wordt opgehaald.
 2. Installeer de Supabase CLI en koppel het project.
 3. Voeg de geheime sleutel toe en deploy de functie:
 
@@ -22,8 +22,9 @@ supabase secrets set API_FOOTBALL_KEY=JOUW_SLEUTEL API_FOOTBALL_LEAGUE_ID=144 AP
 supabase functions deploy sync-jpl
 ```
 
-4. Roep `sync-jpl` één keer aan vanuit **Edge Functions**. De functie zoekt automatisch de nieuwste volledig afgewerkte speeldag met exact 9 wedstrijden, importeert alle beschikbare spelerstatistieken en berekent meteen de fantasy-punten.
-5. Plan de functie daarna iedere 15 minuten via **Integrations → Cron → Create job → Supabase Edge Function → sync-jpl**.
+4. Roep `sync-jpl` één keer handmatig aan vanuit **Edge Functions**. De eerste run haalt de kalender op, vult de spelerslijst en verwerkt alleen de nog niet verwerkte wedstrijden van de nieuwste volledig afgewerkte speeldag. Controleer in de JSON-respons vooral `ok`, `processedFixtures`, `playersImported` en `apiCalls`.
+5. Roep de functie daarna meteen een tweede keer aan. Als dezelfde speeldag al verwerkt is, hoort `processedFixtures` nu 0 te zijn en hoort de spelerslijst niet opnieuw opgehaald te worden (`playerRefresh:false`). Zo controleer je dat de gratis API-limiet niet onnodig wordt verbruikt.
+6. Plan de functie pas daarna automatisch. Gebruik op het gratis API-Football-plan **niet iedere 15 minuten**. Een veilige start is **iedere 2 uur** via **Integrations → Cron → Create job → Supabase Edge Function → sync-jpl**. Elke normale run gebruikt dan meestal alleen de fixture-aanvraag; de volledige spelerslijst wordt maximaal ongeveer één keer per 24 uur vernieuwd en reeds verwerkte wedstrijden worden overgeslagen.
 
 API-FOOTBALL levert de meeste waarden uit de huidige puntentabel rechtstreeks. De velden `savesInsideBox`, `punches`, `clearances`, `possessionLost` en `successfulLongPass` zitten niet in zijn standaard player-fixture response en blijven daarom bewust 0; ze worden niet geschat. Als die vijf statistieken moeten meetellen, is een databron met die expliciete velden nodig en moet alleen de mapping in `supabase/functions/sync-jpl/index.ts` worden aangepast.
 
