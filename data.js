@@ -184,6 +184,205 @@ const PLAYERS = [
   score: 0
 }));
 
+// Aanvulling op basis van de officiële Pro League-selecties van 5 oktober 2026.
+// Bij live gebruik vervangt de datafeed minuten, prijzen en scores automatisch.
+const EXTRA_PLAYERS = [
+  // Cercle Brugge
+  {id:"cer-lienard",name:"Yann Lienard",club:"Cercle Brugge",pos:"GK",minutes:0,price:3},
+  {id:"cer-langenbick",name:"Bas Langenbick",club:"Cercle Brugge",pos:"GK",minutes:0,price:1},
+  {id:"cer-kakou",name:"Emmanuel Kakou",club:"Cercle Brugge",pos:"DEF",minutes:0,price:5},
+  {id:"cer-adaramola",name:"Tayo Adaramola",club:"Cercle Brugge",pos:"DEF",minutes:0,price:4},
+  {id:"cer-amani",name:"Lazare Amani",club:"Cercle Brugge",pos:"MID",minutes:0,price:6},
+  {id:"cer-manneh",name:"Abdoulie Manneh",club:"Cercle Brugge",pos:"MID",minutes:0,price:4},
+  {id:"cer-herrmann",name:"Charles Herrmann",club:"Cercle Brugge",pos:"FWD",minutes:0,price:5},
+
+  // Club Brugge — volledige officiële A-selectie
+  {id:"clu-jackers",name:"Nordin Jackers",club:"Club Brugge",pos:"GK",minutes:0,price:7},
+  {id:"clu-decorte",name:"Axl De Corte",club:"Club Brugge",pos:"GK",minutes:0,price:2},
+  {id:"clu-vandendriessche",name:"Argus Vanden Driessche",club:"Club Brugge",pos:"GK",minutes:0,price:1},
+  {id:"clu-ordonez",name:"Joel Ordóñez",club:"Club Brugge",pos:"DEF",minutes:0,price:13},
+  {id:"clu-dams",name:"Matteo Dams",club:"Club Brugge",pos:"DEF",minutes:0,price:9},
+  {id:"clu-siquet",name:"Hugo Siquet",club:"Club Brugge",pos:"DEF",minutes:0,price:10},
+  {id:"clu-coulibaly",name:"Samba Coulibaly",club:"Club Brugge",pos:"DEF",minutes:0,price:5},
+  {id:"clu-spileers",name:"Jorne Spileers",club:"Club Brugge",pos:"DEF",minutes:0,price:8},
+  {id:"clu-sabbe",name:"Kyriani Sabbe",club:"Club Brugge",pos:"DEF",minutes:0,price:8},
+  {id:"clu-gomez",name:"Samuel Gomez van Hoogen",club:"Club Brugge",pos:"DEF",minutes:0,price:3},
+  {id:"clu-garcia",name:"Andre Garcia",club:"Club Brugge",pos:"DEF",minutes:0,price:4},
+  {id:"clu-verlinden",name:"Wout Verlinden",club:"Club Brugge",pos:"DEF",minutes:0,price:1},
+  {id:"clu-tsawa",name:"Cheveyo Tsawa",club:"Club Brugge",pos:"MID",minutes:0,price:4},
+  {id:"clu-audoor",name:"Lynnt Audoor",club:"Club Brugge",pos:"MID",minutes:0,price:3},
+  {id:"clu-lemarechal",name:"Félix Lemaréchal",club:"Club Brugge",pos:"MID",minutes:0,price:9},
+  {id:"clu-naikoren",name:"Tian Nai Koren",club:"Club Brugge",pos:"MID",minutes:0,price:2},
+  {id:"clu-okon",name:"Gianluca Okon-Engstler",club:"Club Brugge",pos:"MID",minutes:0,price:1},
+  {id:"clu-forbs",name:"Carlos Forbs",club:"Club Brugge",pos:"FWD",minutes:0,price:15},
+  {id:"clu-virgili",name:"Jan Virgili",club:"Club Brugge",pos:"FWD",minutes:0,price:11},
+  {id:"clu-vermant",name:"Romeo Vermant",club:"Club Brugge",pos:"FWD",minutes:0,price:14},
+  {id:"clu-mike",name:"Wisdom Mike",club:"Club Brugge",pos:"FWD",minutes:0,price:6},
+  {id:"clu-robberechts",name:"Milan Robberechts",club:"Club Brugge",pos:"FWD",minutes:0,price:3},
+  {id:"clu-diakhon",name:"Mamadou Diakhon",club:"Club Brugge",pos:"FWD",minutes:0,price:5},
+  {id:"clu-vasovic",name:"Andrej Vasovic",club:"Club Brugge",pos:"FWD",minutes:0,price:1},
+
+  // KAA Gent
+  {id:"gen-peersman",name:"Kjell Peersman",club:"KAA Gent",pos:"GK",minutes:0,price:5},
+  {id:"gen-evers",name:"Bas Evers",club:"KAA Gent",pos:"GK",minutes:0,price:1},
+  {id:"gen-paskotsi",name:"Maksim Paskotsi",club:"KAA Gent",pos:"DEF",minutes:0,price:6},
+  {id:"gen-ayinde",name:"Abdoul Ayindé",club:"KAA Gent",pos:"DEF",minutes:0,price:4},
+  {id:"gen-benes",name:"László Bénes",club:"KAA Gent",pos:"MID",minutes:0,price:9},
+  {id:"gen-delorge",name:"Mathias Delorge",club:"KAA Gent",pos:"MID",minutes:0,price:8},
+  {id:"gen-dean",name:"Max Dean",club:"KAA Gent",pos:"FWD",minutes:0,price:10},
+
+  // KRC Genk
+  {id:"krg-leysen",name:"Tobe Leysen",club:"KRC Genk",pos:"GK",minutes:0,price:8},
+  {id:"krg-lawal",name:"Tobias Lawal",club:"KRC Genk",pos:"GK",minutes:0,price:5},
+  {id:"krg-doucoure",name:"Émile Doucouré",club:"KRC Genk",pos:"GK",minutes:0,price:1},
+  {id:"krg-smets",name:"Matte Smets",club:"KRC Genk",pos:"DEF",minutes:0,price:12},
+  {id:"krg-ravych",name:"Christiaan Ravych",club:"KRC Genk",pos:"DEF",minutes:0,price:8},
+  {id:"krg-medina",name:"Yaimar Medina",club:"KRC Genk",pos:"DEF",minutes:0,price:7},
+  {id:"krg-tahirovic",name:"Benjamin Tahirovic",club:"KRC Genk",pos:"MID",minutes:0,price:10},
+  {id:"krg-heymans",name:"Daan Heymans",club:"KRC Genk",pos:"MID",minutes:0,price:12},
+  {id:"krg-ito",name:"Junya Ito",club:"KRC Genk",pos:"FWD",minutes:0,price:15},
+  {id:"krg-bibout",name:"Aaron Bibout",club:"KRC Genk",pos:"FWD",minutes:0,price:7},
+
+  // KV Kortrijk
+  {id:"kor-gunnarsson",name:"Patrik Gunnarsson",club:"KV Kortrijk",pos:"GK",minutes:0,price:6},
+  {id:"kor-devlaeminck",name:"Ebbe De Vlaeminck",club:"KV Kortrijk",pos:"GK",minutes:0,price:1},
+  {id:"kor-anderson",name:"Matthew Anderson",club:"KV Kortrijk",pos:"DEF",minutes:0,price:6},
+  {id:"kor-murraycampbell",name:"Harrison Murray-Campbell",club:"KV Kortrijk",pos:"DEF",minutes:0,price:4},
+  {id:"kor-dewaele",name:"Gilles Dewaele",club:"KV Kortrijk",pos:"DEF",minutes:0,price:5},
+  {id:"kor-hens",name:"Lennard Hens",club:"KV Kortrijk",pos:"MID",minutes:0,price:7},
+  {id:"kor-desmet",name:"Liam De Smet",club:"KV Kortrijk",pos:"MID",minutes:0,price:5},
+  {id:"kor-lambert",name:"Boris Lambert",club:"KV Kortrijk",pos:"MID",minutes:0,price:4},
+  {id:"kor-koyalipou",name:"Goduine Koyalipou",club:"KV Kortrijk",pos:"FWD",minutes:0,price:8},
+  {id:"kor-ambrose",name:"Thierry Ambrose",club:"KV Kortrijk",pos:"FWD",minutes:0,price:7},
+
+  // KV Mechelen
+  {id:"mec-dewolf",name:"Ortwin De Wolf",club:"KV Mechelen",pos:"GK",minutes:0,price:6},
+  {id:"mec-vaningelgom",name:"Tijn Van Ingelgom",club:"KV Mechelen",pos:"GK",minutes:0,price:1},
+  {id:"mec-diouf",name:"Gora Diouf",club:"KV Mechelen",pos:"DEF",minutes:0,price:7},
+  {id:"mec-eerdhuijzen",name:"Mike Eerdhuijzen",club:"KV Mechelen",pos:"DEF",minutes:0,price:6},
+  {id:"mec-teague",name:"Ryan Teague",club:"KV Mechelen",pos:"MID",minutes:0,price:8},
+  {id:"mec-salifou",name:"Dikeni Salifou",club:"KV Mechelen",pos:"MID",minutes:0,price:5},
+  {id:"mec-raman",name:"Benito Raman",club:"KV Mechelen",pos:"FWD",minutes:0,price:10},
+
+  // KVC Westerlo
+  {id:"wes-lathouwers",name:"Bill Lathouwers",club:"KVC Westerlo",pos:"GK",minutes:0,price:4},
+  {id:"wes-wiegel",name:"Jahnilo Wiegel-Triebel",club:"KVC Westerlo",pos:"GK",minutes:0,price:1},
+  {id:"wes-flo",name:"Lasse Flø",club:"KVC Westerlo",pos:"DEF",minutes:0,price:5},
+  {id:"wes-balogh",name:"Botond Balogh",club:"KVC Westerlo",pos:"DEF",minutes:0,price:7},
+  {id:"wes-sydorchuk",name:"Serhii Sydorchuk",club:"KVC Westerlo",pos:"MID",minutes:0,price:7},
+  {id:"wes-haspolat",name:"Dogucan Haspolat",club:"KVC Westerlo",pos:"MID",minutes:0,price:9},
+  {id:"wes-storm",name:"Nikola Storm",club:"KVC Westerlo",pos:"FWD",minutes:0,price:8},
+
+  // Lommel SK
+  {id:"lom-ivezic",name:"Nikola Ivezic",club:"Lommel SK",pos:"GK",minutes:0,price:4},
+  {id:"lom-vercauteren",name:"Rik Vercauteren",club:"Lommel SK",pos:"GK",minutes:0,price:1},
+  {id:"lom-adewoye",name:"Shawn Adewoye",club:"Lommel SK",pos:"DEF",minutes:0,price:5},
+  {id:"lom-tolinsson",name:"Jesper Tolinsson",club:"Lommel SK",pos:"DEF",minutes:0,price:4},
+  {id:"lom-rommens",name:"Nicolas Rommens",club:"Lommel SK",pos:"MID",minutes:0,price:6},
+  {id:"lom-nypan",name:"Sverre Nypan",club:"Lommel SK",pos:"MID",minutes:0,price:7},
+  {id:"lom-talvitie",name:"Juho Talvitie",club:"Lommel SK",pos:"FWD",minutes:0,price:6},
+  {id:"lom-seuntjens",name:"Ralf Seuntjens",club:"Lommel SK",pos:"FWD",minutes:0,price:5},
+
+  // OH Leuven
+  {id:"ohl-vroman",name:"Kiany Vroman",club:"OH Leuven",pos:"GK",minutes:0,price:3},
+  {id:"ohl-jochmans",name:"Owen Jochmans",club:"OH Leuven",pos:"GK",minutes:0,price:1},
+  {id:"ohl-lawrence",name:"Jamie Lawrence",club:"OH Leuven",pos:"DEF",minutes:0,price:6},
+  {id:"ohl-ogiwara",name:"Takuya Ogiwara",club:"OH Leuven",pos:"DEF",minutes:0,price:7},
+  {id:"ohl-verstraete",name:"Birger Verstraete",club:"OH Leuven",pos:"MID",minutes:0,price:9},
+  {id:"ohl-teklab",name:"Henok Teklab",club:"OH Leuven",pos:"MID",minutes:0,price:6},
+  {id:"ohl-addai",name:"Emmanuel Addai",club:"OH Leuven",pos:"FWD",minutes:0,price:8},
+  {id:"ohl-vaesen",name:"Kyan Vaesen",club:"OH Leuven",pos:"FWD",minutes:0,price:10},
+  {id:"ohl-yamada",name:"Shin Yamada",club:"OH Leuven",pos:"FWD",minutes:0,price:5},
+
+  // RAAL La Louvière
+  {id:"raal-cardoso",name:"Tiago Pereira Cardoso",club:"RAAL La Louvière",pos:"GK",minutes:0,price:5},
+  {id:"raal-monteiro",name:"Lucas Monteiro",club:"RAAL La Louvière",pos:"GK",minutes:0,price:1},
+  {id:"raal-gillot",name:"Nolan Gillot",club:"RAAL La Louvière",pos:"DEF",minutes:0,price:5},
+  {id:"raal-lutonda",name:"Thierry Lutonda",club:"RAAL La Louvière",pos:"DEF",minutes:0,price:6},
+  {id:"raal-kovacs",name:"Mátyás Kovács",club:"RAAL La Louvière",pos:"MID",minutes:0,price:5},
+  {id:"raal-soumare",name:"Bryan Soumaré",club:"RAAL La Louvière",pos:"MID",minutes:0,price:7},
+  {id:"raal-filet",name:"Elias Filet",club:"RAAL La Louvière",pos:"FWD",minutes:0,price:6},
+  {id:"raal-belkheir",name:"Mouhamed Belkheir",club:"RAAL La Louvière",pos:"FWD",minutes:0,price:8},
+
+  // Royal Antwerp FC
+  {id:"ant-thoelen",name:"Yannick Thoelen",club:"Royal Antwerp FC",pos:"GK",minutes:0,price:5},
+  {id:"ant-devalckeneer",name:"Niels Devalckeneer",club:"Royal Antwerp FC",pos:"GK",minutes:0,price:1},
+  {id:"ant-foulon",name:"Daam Foulon",club:"Royal Antwerp FC",pos:"DEF",minutes:0,price:8},
+  {id:"ant-busi",name:"Maxime Busi",club:"Royal Antwerp FC",pos:"DEF",minutes:0,price:7},
+  {id:"ant-benitez",name:"Mauricio Benítez",club:"Royal Antwerp FC",pos:"MID",minutes:0,price:7},
+  {id:"ant-vermeeren",name:"Arthur Vermeeren",club:"Royal Antwerp FC",pos:"MID",minutes:0,price:12},
+  {id:"ant-salah",name:"Ibrahim Salah",club:"Royal Antwerp FC",pos:"FWD",minutes:0,price:10},
+
+  // Royale Union Saint-Gilloise
+  {id:"usg-boets",name:"Keo Boets",club:"Royale Union Saint-Gilloise",pos:"GK",minutes:0,price:1},
+  {id:"usg-chambaere",name:"Vic Chambaere",club:"Royale Union Saint-Gilloise",pos:"GK",minutes:0,price:3},
+  {id:"usg-chibani",name:"Nohim Chibani",club:"Royale Union Saint-Gilloise",pos:"DEF",minutes:0,price:4},
+  {id:"usg-sykes",name:"Ross Sykes",club:"Royale Union Saint-Gilloise",pos:"DEF",minutes:0,price:8},
+  {id:"usg-zorgane",name:"Adem Zorgane",club:"Royale Union Saint-Gilloise",pos:"MID",minutes:0,price:11},
+  {id:"usg-schoofs",name:"Rob Schoofs",club:"Royale Union Saint-Gilloise",pos:"MID",minutes:0,price:10},
+  {id:"usg-rodriguez",name:"Kevin Rodríguez",club:"Royale Union Saint-Gilloise",pos:"FWD",minutes:0,price:12},
+
+  // RSC Anderlecht
+  {id:"and-heekeren",name:"Justin Heekeren",club:"RSC Anderlecht",pos:"GK",minutes:0,price:5},
+  {id:"and-seghers",name:"Mattis Seghers",club:"RSC Anderlecht",pos:"GK",minutes:0,price:1},
+  {id:"and-hey",name:"Lucas Hey",club:"RSC Anderlecht",pos:"DEF",minutes:0,price:8},
+  {id:"and-sardella",name:"Killian Sardella",club:"RSC Anderlecht",pos:"DEF",minutes:0,price:10},
+  {id:"and-stroeykens",name:"Mario Stroeykens",club:"RSC Anderlecht",pos:"MID",minutes:0,price:13},
+  {id:"and-aasgaard",name:"Thelo Aasgaard",club:"RSC Anderlecht",pos:"MID",minutes:0,price:10},
+  {id:"and-bertaccini",name:"Adriano Bertaccini",club:"RSC Anderlecht",pos:"FWD",minutes:0,price:14},
+
+  // SK Beveren
+  {id:"bev-deschutter",name:"Milan De Schutter",club:"SK Beveren",pos:"GK",minutes:0,price:3},
+  {id:"bev-deman",name:"Maxim Deman",club:"SK Beveren",pos:"GK",minutes:0,price:1},
+  {id:"bev-thompson",name:"Dominic Thompson",club:"SK Beveren",pos:"DEF",minutes:0,price:5},
+  {id:"bev-boone",name:"Viktor Boone",club:"SK Beveren",pos:"DEF",minutes:0,price:6},
+  {id:"bev-godeau",name:"Bruno Godeau",club:"SK Beveren",pos:"DEF",minutes:0,price:6},
+  {id:"bev-rigo",name:"Dante Rigo",club:"SK Beveren",pos:"MID",minutes:0,price:7},
+  {id:"bev-bruls",name:"Christian Brüls",club:"SK Beveren",pos:"MID",minutes:0,price:6},
+  {id:"bev-verschueren",name:"Arno Verschueren",club:"SK Beveren",pos:"MID",minutes:0,price:7},
+  {id:"bev-olatunji",name:"Victor Olatunji",club:"SK Beveren",pos:"FWD",minutes:0,price:9},
+  {id:"bev-mertens",name:"Lennart Mertens",club:"SK Beveren",pos:"FWD",minutes:0,price:5},
+
+  // Sporting Charleroi
+  {id:"cha-cremer",name:"Arthur Cremer",club:"Sporting Charleroi",pos:"GK",minutes:0,price:1},
+  {id:"cha-ousou",name:"Aiham Ousou",club:"Sporting Charleroi",pos:"DEF",minutes:0,price:7},
+  {id:"cha-rowe",name:"Triston Rowe",club:"Sporting Charleroi",pos:"DEF",minutes:0,price:5},
+  {id:"cha-nawata",name:"Gaku Nawata",club:"Sporting Charleroi",pos:"MID",minutes:0,price:7},
+  {id:"cha-bojang",name:"Adama Bojang",club:"Sporting Charleroi",pos:"FWD",minutes:0,price:8},
+  {id:"cha-scheidler",name:"Aurélien Scheidler",club:"Sporting Charleroi",pos:"FWD",minutes:0,price:10},
+
+  // Standard de Liège
+  {id:"sta-pirard",name:"Lucas Pirard",club:"Standard de Liège",pos:"GK",minutes:0,price:4},
+  {id:"sta-dizdarevic",name:"Belmin Dizdarevic",club:"Standard de Liège",pos:"GK",minutes:0,price:1},
+  {id:"sta-lavalee",name:"Dimitri Lavalée",club:"Standard de Liège",pos:"DEF",minutes:0,price:8},
+  {id:"sta-lawrence",name:"Henry Lawrence",club:"Standard de Liège",pos:"DEF",minutes:0,price:6},
+  {id:"sta-mohr",name:"Tobias Mohr",club:"Standard de Liège",pos:"MID",minutes:0,price:8},
+  {id:"sta-ilaimaharitra",name:"Marco Ilaimaharitra",club:"Standard de Liège",pos:"MID",minutes:0,price:9},
+  {id:"sta-zeqiri",name:"Andi Zeqiri",club:"Standard de Liège",pos:"FWD",minutes:0,price:12},
+
+  // STVV
+  {id:"stv-lendfers",name:"Matt Lendfers",club:"STVV",pos:"GK",minutes:0,price:3},
+  {id:"stv-aburasyin",name:"Ahmad Aburasyin",club:"STVV",pos:"GK",minutes:0,price:1},
+  {id:"stv-hata",name:"Taiga Hata",club:"STVV",pos:"DEF",minutes:0,price:7},
+  {id:"stv-takai",name:"Kota Takai",club:"STVV",pos:"DEF",minutes:0,price:8},
+  {id:"stv-taniguchi",name:"Shogo Taniguchi",club:"STVV",pos:"DEF",minutes:0,price:7},
+  {id:"stv-merlen",name:"Ryan Merlen",club:"STVV",pos:"MID",minutes:0,price:6},
+  {id:"stv-araki",name:"Ryotaro Araki",club:"STVV",pos:"MID",minutes:0,price:9},
+  {id:"stv-muja",name:"Arbnor Muja",club:"STVV",pos:"FWD",minutes:0,price:9},
+  {id:"stv-mbuku",name:"Nathanaël Mbuku",club:"STVV",pos:"FWD",minutes:0,price:10},
+  {id:"stv-seolle",name:"Frederic Soèllé Soèllé",club:"STVV",pos:"FWD",minutes:0,price:4},
+
+  // SV Zulte Waregem
+  {id:"zul-vanbever",name:"Florian Van Bever",club:"SV Zulte Waregem",pos:"GK",minutes:0,price:1},
+  {id:"zul-paugain",name:"Wilguens Paugain",club:"SV Zulte Waregem",pos:"DEF",minutes:0,price:6},
+  {id:"zul-barkarson",name:"Atli Barkarson",club:"SV Zulte Waregem",pos:"DEF",minutes:0,price:5},
+  {id:"zul-horvat",name:"Niko Horvat",club:"SV Zulte Waregem",pos:"MID",minutes:0,price:7},
+  {id:"zul-niang",name:"Ousseynou Niang",club:"SV Zulte Waregem",pos:"MID",minutes:0,price:6},
+  {id:"zul-mbaye",name:"Malick Mbaye",club:"SV Zulte Waregem",pos:"FWD",minutes:0,price:7}
+].map(player => ({...player,score:0}));
+
+PLAYERS.push(...EXTRA_PLAYERS);
+
 const MATCHES = [
   {date:"7 aug 2026",week:"Speeldag 1",home:"Club Brugge",away:"KV Kortrijk",homeScore:3,awayScore:0},
   {date:"8 aug 2026",week:"Speeldag 1",home:"Standard de Liège",away:"Cercle Brugge",homeScore:2,awayScore:2},

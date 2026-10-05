@@ -39,6 +39,9 @@ API-FOOTBALL levert de meeste waarden uit de huidige puntentabel rechtstreeks. D
 - de reservekeeper kan uitsluitend de basiskeeper vervangen en de veldreserve kan maximaal één afwezige veldspeler vervangen;
 - iedere gespeelde minuut levert 0,1 punt op;
 - na de eerste vastgezette selectie zijn 2 transfers per speeldag gratis en kost iedere extra transfer 4 punten.
+- het leaderboard toont de totaalscore, de laatste speeldagscore en na een klik alle eerder vastgezette teams;
+- spelersfiches lezen de verwerkte wedstrijdstatistieken rechtstreeks uit `player_match_stats`;
+- actieve spelers zonder speelminuten kunnen als budgetoptie vanaf €1M geprijsd worden.
 
 ## 4. Productiecontrole
 

@@ -244,22 +244,68 @@
   }
 
   async function loadLeaderboard(){
-    const {data,error} = await cloud.client.from("leaderboard").select("team_name,total_points,manager_id").order("total_points",{ascending:false}).limit(50);
+    const {data,error} = await cloud.client.rpc("public_leaderboard");
     if(error) throw error;
     const card = document.querySelector(".leaderboard-card");
-    card.innerHTML = "";
+    card.innerHTML = '<div class="leader-head"><span>#</span><span>Team</span><span>Speeldag</span><span>Totaal</span></div>';
     (data || []).forEach((row,index) => {
-      const line = make("div","leader-row" + (cloud.user && row.manager_id === cloud.user.id ? " current-user" : ""));
+      const mine = cloud.user && row.manager_id === cloud.user.id;
+      const line = make("button","leader-row" + (mine ? " current-user" : ""));
+      line.type = "button";
       const rank = make("span","rank",String(index + 1));
       const info = make("div");
       info.appendChild(make("strong","",row.team_name));
-      if(cloud.user && row.manager_id === cloud.user.id) info.querySelector("strong").id = "leaderTeamName";
-      info.appendChild(make("small","",cloud.user && row.manager_id === cloud.user.id ? "Jij" : "Manager"));
+      if(mine) info.querySelector("strong").id = "leaderTeamName";
+      info.appendChild(make("small","",mine ? "Jij · klik voor historiek" : "Klik voor historiek"));
+      const latest = make("strong","gameweek-points",row.latest_gameweek_number
+        ? "S" + row.latest_gameweek_number + " · " + Number(row.latest_gameweek_points || 0).toFixed(1).replace(".0","")
+        : "—");
       const points = make("strong","",Number(row.total_points || 0).toFixed(1).replace(".0","") + " pts");
-      if(cloud.user && row.manager_id === cloud.user.id) points.id = "leaderPoints";
-      line.append(rank,info,points);
+      if(mine) points.id = "leaderPoints";
+      line.append(rank,info,latest,points);
+      line.addEventListener("click",() => loadManagerHistory(row.manager_id,row.team_name));
       card.appendChild(line);
     });
+    if(!data || !data.length){
+      card.appendChild(make("div","empty-state","Nog geen teams in het leaderboard."));
+    }
+  }
+
+  async function loadManagerHistory(managerId,teamName){
+    const dialog = document.getElementById("managerDialog");
+    const target = document.getElementById("managerHistory");
+    target.innerHTML = '<p class="eyebrow">TEAMHISTORIEK</p><h2>' + escapeHtml(teamName) + '</h2><div class="empty-state">Speeldagen laden…</div>';
+    if(!dialog.open) dialog.showModal();
+    const {data,error} = await cloud.client.rpc("public_manager_history",{p_manager:managerId});
+    if(error){
+      target.innerHTML = '<p class="eyebrow">TEAMHISTORIEK</p><h2>' + escapeHtml(teamName) + '</h2><div class="empty-state">De historiek kon niet worden geladen.</div>';
+      return;
+    }
+    const history = (data || []).map(row => {
+      const starters = (row.starter_ids || []).map(id => playerById(id) || {id,name:id,pos:""});
+      const benchIds = [row.bench_gk_id,row.bench_outfield_id].filter(Boolean);
+      const bench = benchIds.map(id => playerById(id) || {id,name:"Onbekende speler",pos:""});
+      const lineup = starters.map(player => '<div class="history-player"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(player.pos) + ' · basis</small></div>').join("") +
+        bench.map(player => '<div class="history-player bench"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(player.pos) + ' · bank</small></div>').join("");
+      const transferCost = Number(row.breakdown?.transfer_cost || 0);
+      return '<article class="history-card"><div class="history-card-head"><div><strong>Speeldag ' + row.gameweek_number + '</strong><small>' + (transferCost ? " · −" + transferCost + " transferpunten" : "") + '</small></div><strong>' + points(row.points) + '</strong></div><div class="history-lineup">' + (lineup || '<span class="muted">Geen vastgezette spelers.</span>') + '</div></article>';
+    }).join("");
+    target.innerHTML = '<p class="eyebrow">TEAMHISTORIEK</p><h2>' + escapeHtml(teamName) + '</h2><p class="muted">Vastgezette opstellingen en behaalde score per speeldag.</p><div class="history-list">' + (history || '<div class="empty-state">Nog geen afgewerkte speeldagen.</div>') + '</div>';
+  }
+
+  async function loadPlayerStats(playerId){
+    const player = playerById(playerId);
+    if(!player) return;
+    const {data,error} = await cloud.client
+      .from("player_match_stats")
+      .select("minutes,stats,fantasy_points,fixtures(kickoff,home_team,away_team,gameweeks(number))")
+      .eq("player_id",playerId)
+      .limit(100);
+    if(error){
+      console.error(error);
+      return;
+    }
+    renderPlayerProfile(player,data || []);
   }
 
   async function loadDeadline(){
@@ -353,6 +399,9 @@
 
   injectUi();
   wrapMutations();
+  window.addEventListener("fantasy:player-profile",event => {
+    if(cloud.enabled && cloud.client && event.detail?.playerId) loadPlayerStats(event.detail.playerId);
+  });
 
   if(!cloud.enabled){
     showSetupBanner();

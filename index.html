@@ -122,16 +122,20 @@
         <div>
           <p class="eyebrow">VRIENDEN</p>
           <h2>Leaderboard</h2>
-          <p class="muted">In deze eerste GitHub Pages-versie wordt jouw team lokaal bewaard. Het gedeelde vriendenleaderboard wordt gekoppeld zodra de backend/database actief is.</p>
+          <p class="muted">Vergelijk de totaalscore en de laatste speeldag. Klik op een team om de scores en vastgezette opstellingen van eerdere speeldagen te bekijken.</p>
         </div>
       </div>
       <div class="leaderboard-card">
-        <div class="leader-row current-user">
-          <span class="rank">1</span>
-          <div><strong id="leaderTeamName">Mijn Fantasy Team</strong><small>Jij</small></div>
-          <strong id="leaderPoints">0 pts</strong>
+        <div class="leader-head">
+          <span>#</span><span>Team</span><span>Speeldag</span><span>Totaal</span>
         </div>
-        <div class="leader-row demo"><span class="rank">–</span><div><strong>Vriendenteams</strong><small>Wachten op multiplayer database</small></div><strong>—</strong></div>
+        <button class="leader-row current-user" type="button" data-demo-history>
+          <span class="rank">1</span>
+          <div><strong id="leaderTeamName">Mijn Fantasy Team</strong><small>Jij · klik voor historiek</small></div>
+          <strong class="gameweek-points">0 pts</strong>
+          <strong id="leaderPoints">0 pts</strong>
+        </button>
+        <div class="leader-row demo"><span class="rank">–</span><div><strong>Vriendenteams</strong><small>Log in voor het gedeelde klassement</small></div><strong>—</strong><strong>—</strong></div>
       </div>
     </section>
 
@@ -176,6 +180,20 @@
       </div>
     </section>
   </main>
+
+  <dialog id="playerDialog" class="detail-dialog">
+    <div class="dialog-shell">
+      <button class="dialog-close" type="button" data-close-dialog="playerDialog" aria-label="Sluiten">×</button>
+      <div id="playerProfile"></div>
+    </div>
+  </dialog>
+
+  <dialog id="managerDialog" class="detail-dialog">
+    <div class="dialog-shell">
+      <button class="dialog-close" type="button" data-close-dialog="managerDialog" aria-label="Sluiten">×</button>
+      <div id="managerHistory"></div>
+    </div>
+  </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

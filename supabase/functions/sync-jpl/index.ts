@@ -41,6 +41,9 @@ function positionCode(value:string){
 
 function startingPrice(position:string,minutes=0,name="",stat:any={}){
   if(name.toLowerCase() === "hans vanaken") return 25;
+  if(minutes <= 0) return 1;
+  if(minutes < 90) return 2;
+  if(minutes < 270) return 4;
   const base:Record<string,number> = {GK:8,DEF:9,MID:10,FWD:11};
   const availability = Math.min(4,minutes/180);
   const output = num(stat.goals?.total)*.75 + num(stat.goals?.assists)*.5;

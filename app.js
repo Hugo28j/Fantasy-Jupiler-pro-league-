@@ -45,6 +45,12 @@ function isLineupComplete(){
 
 function money(v){ return "€" + v.toFixed(1).replace(".",",") + "M"; }
 function initials(name){ return name.split(/\s+/).slice(0,2).map(x => x[0]).join("").toUpperCase(); }
+function escapeHtml(value){
+  return String(value ?? "").replace(/[&<>"']/g,char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[char]));
+}
+function points(value){
+  return Number(value || 0).toFixed(1).replace(".0","").replace(".",",") + " pts";
+}
 function toast(message){
   const el = document.getElementById("toast");
   el.textContent = message;
@@ -139,7 +145,7 @@ function lineupPlayerHtml(p,isBench){
   const buttonText = isBench ? "Naar basis" : "Op bank";
   return '<div class="lineup-player ' + (isBench ? "benched":"") + '">' +
     '<div class="player-avatar">' + initials(p.name) + '</div>' +
-    '<div class="info"><strong>' + p.name + '</strong><small>' + p.club + ' · ' + (isBench ? benchLabel : POSITION_LABELS[p.pos]) + '</small></div>' +
+    '<div class="info"><button class="player-name-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button><small>' + escapeHtml(p.club) + ' · ' + (isBench ? benchLabel : POSITION_LABELS[p.pos]) + '</small></div>' +
     '<span class="role-badge role-' + p.pos + '">' + p.pos + '</span>' +
     '<div class="lineup-actions"><button class="icon-btn bench-toggle" data-id="' + p.id + '">' + buttonText + '</button></div>' +
   '</div>';
@@ -174,6 +180,7 @@ function renderTeam(){
   }
 
   document.querySelectorAll(".bench-toggle").forEach(btn => btn.addEventListener("click", () => setBench(btn.dataset.id)));
+  document.querySelectorAll("#team .player-name-link").forEach(btn => btn.addEventListener("click", () => openPlayerProfile(btn.dataset.playerId)));
 }
 
 function renderClubFilter(){
@@ -213,19 +220,58 @@ function renderMarket(){
     const owned = state.squad.includes(p.id);
     const check = canBuy(p);
     const disabled = !owned && !check.ok;
-    return '<article class="player-card ' + (owned ? "owned":"") + '">' +
+    return '<article class="player-card ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
       '<div class="player-card-head"><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><span class="price">' + money(p.price) + '</span></div>' +
-      '<h3>' + p.name + '</h3><div class="club">' + p.club + '</div>' +
-      '<div class="player-meta"><div><span>Minuten 26/27</span><strong>' + (p.minutes == null ? "Actief" : p.minutes) + '</strong></div><div><span>Fantasy score</span><strong>0</strong></div></div>' +
-      '<button class="buy-btn ' + (owned ? "remove":"") + '" data-action="' + (owned ? "sell":"buy") + '" data-id="' + p.id + '" ' + (disabled ? "disabled":"") + '>' +
-        (owned ? "Verkopen" : (disabled ? "Niet beschikbaar" : "Kopen")) +
-      '</button>' +
+      '<h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3><div class="club">' + escapeHtml(p.club) + '</div>' +
+      '<div class="player-meta"><div><span>Minuten 26/27</span><strong>' + (p.minutes == null ? "Actief" : p.minutes) + '</strong></div><div><span>Fantasy score</span><strong>' + points(p.score).replace(" pts","") + '</strong></div></div>' +
+      '<div class="player-actions"><button class="details-btn" data-player-id="' + escapeHtml(p.id) + '">Statistieken</button>' +
+      '<button class="buy-btn ' + (owned ? "remove":"") + '" data-action="' + (owned ? "sell":"buy") + '" data-id="' + escapeHtml(p.id) + '" ' + (disabled ? "disabled":"") + '>' +
+        (owned ? "Verkopen" : (disabled ? "Niet beschikbaar" : "Kopen")) + '</button></div>' +
     '</article>';
   }).join("");
 
   grid.querySelectorAll(".buy-btn").forEach(btn => btn.addEventListener("click", () => {
     btn.dataset.action === "sell" ? sellPlayer(btn.dataset.id) : buyPlayer(btn.dataset.id);
   }));
+  grid.querySelectorAll(".details-btn,.player-title-link").forEach(btn => btn.addEventListener("click", () => openPlayerProfile(btn.dataset.playerId)));
+}
+
+function renderPlayerProfile(player,matchRows=[]){
+  const rows = Array.isArray(matchRows) ? matchRows : [];
+  const total = key => rows.reduce((sum,row) => sum + Number((row.stats || {})[key] || 0),0);
+  const totalMinutes = rows.length ? rows.reduce((sum,row) => sum + Number(row.minutes || 0),0) : Number(player.minutes || 0);
+  const totalPoints = rows.length ? rows.reduce((sum,row) => sum + Number(row.fantasy_points || 0),0) : Number(player.score || 0);
+  const metrics = [
+    ["Goals",total("goal")],["Assists",total("assist")],["Tackles",total("successfulTackles")],
+    ["Duels gewonnen",total("duelWon")],["Intercepties",total("interceptions")],
+    ["Bal gewonnen",total("possessionWon")],["Bal verloren",total("possessionLost")],
+    ["Key passes",total("keyPass")],["Dribbels",total("successfulDribble")],
+    ["Schoten op doel",total("shotOnTarget")]
+  ];
+  const matches = rows.slice().sort((a,b) => {
+    const ad = a.fixtures?.kickoff || "";
+    const bd = b.fixtures?.kickoff || "";
+    return bd.localeCompare(ad);
+  }).map(row => {
+    const fixture = row.fixtures || {};
+    const gameweek = fixture.gameweeks?.number || "?";
+    const date = fixture.kickoff ? new Intl.DateTimeFormat("nl-BE",{day:"numeric",month:"short"}).format(new Date(fixture.kickoff)) : "";
+    return '<div class="profile-match"><div><strong>Speeldag ' + gameweek + '</strong><small>' + escapeHtml(date + " · " + (fixture.home_team || "") + " – " + (fixture.away_team || "")) + '</small></div><span>' + Number(row.minutes || 0) + ' min</span><strong>' + points(row.fantasy_points) + '</strong></div>';
+  }).join("");
+  document.getElementById("playerProfile").innerHTML =
+    '<p class="eyebrow">SPELERSFICHE</p><div class="profile-hero"><div><span class="role-badge role-' + player.pos + '">' + player.pos + '</span><h2>' + escapeHtml(player.name) + '</h2><p>' + escapeHtml(player.club) + ' · ' + escapeHtml(POSITION_LABELS[player.pos]) + '</p></div><strong class="profile-price">' + money(Number(player.price)) + '</strong></div>' +
+    '<div class="profile-highlights"><article><span>Totale score</span><strong>' + points(totalPoints) + '</strong></article><article><span>Speelminuten</span><strong>' + totalMinutes + '</strong></article><article><span>Wedstrijden</span><strong>' + rows.length + '</strong></article></div>' +
+    '<h3>Seizoenstatistieken</h3><div class="profile-stats">' + metrics.map(([label,value]) => '<div><span>' + label + '</span><strong>' + value + '</strong></div>').join("") + '</div>' +
+    '<div class="profile-section-head"><h3>Score per wedstrijd</h3><small>Inclusief +0,1 punt per minuut</small></div><div class="profile-matches">' + (matches || '<div class="empty-state">Nog geen verwerkte wedstrijdstatistieken.</div>') + '</div>';
+}
+
+function openPlayerProfile(id){
+  const player = playerById(id);
+  if(!player) return;
+  renderPlayerProfile(player,[]);
+  const dialog = document.getElementById("playerDialog");
+  if(!dialog.open) dialog.showModal();
+  window.dispatchEvent(new CustomEvent("fantasy:player-profile",{detail:{playerId:id}}));
 }
 
 function renderMatches(){
@@ -314,3 +360,13 @@ document.getElementById("teamName").addEventListener("input", e => {
 });
 document.getElementById("autoLineupBtn").addEventListener("click",autoLineup);
 document.getElementById("resetBtn").addEventListener("click",resetSquad);
+document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click",() => {
+  document.getElementById(button.dataset.closeDialog).close();
+}));
+document.querySelectorAll("dialog.detail-dialog").forEach(dialog => dialog.addEventListener("click",event => {
+  if(event.target === dialog) dialog.close();
+}));
+document.querySelector("[data-demo-history]")?.addEventListener("click",() => {
+  document.getElementById("managerHistory").innerHTML = '<p class="eyebrow">TEAMHISTORIEK</p><h2>' + escapeHtml(state.teamName) + '</h2><div class="empty-state">Log in en speel een speeldag om hier je vastgezette teams en scores te zien.</div>';
+  document.getElementById("managerDialog").showModal();
+});
