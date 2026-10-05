@@ -6,7 +6,7 @@ returns table(
   player_id text,
   player_name text,
   club_name text,
-  position text,
+  "position" text,
   price numeric,
   matches integer,
   minutes integer,
