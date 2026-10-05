@@ -6,10 +6,10 @@ const TERMINAL = new Set(["FT","AET","PEN","PST","CANC","ABD","AWD","WO"]);
 const LIVE = new Set(["1H","HT","2H","ET","BT","P","SUSP","INT"]);
 
 const weights: Record<string,Record<string,number>> = {
-  GK:{save:3,cleanSheet:20,savesInsideBox:5,punches:2,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:2,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
-  DEF:{goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:2,interceptions:2,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
-  MID:{goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:2,possessionWon:.3,possessionLost:-.3,successfulPass:.2,successfulLongPass:.4,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2},
-  FWD:{goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:1,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4}
+  GK:{minutes:.1,save:3,cleanSheet:20,savesInsideBox:5,punches:2,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:2,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
+  DEF:{minutes:.1,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:2,interceptions:2,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
+  MID:{minutes:.1,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:2,possessionWon:.3,possessionLost:-.3,successfulPass:.2,successfulLongPass:.4,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2},
+  FWD:{minutes:.1,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:1,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4}
 };
 
 function env(name:string, fallback?:string){
@@ -39,9 +39,13 @@ function positionCode(value:string){
   return "FWD";
 }
 
-function startingPrice(position:string,minutes=0){
-  const base:Record<string,number> = {GK:5.5,DEF:6,MID:6.5,FWD:7};
-  return Math.min(17.5,Math.round((base[position] + Math.min(minutes,1800)/600)*2)/2);
+function startingPrice(position:string,minutes=0,name="",stat:any={}){
+  if(name.toLowerCase() === "hans vanaken") return 25;
+  const base:Record<string,number> = {GK:8,DEF:9,MID:10,FWD:11};
+  const availability = Math.min(4,minutes/180);
+  const output = num(stat.goals?.total)*.75 + num(stat.goals?.assists)*.5;
+  const rating = Math.max(0,num(stat.games?.rating)-6.5);
+  return Math.min(24,Math.round((base[position]+availability+output+rating)*2)/2);
 }
 
 function num(value:unknown){
@@ -65,6 +69,7 @@ function mapStats(raw:any,position:string,teamGoalsConceded:number){
   const interceptions = num(raw.tackles?.interceptions);
   const minutes = num(raw.games?.minutes);
   return {
+    minutes,
     save:num(raw.goals?.saves),
     cleanSheet:position === "GK" && minutes > 0 && teamGoalsConceded === 0 ? 1 : 0,
     savesInsideBox:0,
@@ -99,6 +104,9 @@ Deno.serve(async request => {
     const season = Number(env("API_FOOTBALL_SEASON","2026"));
     const league = Number(env("API_FOOTBALL_LEAGUE_ID","144"));
     const db = createClient(env("SUPABASE_URL"),env("SUPABASE_SERVICE_ROLE_KEY"),{auth:{persistSession:false}});
+    const {data:existingPlayers,error:existingPlayersError} = await db.from("players").select("provider_player_id,price");
+    if(existingPlayersError) throw existingPlayersError;
+    const existingPrices = new Map((existingPlayers || []).map(p => [Number(p.provider_player_id),Number(p.price)]));
 
     const fixturesPayload = await football(`/fixtures?league=${league}&season=${season}`);
     const fixtures = fixturesPayload.response || [];
@@ -146,7 +154,8 @@ Deno.serve(async request => {
         playerRows.push({
           id:`af-${entry.player.id}`,provider_player_id:entry.player.id,name:entry.player.name,
           club_id:stat.team?.id,club_name:stat.team?.name || "Onbekende club",position,minutes,
-          price:startingPrice(position,minutes),active:true,updated_at:new Date().toISOString()
+          price:existingPrices.get(Number(entry.player.id)) ?? startingPrice(position,minutes,entry.player.name,stat),
+          active:true,updated_at:new Date().toISOString()
         });
       }
       const total = num(payload.paging?.total) || 1;
@@ -177,7 +186,9 @@ Deno.serve(async request => {
           const stats = mapStats(raw,position,conceded);
           await db.from("players").upsert({
             id,provider_player_id:entry.player.id,name:entry.player.name,club_id:teamBlock.team.id,
-            club_name:teamBlock.team.name,position,minutes:0,price:startingPrice(position),active:true,updated_at:new Date().toISOString()
+            club_name:teamBlock.team.name,position,minutes:0,
+            price:existingPrices.get(Number(entry.player.id)) ?? startingPrice(position,0,entry.player.name,raw),
+            active:true,updated_at:new Date().toISOString()
           },{onConflict:"provider_player_id",ignoreDuplicates:true});
           rows.push({fixture_id:fixture.id,player_id:id,minutes:num(raw.games?.minutes),stats,fantasy_points:fantasyScore(position,stats),updated_at:new Date().toISOString()});
         }

@@ -2,7 +2,7 @@ const DATA_META = {
   season: "2026/27",
   generatedAt: "2026-10-05",
   playerCoverage: "verified-active-seed",
-  priceNote: "Voorlopige fantasy-prijzen, geen officiële marktwaarden"
+  priceNote: "Gebalanceerde fantasy-prijzen voor een budget van €100M"
 };
 
 const CLUBS = [
@@ -178,7 +178,11 @@ const PLAYERS = [
   {id:"zul-claes",name:"Thomas Claes",club:"SV Zulte Waregem",pos:"MID",minutes:616,price:7.5},
   {id:"zul-ake",name:"Marley Aké",club:"SV Zulte Waregem",pos:"FWD",minutes:580,price:9.0},
   {id:"zul-ementa",name:"Anosike Ementa",club:"SV Zulte Waregem",pos:"FWD",minutes:615,price:14.0}
-].map(p => ({...p, score:0}));
+].map(p => ({
+  ...p,
+  price: p.id === "clu-vanaken" ? 25 : Math.min(24, Math.round(p.price * 3) / 2),
+  score: 0
+}));
 
 const MATCHES = [
   {date:"7 aug 2026",week:"Speeldag 1",home:"Club Brugge",away:"KV Kortrijk",homeScore:3,awayScore:0},
@@ -192,7 +196,7 @@ const MATCHES = [
 
 const SCORING = {
   columns: [
-    ["save","Save"],["cleanSheet","Clean sheet"],["savesInsideBox","Saves inside box"],["punches","Punches"],
+    ["minutes","Speelminuut"],["save","Save"],["cleanSheet","Clean sheet"],["savesInsideBox","Saves inside box"],["punches","Punches"],
     ["goalsConceded","Goals conceded"],["foulsMade","Fouls made"],["foulsDrawn","Fouls get"],
     ["yellow","Yellow card"],["red","Red card"],["goal","Goal"],["assist","Assist"],
     ["successfulTackles","Successful tackles"],["duelWon","Duel won"],["duelLost","Duel lost"],
@@ -202,10 +206,10 @@ const SCORING = {
     ["successfulDribble","Successful dribble"],["shotOnTarget","Shots on target"]
   ],
   rows: {
-    GK: {save:3,cleanSheet:20,savesInsideBox:5,punches:2,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:2,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
-    DEF:{save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:2,interceptions:2,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
-    MID:{save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:2,possessionWon:.3,possessionLost:-.3,successfulPass:.2,successfulLongPass:.4,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2},
-    FWD:{save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:1,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4}
+    GK: {minutes:.1,save:3,cleanSheet:20,savesInsideBox:5,punches:2,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:2,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
+    DEF:{minutes:.1,save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:2,interceptions:2,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
+    MID:{minutes:.1,save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:2,possessionWon:.3,possessionLost:-.3,successfulPass:.2,successfulLongPass:.4,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2},
+    FWD:{minutes:.1,save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:1,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4}
   }
 };
 

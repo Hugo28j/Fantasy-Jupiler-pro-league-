@@ -5,7 +5,7 @@ De code voor punten 1–4 staat in de repository, maar GitHub Pages kan zelf gee
 ## 1. Supabase maken
 
 1. Maak een project op <https://supabase.com/dashboard>.
-2. Open **SQL Editor** en voer `supabase/migrations/001_fantasy_core.sql` volledig uit.
+2. Open **SQL Editor** en voer de bestanden in `supabase/migrations/` in nummervolgorde volledig uit (`001`, daarna `002`, enzovoort).
 3. Open **Authentication → URL Configuration**. Zet de GitHub Pages-URL als **Site URL** en voeg dezelfde URL toe bij **Redirect URLs**.
 4. Kopieer bij **Project Settings → API** de Project URL en de publieke anon/publishable key naar `config.js`.
 
@@ -36,6 +36,9 @@ API-FOOTBALL levert de meeste waarden uit de huidige puntentabel rechtstreeks. D
 - de deadline is het startuur van de eerste wedstrijd van de speeldag;
 - na die deadline weigert de database elke teamwijziging, ook wanneer iemand de browsercode manipuleert;
 - de opstelling wordt per speeldag bevroren en scores worden opnieuw berekend zodra wedstrijdstatistieken binnenkomen.
+- de reservekeeper kan uitsluitend de basiskeeper vervangen en de veldreserve kan maximaal één afwezige veldspeler vervangen;
+- iedere gespeelde minuut levert 0,1 punt op;
+- na de eerste vastgezette selectie zijn 2 transfers per speeldag gratis en kost iedere extra transfer 4 punten.
 
 ## 4. Productiecontrole
 

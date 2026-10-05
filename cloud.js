@@ -41,6 +41,11 @@
     deadline.innerHTML = '<span id="syncDot" class="sync-dot"></span><div><strong id="deadlineTitle">Speeldagdeadline</strong><small id="deadlineText">Nog niet gekoppeld</small></div>';
     document.querySelector("main").prepend(deadline);
 
+    const transfers = make("div","transfer-card");
+    transfers.id = "transferCard";
+    transfers.innerHTML = '<div><strong id="transferTitle">Transfers</strong><small id="transferText">2 gratis per speeldag · daarna −4 punten per extra transfer</small></div><span id="transferCounter" class="transfer-counter">0 / 2</span>';
+    deadline.insertAdjacentElement("afterend",transfers);
+
     const dialog = document.createElement("dialog");
     dialog.id = "authDialog";
     dialog.className = "auth-dialog";
@@ -58,6 +63,7 @@
     document.querySelector("main").prepend(banner);
     document.getElementById("authButton").textContent = "Backend instellen";
     document.getElementById("deadlineText").textContent = "Demomodus — wijzigingen worden alleen lokaal bewaard";
+    document.getElementById("transferText").textContent = "Wordt actief zodra de backend gekoppeld is";
   }
 
   function setStatus(text,kind){
@@ -185,7 +191,9 @@
       return;
     }
     setStatus("Online opgeslagen","online");
-    if(data && data.locked) cloud.locked = true;
+    const result = Array.isArray(data) ? data[0] : data;
+    if(result && result.locked) cloud.locked = true;
+    await loadTransferStatus();
   }
 
   async function loadPlayers(){
@@ -273,6 +281,22 @@
     updateEditability();
   }
 
+  async function loadTransferStatus(){
+    if(!cloud.user) return;
+    const {data,error} = await cloud.client.rpc("my_transfer_status");
+    if(error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    const used = Number(row?.transfers_used || 0);
+    const free = Number(row?.free_transfers || 2);
+    const cost = Number(row?.point_cost || 0);
+    document.getElementById("transferTitle").textContent = row?.gameweek_number ? "Transfers voor speeldag " + row.gameweek_number : "Transfers";
+    document.getElementById("transferCounter").textContent = used + " / " + free + " gratis";
+    document.getElementById("transferCounter").classList.toggle("has-cost",cost > 0);
+    document.getElementById("transferText").textContent = cost > 0
+      ? "Huidige puntenkost: −" + cost + " punten"
+      : "2 gratis per speeldag · daarna −4 punten per extra transfer";
+  }
+
   function formatDateTime(value){
     if(!value) return "onbekend";
     return new Intl.DateTimeFormat("nl-BE",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(value);
@@ -291,7 +315,7 @@
     try{
       setStatus("Gegevens laden…","");
       await loadPlayers();
-      await Promise.all([loadFixtures(),loadDeadline()]);
+      await Promise.all([loadFixtures(),loadDeadline(),loadTransferStatus()]);
       await loadTeam();
       await loadLeaderboard();
       if(!cloud.locked) setStatus("Online opgeslagen","online");
@@ -314,6 +338,9 @@
       button.textContent = "Inloggen";
       setStatus("Niet ingelogd","");
       document.getElementById("deadlineText").textContent = "Log in om de actuele deadline te zien";
+      document.getElementById("transferTitle").textContent = "Transfers";
+      document.getElementById("transferCounter").textContent = "0 / 2";
+      document.getElementById("transferText").textContent = "Log in om je transfers voor de volgende speeldag te zien";
       state.squad = [];
       state.benchGK = null;
       state.benchOutfield = null;
