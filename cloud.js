@@ -232,20 +232,38 @@
     await loadTeam();
   }
 
-  async function loadPlayers(){
-    const [{data,error},{data:priceRows,error:priceError}] = await Promise.all([
-      cloud.client.from("players").select("id,name,club_name,position,minutes,price,total_points").eq("active",true).order("name"),
-      cloud.client
+  async function loadAllPriceHistory(){
+    const rows = [];
+    const pageSize = 1000;
+    for(let from=0; from<10000; from+=pageSize){
+      const {data,error} = await cloud.client
         .from("player_match_stats")
         .select("player_id,stats,fixtures(kickoff,status)")
-        .limit(5000)
+        .range(from,from+pageSize-1);
+      if(error) throw error;
+      rows.push(...(data || []));
+      if(!data || data.length < pageSize) break;
+    }
+    return rows;
+  }
+
+  async function loadPlayers(){
+    const [{data,error},priceHistoryResult] = await Promise.all([
+      cloud.client.from("players").select("id,name,club_name,position,minutes,price,total_points").eq("active",true).order("name"),
+      loadAllPriceHistory()
+        .then(data => ({data,error:null}))
+        .catch(error => ({data:[],error}))
     ]);
     if(error) throw error;
-    if(priceError) console.warn("Laatste prijswijziging kon niet worden geladen",priceError.message);
+
+    const priceRows = priceHistoryResult.data || [];
+    if(priceHistoryResult.error){
+      console.warn("Laatste prijswijziging kon niet volledig worden geladen",priceHistoryResult.error.message);
+    }
     if(!data || !data.length) return;
 
     const latestPriceChange = new Map();
-    for(const row of priceRows || []){
+    for(const row of priceRows){
       const fixture = Array.isArray(row.fixtures) ? row.fixtures[0] : row.fixtures;
       if(!fixture || fixture.status !== "FT") continue;
       const deltaRaw = row.stats?.priceDelta;
@@ -263,7 +281,7 @@
     PLAYERS.splice(0,PLAYERS.length,...data.map(p => ({
       id:p.id,name:p.name,club:p.club_name,pos:p.position,minutes:p.minutes,
       price:Number(p.price),score:Number(p.total_points || 0),
-      lastPriceDelta:latestPriceChange.get(String(p.id))?.delta ?? null
+      lastPriceDelta:latestPriceChange.get(String(p.id))?.delta ?? 0
     })));
     const clubs = [...new Set(PLAYERS.map(p => p.club))].sort((a,b) => a.localeCompare(b,"nl"));
     CLUBS.splice(0,CLUBS.length,...clubs);
