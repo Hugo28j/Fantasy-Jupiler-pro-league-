@@ -287,7 +287,8 @@ function renderPlayerProfile(player,matchRows=[]){
   const metrics = [
     ["Goals","goal"],["Assists","assist"],["Schoten op doel","shotOnTarget"],["Doelpogingen","totalScoringAtt"],
     ["Grote kansen gecreëerd","bigChanceCreated"],["Grote kansen gemist","bigChanceMissed"],
-    ["Penalty afgedwongen","penaltyWon"],["Geslaagde passes laatste derde","successfulFinalThirdPasses"],
+    ["Penalty area entries","penAreaEntries"],["Penalty afgedwongen","penaltyWon"],
+    ["Fout leidend tot goal","errorLeadToGoal"],["Geslaagde passes laatste derde","successfulFinalThirdPasses"],
     ["Geslaagde dribbels","successfulDribble"],
     ["Tackles gewonnen","successfulTackles"],["Duels gewonnen","duelWon"],["Duels verloren","duelLost"],
     ["Clearances","clearances"],["Intercepties","interceptions"],["Bal gewonnen","possessionWon"],["Bal verloren","possessionLost"],
@@ -374,12 +375,31 @@ function matchPlayerButton(row,match,side,index,total){
   const stats = row.stats || {};
   const pos = player.position || "MID";
   const score = Number(row.fantasy_points || 0);
-  const scoreClass = score >= 60 ? "hot" : score >= 30 ? "warm" : "cool";
+  const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+
+  // Sorare formationPlace gebruikt klassieke veldslots:
+  // 1 GK, 2 RB, 3 LB, 5/6 CB, 7 RW, 9 ST, 11 LW, met 4/8/10 op het middenveld.
+  const formationPlace = Number(stats.formationPlace || 0);
+  const slotMap = {
+    1:{zone:"GK",y:50},
+    2:{zone:"DEF",y:80},
+    3:{zone:"DEF",y:20},
+    4:{zone:"MID",y:25},
+    5:{zone:"DEF",y:40},
+    6:{zone:"DEF",y:60},
+    7:{zone:"FWD",y:80},
+    8:{zone:"MID",y:75},
+    9:{zone:"FWD",y:50},
+    10:{zone:"MID",y:50},
+    11:{zone:"FWD",y:20}
+  };
+  const slot = slotMap[formationPlace];
+  const zone = slot?.zone || pos;
   const xByPosition = side === "home"
     ? {GK:7,DEF:20,MID:33,FWD:45}
     : {GK:93,DEF:80,MID:67,FWD:55};
-  const x = xByPosition[pos] || (side === "home" ? 33 : 67);
-  const y = Math.round(((index+1)/(total+1))*88+6);
+  const x = xByPosition[zone] || (side === "home" ? 33 : 67);
+  const y = slot?.y ?? Math.round(((index+1)/(total+1))*88+6);
   return '<button class="match-pitch-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '" style="--mx:' + x + '%;--my:' + y + '%">' +
     matchSubstitutionLabel(row,match) +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
@@ -436,12 +456,13 @@ function renderMatchBench(rows,match,side){
     const player = row.player || {};
     const score = Number(row.fantasy_points || 0);
     const played = Number(row.minutes || 0) > 0;
+    const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
     return '<button class="match-bench-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '">' +
       '<span class="match-bench-avatar">' + initials(player.name || "?") + '</span>' +
       '<span><strong>' + escapeHtml(player.name || "Onbekend") + '</strong><small>' +
         (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>') +
       '</small></span>' +
-      '<span class="match-bench-score">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
+      '<span class="match-bench-score ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
     '</button>';
   }).join("") || '<div class="empty-state">Geen bankdata beschikbaar.</div>';
 }
@@ -497,7 +518,8 @@ const MATCH_STAT_LABELS = {
   successfulLongPass:"Geslaagde lange passes",passMissed:"Gemiste passes",successfulDribble:"Geslaagde dribbels",
   shotOnTarget:"Schoten op doel",bigChanceCreated:"Grote kansen gecreëerd",
   successfulFinalThirdPasses:"Geslaagde passes laatste derde",bigChanceMissed:"Grote kansen gemist",
-  penaltyWon:"Penalty afgedwongen",totalScoringAtt:"Doelpogingen"
+  penaltyWon:"Penalty afgedwongen",totalScoringAtt:"Doelpogingen",
+  penAreaEntries:"Penalty area entries",errorLeadToGoal:"Fout leidend tot goal"
 };
 
 function renderMatchPlayerDetail(match,row){
