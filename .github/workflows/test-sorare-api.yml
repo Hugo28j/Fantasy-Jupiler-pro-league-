@@ -8,12 +8,29 @@ on:
       - ".github/workflows/test-sorare-api.yml"
 
 jobs:
-  check:
+  inspect:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-      - name: Type-check Edge Function
-        run: deno check supabase/functions/sync-jpl/index.ts
+      - name: Inspect Sorare game and competition schema
+        shell: python
+        run: |
+          import urllib.request
+          url="https://api.sorare.com/graphql/schema"
+          req=urllib.request.Request(url,headers={"User-Agent":"Fantasy-JPL/1.0"})
+          with urllib.request.urlopen(req,timeout=60) as r:
+              schema=r.read().decode("utf-8",errors="replace")
+          def block(name):
+              marker=f"type {name} "
+              i=schema.find(marker)
+              if i<0:
+                  marker=f"type {name} {{"
+                  i=schema.find(marker)
+              print(f"\n=== {name} ===")
+              if i<0:
+                  print("NOT_FOUND")
+                  return
+              j=schema.find("\ntype ",i+5)
+              if j<0: j=min(len(schema),i+25000)
+              print(schema[i:j][:25000])
+          for name in ["Game","Competition","TournamentCalendarStage","StageGroup","FootballRoot"]:
+              block(name)
