@@ -826,50 +826,37 @@ Deno.serve(async request => {
     // bijgewerkt zodra de cron opnieuw draait.
     const {data:pending,error:pendingError} = await db
       .from("fixtures")
-      .select("id,gameweek_id,kickoff,status")
+      .select("id,gameweek_id,kickoff,status,details_processed")
       .in("gameweek_id",seasonGameweekIds)
       .eq("stats_processed",false)
       .eq("status","FT")
       .order("kickoff",{ascending:true});
     if(pendingError) throw pendingError;
 
+    const {data:pendingDetails,error:pendingDetailsError} = await db
+      .from("fixtures")
+      .select("id,gameweek_id,kickoff,status,details_processed")
+      .in("gameweek_id",seasonGameweekIds)
+      .eq("details_processed",false)
+      .eq("status","FT")
+      .order("kickoff",{ascending:true});
+    if(pendingDetailsError) throw pendingDetailsError;
+
     const {data:liveFixtures,error:liveError} = await db
       .from("fixtures")
-      .select("id,gameweek_id,kickoff,status")
+      .select("id,gameweek_id,kickoff,status,details_processed")
       .in("gameweek_id",seasonGameweekIds)
       .eq("status","LIVE")
       .order("kickoff",{ascending:true});
     if(liveError) throw liveError;
 
-    // De eerste stats-import bevatte nog geen opstellingsmetadata. Controleer één rij
-    // van de laatste afgewerkte speeldag en refresh die speeldag exact één keer indien nodig.
-    const latestFixtureIds = latestCompleted.games.map((g:any)=>fixtureDbId(String(g.id)));
-    let needsLineupBackfill = false;
-    if(latestFixtureIds.length){
-      const {data:sampleMeta,error:sampleMetaError} = await db
-        .from("player_match_stats")
-        .select("stats")
-        .eq("fixture_id",latestFixtureIds[0])
-        .limit(1);
-      if(sampleMetaError) throw sampleMetaError;
-      const sampleStats = sampleMeta?.[0]?.stats || {};
-      needsLineupBackfill = sampleMeta?.length > 0 && sampleStats.gameStarted == null;
-    }
-
     const targetById = new Map<string,any>();
     for(const fixture of pending || []) targetById.set(String(fixture.id),fixture);
+    for(const fixture of pendingDetails || []) targetById.set(String(fixture.id),fixture);
     for(const fixture of liveFixtures || []) targetById.set(String(fixture.id),fixture);
-    if(needsLineupBackfill){
-      for(const game of latestCompleted.games){
-        const id = fixtureDbId(String(game.id));
-        targetById.set(id,{
-          id,
-          gameweek_id:latestCompletedId,
-          kickoff:game.date,
-          status:"FT"
-        });
-      }
-    }
+
+    const pendingStatIds = new Set((pending || []).map((f:any)=>String(f.id)));
+    const pendingDetailIds = new Set((pendingDetails || []).map((f:any)=>String(f.id)));
 
     let processedFixtures = 0;
     let importedPlayerRows = 0;
@@ -1004,20 +991,31 @@ Deno.serve(async request => {
       }
       importedPlayerRows = statRows.length;
 
-      // Alleen afgewerkte, nog niet verwerkte fixtures worden definitief afgevinkt.
-      for(const fixture of pending || []){
+      // Afgewerkte wedstrijden krijgen éénmalig zowel score- als opstellingsstatus.
+      for(const fixture of [...targetById.values()]){
+        if(String(fixture.status) !== "FT") continue;
         const id = String(fixture.id);
         const count = rowCountByFixture.get(id) || 0;
         if(count < 18){
           incompleteFixtures.push(id);
           continue;
         }
+
+        const patch:any = {
+          details_processed:true,
+          updated_at:new Date().toISOString()
+        };
+        if(pendingStatIds.has(id)) patch.stats_processed = true;
+
         const {error} = await db.from("fixtures")
-          .update({stats_processed:true,updated_at:new Date().toISOString()})
+          .update(patch)
           .eq("id",fixture.id);
         if(error) throw error;
-        touchedGameweeks.add(Number(fixture.gameweek_id));
-        processedFixtures += 1;
+
+        if(pendingStatIds.has(id)){
+          touchedGameweeks.add(Number(fixture.gameweek_id));
+          processedFixtures += 1;
+        }
       }
     }
 
@@ -1053,7 +1051,7 @@ Deno.serve(async request => {
       playersImported:importedPlayers,
       pendingFixtures:(pending || []).length,
       liveFixtures:(liveFixtures || []).length,
-      lineupBackfill:needsLineupBackfill,
+      lineupBackfillFixtures:pendingDetailIds.size,
       processedFixtures,
       incompleteFixtures,
       importedPlayerRows,
