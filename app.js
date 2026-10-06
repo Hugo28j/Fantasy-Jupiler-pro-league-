@@ -90,7 +90,16 @@ function buyPlayer(id){
   if(!p) return;
   const check = canBuy(p);
   if(!check.ok){ if(check.reason !== "owned") toast(check.reason); return; }
+
+  const samePositionBefore = squadPlayers().filter(player => player.pos === p.pos).length;
   state.squad.push(id);
+
+  // De tweede gekochte keeper is automatisch de reservekeeper.
+  // De eerste keeper blijft dus zonder extra klik in de basis staan.
+  if(p.pos === "GK" && samePositionBefore === 1 && !state.benchGK){
+    state.benchGK = p.id;
+  }
+
   state.cash = Math.round((Number(state.cash || 0)-Number(p.price || 0))*10)/10;
   saveState();
   renderAll();
@@ -112,15 +121,50 @@ function sellPlayer(id){
 function setBench(id){
   const p = playerById(id);
   if(!p || !state.squad.includes(id)) return;
-  if(!isSquadComplete()){
-    toast("Maak eerst je volledige selectie van 8 spelers.");
-    return;
-  }
+
   if(p.pos === "GK"){
-    state.benchGK = state.benchGK === id ? null : id;
+    const keepers = squadPlayers().filter(player => player.pos === "GK");
+    if(keepers.length < 2){
+      toast("Koop eerst een tweede keeper om te kunnen wisselen.");
+      return;
+    }
+
+    if(state.benchGK === id){
+      // "Naar basis": de andere keeper gaat meteen naar de bank.
+      const otherKeeper = keepers.find(player => player.id !== id);
+      state.benchGK = otherKeeper ? otherKeeper.id : null;
+    }else{
+      // "Op bank": de huidige reservekeeper komt automatisch in de basis.
+      state.benchGK = id;
+    }
   }else{
-    state.benchOutfield = state.benchOutfield === id ? null : id;
+    const outfield = squadPlayers().filter(player => player.pos !== "GK");
+    if(outfield.length < 2){
+      toast("Je hebt nog geen andere veldspeler om mee te wisselen.");
+      return;
+    }
+
+    if(state.benchOutfield === id){
+      // Kies bij "Naar basis" eerst de andere speler van dezelfde positie.
+      // Zo blijft de formatie zo logisch mogelijk.
+      const samePositionStarter = outfield.find(player =>
+        player.id !== id &&
+        player.pos === p.pos &&
+        player.id !== state.benchOutfield
+      );
+      const fallbackStarter = outfield.find(player =>
+        player.id !== id &&
+        player.id !== state.benchOutfield
+      );
+      const replacement = samePositionStarter || fallbackStarter;
+      state.benchOutfield = replacement ? replacement.id : null;
+    }else{
+      // De aangeklikte basisspeler gaat naar de bank en de huidige bankspeler
+      // komt vanzelf in de basis doordat lineupPlayers() hem niet langer uitsluit.
+      state.benchOutfield = id;
+    }
   }
+
   saveState();
   renderAll();
 }
@@ -165,7 +209,11 @@ function renderRequirements(){
 function lineupPlayerHtml(p,isBench){
   const benchLabel = p.pos === "GK" ? "Reservekeeper" : "Reserve veldspeler";
   const buttonText = isBench ? "Naar basis" : "Op bank";
-  const score = Number(p.score || 0);
+  const liveScoreMode = Boolean(window.FANTASY_LIVE_SCORE_MODE);
+  const liveScores = window.FANTASY_GAMEWEEK_PLAYER_SCORES || {};
+  const score = liveScoreMode
+    ? Number(liveScores[p.id] || 0)
+    : Number(p.score || 0);
   const scoreClass = score >= 60 ? "hot" : score >= 30 ? "warm" : "cool";
   return '<article class="sorare-player ' + (isBench ? "is-bench":"") + '">' +
     '<button class="sorare-player-main player-name-link" data-player-id="' + escapeHtml(p.id) + '" type="button">' +
@@ -223,12 +271,21 @@ function renderTeam(){
   }
 
   if(!isSquadComplete()){
+    const starters = lineupPlayers();
+    const bp = benchPlayers();
     starting.className = "fantasy-pitch";
-    starting.innerHTML = renderPitch(squadPlayers());
-    bench.className = "sorare-bench empty-state";
-    bench.textContent = "Voltooi eerst de 2-2-2-2 selectie. Daarna kies je 1 reservekeeper en 1 veldreserve.";
+    starting.innerHTML = renderPitch(starters);
+
+    if(bp.length){
+      bench.className = "sorare-bench";
+      bench.innerHTML = bp.map(player => lineupPlayerHtml(player,true)).join("");
+    }else{
+      bench.className = "sorare-bench empty-state";
+      bench.textContent = "Je reservekeeper verschijnt hier automatisch zodra je een tweede keeper koopt.";
+    }
+
     if(lineupTitle) lineupTitle.textContent = "Selectie · " + state.squad.length + " / 8";
-    if(lineupPill) lineupPill.textContent = "Nog bezig met bouwen";
+    if(lineupPill) lineupPill.textContent = bp.length ? "Bank wordt automatisch opgebouwd" : "Nog bezig met bouwen";
   }else{
     const starters = lineupPlayers();
     starting.className = "fantasy-pitch";
