@@ -1,0 +1,118 @@
+name: Audit market prices
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/audit-market-prices.yml"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit all player price histories
+        shell: python
+        run: |
+          import json,re,urllib.parse,urllib.request,collections,math
+          cfg=open("config.js","r",encoding="utf-8").read()
+          url=re.search(r'supabaseUrl:\s*"([^"]+)"',cfg).group(1)
+          key=re.search(r'supabaseAnonKey:\s*"([^"]+)"',cfg).group(1)
+
+          def get(path,params,range_header=None):
+              qs=urllib.parse.urlencode(params,safe="(),*")
+              headers={"apikey":key,"Accept":"application/json"}
+              if range_header: headers["Range"]=range_header
+              req=urllib.request.Request(url+"/rest/v1/"+path+"?"+qs,headers=headers)
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return json.loads(r.read().decode())
+
+          players=get("players",{
+              "select":"id,name,club_name,position,price,total_points,minutes,active",
+              "active":"eq.true",
+              "order":"name.asc"
+          },"0-999")
+
+          rows=[]
+          start=0
+          while True:
+              page=get("player_match_stats",{
+                  "select":"player_id,minutes,fantasy_points,stats,fixtures(kickoff,status,home_team,away_team,gameweeks(number))",
+                  "order":"player_id.asc"
+              },f"{start}-{start+999}")
+              rows.extend(page)
+              if len(page)<1000: break
+              start+=1000
+              if start>10000: break
+
+          by=collections.defaultdict(list)
+          for row in rows:
+              fixture=row.get("fixtures") or {}
+              if isinstance(fixture,list): fixture=fixture[0] if fixture else {}
+              if fixture.get("status")!="FT": continue
+              by[str(row["player_id"])].append(row)
+
+          issues=[]
+          dnp_price_changes=[]
+          summaries=[]
+          for p in players:
+              hist=by.get(str(p["id"]),[])
+              hist.sort(key=lambda r: ((r.get("fixtures") or {}).get("kickoff") or ""))
+              if not hist:
+                  summaries.append((p["name"],p["price"],None,0,0,0,p["club_name"]))
+                  continue
+
+              stats0=hist[0].get("stats") or {}
+              base=stats0.get("marketBasePrice")
+              try: base=float(base)
+              except: base=None
+              deltas=[]
+              played=0
+              for r in hist:
+                  st=r.get("stats") or {}
+                  d=st.get("priceDelta")
+                  try: d=float(d)
+                  except: d=None
+                  if d is not None: deltas.append(d)
+                  mins=float(r.get("minutes") or 0)
+                  if mins>0: played+=1
+                  if mins<=0 and d is not None and abs(d)>1e-9:
+                      f=r.get("fixtures") or {}
+                      dnp_price_changes.append({
+                        "name":p["name"],"club":p["club_name"],"gw":(f.get("gameweeks") or {}).get("number"),
+                        "delta":d,"points":r.get("fantasy_points"),"minutes":mins
+                      })
+
+              total_delta=round(sum(deltas),1)
+              current=float(p["price"] or 0)
+              expected=None if base is None else round(max(1,base+total_delta),1)
+              if base is None:
+                  issues.append((p["name"],"missing_base",current))
+              elif abs(current-expected)>0.11:
+                  issues.append((p["name"],"current_mismatch",base,total_delta,expected,current))
+              if base is not None and base>25.01:
+                  issues.append((p["name"],"base_over_25",base,current))
+              if total_delta > 2*len(hist)+0.01:
+                  issues.append((p["name"],"increase_over_rule_max",total_delta,len(hist)))
+
+              summaries.append((p["name"],current,base,len(hist),played,total_delta,p["club_name"]))
+
+          summaries.sort(key=lambda x:x[1],reverse=True)
+          biggest_risers=sorted(
+              [x for x in summaries if x[2] is not None],
+              key=lambda x:x[5],reverse=True
+          )[:25]
+          biggest_fallers=sorted(
+              [x for x in summaries if x[2] is not None],
+              key=lambda x:x[5]
+          )[:25]
+
+          print("PLAYER_COUNT",len(players))
+          print("FT_STAT_ROWS",sum(len(v) for v in by.values()))
+          print("ISSUE_COUNT",len(issues))
+          print("ISSUES",json.dumps(issues[:50],ensure_ascii=False))
+          print("DNP_PRICE_CHANGE_COUNT",len(dnp_price_changes))
+          print("DNP_SAMPLE",json.dumps(dnp_price_changes[:30],ensure_ascii=False))
+          print("TOP_CURRENT",json.dumps(summaries[:25],ensure_ascii=False))
+          print("BIGGEST_RISERS",json.dumps(biggest_risers,ensure_ascii=False))
+          print("BIGGEST_FALLERS",json.dumps(biggest_fallers,ensure_ascii=False))
