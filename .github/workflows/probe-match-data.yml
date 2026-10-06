@@ -1,0 +1,44 @@
+name: Probe match data
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/probe-match-data.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect public Supabase match rows
+        shell: python
+        run: |
+          import json,re,urllib.parse,urllib.request
+          cfg=open("config.js","r",encoding="utf-8").read()
+          url=re.search(r'supabaseUrl:\s*"([^"]+)"',cfg).group(1)
+          key=re.search(r'supabaseAnonKey:\s*"([^"]+)"',cfg).group(1)
+          def get(path,params):
+              qs=urllib.parse.urlencode(params,safe="(),*")
+              req=urllib.request.Request(url+"/rest/v1/"+path+"?"+qs,headers={"apikey":key,"Accept":"application/json","Range":"0-999"})
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return json.loads(r.read().decode())
+          fixtures=get("fixtures",{
+            "select":"id,kickoff,status,home_team,away_team,details_processed",
+            "home_team":"eq.Sint-Truidense VV",
+            "away_team":"eq.KVC Westerlo",
+            "order":"kickoff.desc",
+            "limit":"5"
+          })
+          print("FIXTURES",json.dumps(fixtures,ensure_ascii=False))
+          if fixtures:
+              fid=fixtures[0]["id"]
+              rows=get("player_match_stats",{
+                "select":"player_id,minutes,stats,fantasy_points,players(name,club_name,position)",
+                "fixture_id":f"eq.{fid}",
+                "limit":"100"
+              })
+              print("ROW_COUNT",len(rows))
+              meta=sum(1 for r in rows if "gameStarted" in (r.get("stats") or {}))
+              print("ROWS_WITH_GAMESTARTED",meta)
+              print("SAMPLE",json.dumps(rows[:5],ensure_ascii=False))
