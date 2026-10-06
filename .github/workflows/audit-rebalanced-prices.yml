@@ -75,13 +75,12 @@ jobs:
               else:
                   p90=pts*90/mins
                   if p90<10: factor=.60
-                  elif p90<20: factor=.75
-                  elif p90<30: factor=.90
+                  elif p90<20: factor=.80
                   else: factor=1
                   perf=round(orig*factor*2)/2
-                  if p90<30 and mins<90: cap=6
-                  elif p90<30 and mins<180: cap=8
-                  elif p90<30 and mins<270: cap=10
+                  if p90<20 and mins<90: cap=6
+                  elif p90<20 and mins<180: cap=8
+                  elif p90<20 and mins<270: cap=10
                   else: cap=999
                   target=max(1,min(orig,cap,perf))
               projected.append((p["name"],p["club_name"],p["position"],mins,round(pts,1),None if p90 is None else round(p90,1),orig,target))
