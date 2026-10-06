@@ -49,7 +49,7 @@
     const dialog = document.createElement("dialog");
     dialog.id = "authDialog";
     dialog.className = "auth-dialog";
-    dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in om je team, budget en score centraal te bewaren.</p><button id="googleAuthButton" class="google-auth-btn" type="button"><span class="google-g" aria-hidden="true">G</span><span>Doorgaan met Google</span></button><div class="auth-divider"><span>of met e-mail</span></div><label><span>E-mailadres</span><input id="authEmail" type="email" autocomplete="email"></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="4"></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
+    dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in met je naam en wachtwoord om je team, budget en score centraal te bewaren.</p><button id="googleAuthButton" class="google-auth-btn" type="button"><span class="google-g" aria-hidden="true">G</span><span>Doorgaan met Google</span></button><div class="auth-divider"><span>of met e-mail</span></div><label><span>Naam</span><input id="authIdentity" type="text" autocomplete="username" maxlength="28" placeholder="bv. Hugo"></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="4"></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
     document.body.appendChild(dialog);
 
     document.getElementById("authButton").addEventListener("click", onAuthButton);
@@ -75,9 +75,23 @@
     dot.className = "sync-dot" + (kind ? " " + kind : "");
   }
 
+  function normalizeUsername(value){
+    return String(value || "").trim().replace(/\s+/g," ").toLowerCase();
+  }
+
+  function usernameEmail(value){
+    const normalized = normalizeUsername(value);
+    if(normalized.includes("@")) return normalized;
+    const bytes = new TextEncoder().encode(normalized);
+    const hex = Array.from(bytes,b => b.toString(16).padStart(2,"0")).join("");
+    return "u-" + hex + "@fantasy.invalid";
+  }
+
   function authValues(){
+    const identity = document.getElementById("authIdentity").value.trim();
     return {
-      email: document.getElementById("authEmail").value.trim(),
+      identity,
+      email: usernameEmail(identity),
       password: document.getElementById("authPassword").value
     };
   }
@@ -101,9 +115,9 @@
 
   async function signIn(){
     authError("");
-    const {email,password} = authValues();
-    if(!email || !password){
-      authError("Vul je e-mailadres en wachtwoord in, of kies Google.");
+    const {identity,email,password} = authValues();
+    if(!identity || !password){
+      authError("Vul je naam en wachtwoord in, of kies Google.");
       return;
     }
     const {error} = await cloud.client.auth.signInWithPassword({email,password});
@@ -142,15 +156,36 @@
 
   async function signUp(){
     authError("");
-    const {email,password} = authValues();
-    if(!email || password.length < 4){
-      authError("Vul een geldig e-mailadres en minstens 4 tekens in.");
+    const {identity,email,password} = authValues();
+    const displayName = identity.trim();
+    if(!displayName || displayName.length > 28){
+      authError("Kies een naam van 1 tot 28 tekens.");
       return;
     }
-    const {data,error} = await cloud.client.auth.signUp({email,password,options:{emailRedirectTo:location.href.split("#")[0]}});
-    if(error) authError(error.message);
-    else if(data.session) document.getElementById("authDialog").close();
-    else authError("Account gemaakt. Bevestig eerst de e-mail die je kreeg.");
+    if(password.length < 4){
+      authError("Je wachtwoord moet minstens 4 tekens hebben.");
+      return;
+    }
+
+    const {data,error} = await cloud.client.auth.signUp({
+      email,
+      password,
+      options:{
+        data:{display_name:displayName}
+      }
+    });
+
+    if(error){
+      if(/already|registered|exists/i.test(error.message)){
+        authError("Deze naam is al in gebruik.");
+      }else{
+        authError(error.message);
+      }
+    }else if(data.session){
+      document.getElementById("authDialog").close();
+    }else{
+      authError("Account gemaakt, maar automatische login is nog niet actief. Zet e-mailbevestiging uit in Supabase Auth.");
+    }
   }
 
   function requireEditable(){
