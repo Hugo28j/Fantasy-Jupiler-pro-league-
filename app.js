@@ -6,7 +6,8 @@ const state = {
   squad: [],
   benchGK: null,
   benchOutfield: null,
-  teamName: "Mijn Fantasy Team"
+  teamName: "Mijn Fantasy Team",
+  cash: START_BUDGET
 };
 
 let selectedMatchweek = null;
@@ -18,6 +19,8 @@ function loadState(){
     if(saved.benchGK && state.squad.includes(saved.benchGK)) state.benchGK = saved.benchGK;
     if(saved.benchOutfield && state.squad.includes(saved.benchOutfield)) state.benchOutfield = saved.benchOutfield;
     if(typeof saved.teamName === "string" && saved.teamName.trim()) state.teamName = saved.teamName.slice(0,28);
+    if(Number.isFinite(Number(saved.cash))) state.cash = Number(saved.cash);
+    else state.cash = Math.max(0,START_BUDGET-state.squad.map(playerById).filter(Boolean).reduce((sum,p)=>sum+Number(p.price||0),0));
   }catch(e){ console.warn("Could not load saved fantasy team",e); }
 }
 
@@ -28,8 +31,8 @@ function saveState(){
 function playerById(id){ return PLAYERS.find(p => p.id === id); }
 function squadPlayers(){ return state.squad.map(playerById).filter(Boolean); }
 function countPos(pos){ return squadPlayers().filter(p => p.pos === pos).length; }
-function spent(){ return squadPlayers().reduce((sum,p) => sum + p.price,0); }
-function budgetLeft(){ return Math.max(0, START_BUDGET - spent()); }
+function spent(){ return squadPlayers().reduce((sum,p) => sum + Number(p.price || 0),0); }
+function budgetLeft(){ return Math.max(0,Number(state.cash || 0)); }
 function lineupPlayers(){
   return squadPlayers().filter(p => p.id !== state.benchGK && p.id !== state.benchOutfield);
 }
@@ -75,6 +78,7 @@ function buyPlayer(id){
   const check = canBuy(p);
   if(!check.ok){ if(check.reason !== "owned") toast(check.reason); return; }
   state.squad.push(id);
+  state.cash = Math.round((Number(state.cash || 0)-Number(p.price || 0))*10)/10;
   saveState();
   renderAll();
   toast(p.name + " gekocht voor " + money(p.price));
@@ -82,7 +86,9 @@ function buyPlayer(id){
 
 function sellPlayer(id){
   const p = playerById(id);
+  if(!state.squad.includes(id)) return;
   state.squad = state.squad.filter(x => x !== id);
+  if(p) state.cash = Math.round((Number(state.cash || 0)+Number(p.price || 0))*10)/10;
   if(state.benchGK === id) state.benchGK = null;
   if(state.benchOutfield === id) state.benchOutfield = null;
   saveState();
@@ -119,6 +125,7 @@ function autoLineup(){
 
 function resetSquad(){
   if(!confirm("Wil je je volledige selectie wissen?")) return;
+  state.cash = Math.round((Number(state.cash || 0)+spent())*10)/10;
   state.squad = [];
   state.benchGK = null;
   state.benchOutfield = null;
@@ -526,36 +533,60 @@ function matchSubstitutionLabel(row,match){
   return "";
 }
 
-function matchPlayerButton(row,match,side,index,total){
+const FORMATION_SIDE_ORDER = {
+  GK:[1],
+  DEF:[3,4,5,6,2],
+  MID:[11,8,4,10,7,2],
+  FWD:[11,9,10,7]
+};
+
+function matchFormationPlace(row){
+  const stats = row.stats || {};
+  const actual = Number(stats.formationPlace || 0);
+  if(actual > 0) return actual;
+  const preferred = Number(stats.preferredFormationPlace || 0);
+  return preferred > 0 ? preferred : 0;
+}
+
+function formationSideRank(row,position){
+  const place = matchFormationPlace(row);
+  const order = FORMATION_SIDE_ORDER[position] || [];
+  const rank = order.indexOf(place);
+  if(rank >= 0) return rank;
+  return 50 + String(row.player?.name || row.player_id || "").charCodeAt(0);
+}
+
+function lineY(index,total,side){
+  if(total <= 1) return 50;
+  const min = 18;
+  const max = 82;
+  const base = min + ((max-min)*index)/(total-1);
+  return side === "away" ? 100-base : base;
+}
+
+function inferredFormation(rows){
+  const starters = inferredMatchStarters(rows);
+  const counts = {DEF:0,MID:0,FWD:0};
+  starters.forEach(row => {
+    const pos = row.player?.position || "MID";
+    if(counts[pos] != null) counts[pos] += 1;
+  });
+  return counts.DEF + "-" + counts.MID + "-" + counts.FWD;
+}
+
+function matchPlayerButton(row,match,side,index,total,zone){
   const player = row.player || {};
   const stats = row.stats || {};
-  const pos = player.position || "MID";
+  const pos = player.position || zone || "MID";
   const score = Number(row.fantasy_points || 0);
   const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
 
-  // Sorare formationPlace gebruikt klassieke veldslots:
-  // 1 GK, 2 RB, 3 LB, 5/6 CB, 7 RW, 9 ST, 11 LW, met 4/8/10 op het middenveld.
-  const formationPlace = Number(stats.formationPlace || 0);
-  const slotMap = {
-    1:{zone:"GK",y:50},
-    2:{zone:"DEF",y:80},
-    3:{zone:"DEF",y:20},
-    4:{zone:"MID",y:25},
-    5:{zone:"DEF",y:40},
-    6:{zone:"DEF",y:60},
-    7:{zone:"FWD",y:80},
-    8:{zone:"MID",y:75},
-    9:{zone:"FWD",y:50},
-    10:{zone:"MID",y:50},
-    11:{zone:"FWD",y:20}
-  };
-  const slot = slotMap[formationPlace];
-  const zone = slot?.zone || pos;
   const xByPosition = side === "home"
     ? {GK:7,DEF:20,MID:33,FWD:45}
     : {GK:93,DEF:80,MID:67,FWD:55};
-  const x = xByPosition[zone] || (side === "home" ? 33 : 67);
-  const y = slot?.y ?? Math.round(((index+1)/(total+1))*88+6);
+  const x = xByPosition[zone || pos] || (side === "home" ? 33 : 67);
+  const y = lineY(index,total,side);
+
   return '<button class="match-pitch-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '" style="--mx:' + x + '%;--my:' + y + '%">' +
     '<span class="match-card-strip">' + matchCardBadges(row) + '</span>' +
     '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
@@ -589,12 +620,16 @@ function renderMatchTeamPlayers(rows,match,side){
     const pos = row.player?.position || "MID";
     (groups[pos] || groups.MID).push(row);
   });
-  Object.values(groups).forEach(group => group.sort((a,b) =>
-    Number((a.stats || {}).formationPlace ?? 99)-Number((b.stats || {}).formationPlace ?? 99)
-  ));
-  return Object.entries(groups).flatMap(([,group]) =>
-    group.map((row,index) => matchPlayerButton(row,match,side,index,group.length))
-  ).join("");
+
+  return ["GK","DEF","MID","FWD"].flatMap(zone => {
+    const group = groups[zone];
+    group.sort((a,b) => {
+      const rankDiff = formationSideRank(a,zone)-formationSideRank(b,zone);
+      if(rankDiff) return rankDiff;
+      return String(a.player?.name || "").localeCompare(String(b.player?.name || ""),"nl");
+    });
+    return group.map((row,index) => matchPlayerButton(row,match,side,index,group.length,zone));
+  }).join("");
 }
 
 function renderMatchBench(rows,match,side){
@@ -655,7 +690,7 @@ function renderMatchDetail(match,rows=[]){
   document.getElementById("matchDetail").innerHTML =
     '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p><h2>' + escapeHtml(match.home) + ' <span>' + escapeHtml(String(match.homeScore)) + " – " + escapeHtml(String(match.awayScore)) + '</span> ' + escapeHtml(match.away) + '</h2><p>' + escapeHtml(match.date || "") + (match.status === "LIVE" ? ' · <strong class="live-text">LIVE</strong>' : "") + '</p></div></div>' +
     '<div class="real-match-pitch"><div class="real-pitch-lines"><span class="real-half"></span><span class="real-circle"></span><span class="real-box left"></span><span class="real-box right"></span></div>' +
-      '<span class="team-pitch-label home">' + escapeHtml(match.home) + '</span><span class="team-pitch-label away">' + escapeHtml(match.away) + '</span>' +
+      '<span class="team-pitch-label home">' + escapeHtml(match.home) + '<small>' + escapeHtml(inferredFormation(homeRows)) + '</small></span><span class="team-pitch-label away">' + escapeHtml(match.away) + '<small>' + escapeHtml(inferredFormation(awayRows)) + '</small></span>' +
       renderMatchTeamPlayers(homeRows,match,"home") + renderMatchTeamPlayers(awayRows,match,"away") +
       ((!homeRows.length || !awayRows.length) ? '<div class="match-data-hint">Opstellingsmetadata wordt nog aangevuld door de Sorare-sync.</div>' : '') +
     '</div>' +
