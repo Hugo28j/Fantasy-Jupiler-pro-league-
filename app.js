@@ -279,6 +279,79 @@ function renderMarket(){
   grid.querySelectorAll(".details-btn,.player-title-link").forEach(btn => btn.addEventListener("click", () => openPlayerProfile(btn.dataset.playerId)));
 }
 
+const STAT_GROUP_KEYS = {
+  general:["minutes","goal","assist","cleanSheet","goalsConceded","errorLeadToGoal","foulsMade","foulsDrawn","yellow","red"],
+  keeper:["save","savesInsideBox","punches"],
+  defending:["clearances","successfulTackles","duelWon","duelLost","interceptions"],
+  possession:["successfulPass","successfulLongPass","passMissed","successfulFinalThirdPasses","bigChanceCreated","possessionWon","possessionLost"],
+  attack:["shotOnTarget","totalScoringAtt","bigChanceMissed","penAreaEntries","successfulDribble","penaltyWon"]
+};
+
+function statGroupDefinitions(position,availableKeys=[]){
+  const available = new Set(availableKeys);
+  const used = new Set();
+  const make = (label,keys) => {
+    const filtered = keys.filter(key => available.has(key));
+    filtered.forEach(key => used.add(key));
+    return {label,keys:filtered};
+  };
+
+  if(position === "GK"){
+    const groups = [
+      make("Keeper",STAT_GROUP_KEYS.keeper),
+      make("Algemeen",STAT_GROUP_KEYS.general)
+    ];
+    const remaining = availableKeys.filter(key => !used.has(key));
+    if(remaining.length) groups.push(make("Resterende",remaining));
+    return groups.filter(group => group.keys.length);
+  }
+
+  const groups = [
+    make("Algemeen",STAT_GROUP_KEYS.general),
+    make("Defending",STAT_GROUP_KEYS.defending),
+    make("Possession",STAT_GROUP_KEYS.possession),
+    make("Aanval",STAT_GROUP_KEYS.attack)
+  ];
+  const remaining = availableKeys.filter(key => !used.has(key));
+  if(remaining.length) groups.push(make("Resterende",remaining));
+  return groups.filter(group => group.keys.length);
+}
+
+function scoreContributionClass(value){
+  const n = Number(value || 0);
+  if(n < 0) return "negative";
+  if(n > 0) return "positive";
+  return "neutral";
+}
+
+function renderSeasonStatGroups(metrics,position){
+  const byKey = new Map(metrics.map(metric => [metric.key,metric]));
+  return statGroupDefinitions(position,metrics.map(metric => metric.key)).map((group,index) => {
+    const cards = group.keys.map(key => byKey.get(key)).filter(Boolean).map(metric =>
+      '<div class="profile-stat-card"><span>' + escapeHtml(metric.label) + '</span><strong>' +
+      metric.value + ' <small class="stat-contribution ' + scoreContributionClass(metric.contribution) + '">(' +
+      scoreLabel(metric.contribution) + ' pts)</small></strong></div>'
+    ).join("");
+    return '<details class="stat-group" open><summary><span>' + escapeHtml(group.label) +
+      '</span><small>' + group.keys.length + ' stats</small></summary><div class="profile-stats stat-group-grid">' +
+      cards + '</div></details>';
+  }).join("");
+}
+
+function renderMatchStatGroups(breakdown,position){
+  const byKey = new Map(breakdown.map(item => [item.key,item]));
+  return statGroupDefinitions(position,breakdown.map(item => item.key)).map(group => {
+    const rows = group.keys.map(key => byKey.get(key)).filter(Boolean).map(item =>
+      '<div class="match-stat-line"><span>' + escapeHtml(MATCH_STAT_LABELS[item.key] || item.key) +
+      ' <small>(' + item.amount + ')</small></span><strong class="' +
+      scoreContributionClass(item.contribution) + '">' + scoreLabel(item.contribution) + ' pts</strong></div>'
+    ).join("");
+    return '<details class="stat-group match-stat-group" open><summary><span>' + escapeHtml(group.label) +
+      '</span><small>' + group.keys.length + ' stats</small></summary><div class="match-stat-breakdown">' +
+      rows + '</div></details>';
+  }).join("");
+}
+
 function renderPlayerProfile(player,matchRows=[]){
   const rows = Array.isArray(matchRows) ? matchRows : [];
   const total = key => rows.reduce((sum,row) => sum + Number((row.stats || {})[key] || 0),0);
@@ -300,8 +373,8 @@ function renderPlayerProfile(player,matchRows=[]){
     const value = total(key);
     const weight = SCORING.rows[player.pos]?.[key];
     const contribution = weight == null ? 0 : Math.round(value * Number(weight) * 100) / 100;
-    return [label,value,contribution,key,weight];
-  }).filter(([, , , , weight]) => weight != null && Number(weight) !== 0);
+    return {label,key,value,contribution,weight};
+  }).filter(metric => metric.weight != null && Number(metric.weight) !== 0);
   const matches = rows.slice().sort((a,b) => {
     const ad = a.fixtures?.kickoff || "";
     const bd = b.fixtures?.kickoff || "";
@@ -315,7 +388,7 @@ function renderPlayerProfile(player,matchRows=[]){
   document.getElementById("playerProfile").innerHTML =
     '<p class="eyebrow">SPELERSFICHE</p><div class="profile-hero"><div><span class="role-badge role-' + player.pos + '">' + player.pos + '</span><h2>' + escapeHtml(player.name) + '</h2><p>' + escapeHtml(player.club) + ' · ' + escapeHtml(POSITION_LABELS[player.pos]) + '</p></div><strong class="profile-price">' + money(Number(player.price)) + '</strong></div>' +
     '<div class="profile-highlights"><article><span>Totale score</span><strong>' + points(totalPoints) + '</strong></article><article><span>Speelminuten</span><strong>' + totalMinutes + '</strong></article><article><span>Wedstrijden</span><strong>' + rows.length + '</strong></article></div>' +
-    '<h3>Seizoenstatistieken</h3><div class="profile-stats">' + metrics.map(([label,value,contribution]) => '<div><span>' + label + '</span><strong>' + value + ' <small>(' + scoreLabel(contribution) + ' pts)</small></strong></div>').join("") + '</div>' +
+    '<h3>Seizoenstatistieken</h3><div class="stat-groups">' + renderSeasonStatGroups(metrics,player.pos) + '</div>' +
     '<div class="profile-section-head"><h3>Score per wedstrijd</h3><small>Inclusief +0,1 punt per minuut</small></div><div class="profile-matches">' + (matches || '<div class="empty-state">Nog geen verwerkte wedstrijdstatistieken.</div>') + '</div>';
 }
 
@@ -350,6 +423,23 @@ function renderMatches(){
     if(!dialog.open) dialog.showModal();
     window.dispatchEvent(new CustomEvent("fantasy:match-detail",{detail:{fixtureId:id,match}}));
   }));
+}
+
+function matchEventBadges(row){
+  const stats = row.stats || {};
+  const badges = [];
+  const add = (type,icon,label,count) => {
+    const n = Number(count || 0);
+    if(n <= 0) return;
+    badges.push('<span class="match-event-icon event-' + type + '" title="' + escapeHtml(label + (n > 1 ? " ×" + n : "")) + '">' +
+      icon + (n > 1 ? '<b>' + n + '</b>' : '') + '</span>');
+  };
+  add("goal","⚽","Goal",stats.goal);
+  add("assist","A","Assist",stats.assist);
+  add("yellow","","Gele kaart",stats.yellow);
+  add("red","","Rode kaart",stats.red);
+  add("error","!","Fout leidend tot goal",stats.errorLeadToGoal);
+  return badges.join("");
 }
 
 function matchSubstitutionLabel(row,match){
@@ -401,7 +491,7 @@ function matchPlayerButton(row,match,side,index,total){
   const x = xByPosition[zone] || (side === "home" ? 33 : 67);
   const y = slot?.y ?? Math.round(((index+1)/(total+1))*88+6);
   return '<button class="match-pitch-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '" style="--mx:' + x + '%;--my:' + y + '%">' +
-    matchSubstitutionLabel(row,match) +
+    '<span class="match-player-topline"><span class="match-event-strip">' + matchEventBadges(row) + '</span><span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span></span>' +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
     '<span class="match-score-chip ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
     '<span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span>' +
@@ -459,8 +549,8 @@ function renderMatchBench(rows,match,side){
     const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
     return '<button class="match-bench-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '">' +
       '<span class="match-bench-avatar">' + initials(player.name || "?") + '</span>' +
-      '<span><strong>' + escapeHtml(player.name || "Onbekend") + '</strong><small>' +
-        (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>') +
+      '<span><strong>' + escapeHtml(player.name || "Onbekend") + '</strong><small class="match-bench-meta"><span class="match-event-strip bench-events">' +
+        matchEventBadges(row) + '</span>' + (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>') +
       '</small></span>' +
       '<span class="match-bench-score ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
     '</button>';
@@ -537,17 +627,15 @@ function renderMatchPlayerDetail(match,row){
     return {key,amount,contribution};
   }).filter(item => item && (item.amount !== 0 || item.key === "minutes"));
 
-  const rowsHtml = breakdown.map(item =>
-    '<div class="match-stat-line"><span>' + escapeHtml(MATCH_STAT_LABELS[item.key] || item.key) + ' <small>(' + item.amount + ')</small></span>' +
-    '<strong class="' + (item.contribution < 0 ? "negative":"positive") + '">' + scoreLabel(item.contribution) + ' pts</strong></div>'
-  ).join("");
+  const rowsHtml = renderMatchStatGroups(breakdown,position);
+  const totalScoreClass = scoreContributionClass(row.fantasy_points);
 
   const dialog = document.getElementById("matchPlayerDialog");
   document.getElementById("matchPlayerDetail").innerHTML =
     '<p class="eyebrow">WEDSTRIJDSTATISTIEKEN</p>' +
-    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2>' + escapeHtml(player.name || "Onbekend") + '</h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong>' + points(row.fantasy_points) + '</strong></div>' +
-    '<div class="match-stat-breakdown">' + rowsHtml + '</div>' +
-    '<div class="match-stat-total"><span>Totaal deze wedstrijd</span><strong>' + points(row.fantasy_points) + '</strong></div>';
+    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2>' + escapeHtml(player.name || "Onbekend") + '</h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>' +
+    '<div class="stat-groups match-stat-groups">' + rowsHtml + '</div>' +
+    '<div class="match-stat-total"><span>Totaal deze wedstrijd</span><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>';
   if(!dialog.open) dialog.showModal();
 }
 
