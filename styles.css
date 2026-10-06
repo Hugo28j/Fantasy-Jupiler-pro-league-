@@ -427,3 +427,5 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .profile-match{grid-template-columns:1fr auto auto}
   .profile-price-move{grid-column:2 / 4}
 }
+
+.team-pitch-label small{display:block;margin-top:2px;color:#86d5ff;font-size:9px;font-weight:900;letter-spacing:.06em}
