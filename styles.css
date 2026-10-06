@@ -324,3 +324,48 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .match-bench-score.score-yellow{color:#f5de55}
 .match-bench-score.score-green{color:#55e99a}
 .match-bench-score.score-blue{color:#75dcff}
+
+/* Inklapbare statistiekgroepen */
+.stat-groups{display:grid;gap:10px;margin-bottom:24px}
+.stat-group{border:1px solid var(--border);border-radius:13px;background:rgba(4,18,27,.34);overflow:hidden}
+.stat-group>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;font-weight:900;background:#102638;user-select:none}
+.stat-group>summary::-webkit-details-marker{display:none}
+.stat-group>summary:after{content:"⌄";font-size:17px;color:var(--accent);transition:transform .16s ease}
+.stat-group:not([open])>summary:after{transform:rotate(-90deg)}
+.stat-group>summary small{margin-left:auto;color:var(--muted);font-size:10px;font-weight:700}
+.stat-group-grid{margin:0;padding:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
+.profile-stat-card{background:rgba(0,0,0,.16);padding:10px;border-radius:10px}
+.profile-stat-card>span{display:block;color:var(--muted);font-size:11px}
+.profile-stat-card>strong{display:block;margin-top:3px}
+.stat-contribution.positive{color:#58efa0!important}
+.stat-contribution.negative{color:#ff6575!important}
+.stat-contribution.neutral{color:#9fb0bd!important}
+
+.match-stat-group .match-stat-breakdown{padding:9px;display:grid;gap:7px}
+.match-stat-line strong.positive{color:#58efa0}
+.match-stat-line strong.negative{color:#ff6575}
+.match-stat-line strong.neutral{color:#9fb0bd}
+.match-player-profile-head>strong.negative,.match-stat-total strong.negative{color:#ff6575}
+.match-player-profile-head>strong.positive,.match-stat-total strong.positive{color:#58efa0}
+.match-player-profile-head>strong.neutral,.match-stat-total strong.neutral{color:#9fb0bd}
+
+/* Events en wisselminuten hebben elk hun eigen ruimte boven de speler. */
+.match-player-topline{position:absolute;left:50%;top:-18px;transform:translateX(-50%);width:124px;display:flex;align-items:center;justify-content:space-between;gap:4px;pointer-events:none;z-index:6}
+.match-event-strip{display:flex;align-items:center;gap:2px;min-height:17px;flex-wrap:nowrap}
+.match-event-icon{position:relative;width:15px;height:15px;border-radius:4px;display:inline-grid;place-items:center;font-size:10px;line-height:1;font-weight:950;background:#0a1117;color:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.65)}
+.match-event-icon b{position:absolute;right:-4px;top:-5px;font-size:7px;background:#07131e;color:#fff;border-radius:999px;min-width:10px;padding:1px 2px}
+.match-event-icon.event-assist{background:#5f75ff}
+.match-event-icon.event-yellow{background:#f5dc34}
+.match-event-icon.event-red{background:#ee4151}
+.match-event-icon.event-error{background:#ff6a47}
+.match-event-icon.event-goal{background:#0b181f}
+.match-sub-strip{margin-left:auto;white-space:nowrap}
+.sub-event{position:static!important;display:inline-flex;align-items:center;padding:2px 4px;border-radius:6px;font-size:9px;font-weight:950;background:#111}
+.match-bench-meta{display:flex!important;align-items:center;gap:6px;min-height:18px}
+.bench-events{display:inline-flex}
+
+@media(max-width:760px){
+  .stat-group-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .match-player-topline{width:88px;top:-16px}
+  .match-event-icon{width:13px;height:13px;font-size:8px}
+}
