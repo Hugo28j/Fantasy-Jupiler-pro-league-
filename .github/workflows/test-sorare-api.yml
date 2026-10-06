@@ -39,11 +39,11 @@ jobs:
                   query Games($after:String) {{
                     football {{
                       competition(slug:"{COMP}") {{
-                        {field}(first:50,after:$after) {{
+                        {field}(first:35,after:$after) {{
                           nodes {{
-                            id date statusTyped
-                            homeTeam {{ __typename ... on Club {{ id name slug }} }}
-                            awayTeam {{ __typename ... on Club {{ id name slug }} }}
+                            id date
+                            homeTeam {{ __typename ... on Club {{ id }} }}
+                            awayTeam {{ __typename ... on Club {{ id }} }}
                           }}
                           pageInfo {{ hasNextPage endCursor }}
                         }}
@@ -83,7 +83,6 @@ jobs:
               chosen=[]
               used=set()
 
-              # First take the normal date cluster (Friday-Monday / midweek).
               for g in remaining:
                   if (gdate(g)-seed).total_seconds() > 4.5*86400:
                       break
@@ -92,16 +91,15 @@ jobs:
                   chosen.append(g); used|={h,a}
                   if len(chosen)==9: break
 
-              # Backfill postponed games between the teams still missing from this round.
               while len(chosen)<9:
                   missing=set(teams)-used
                   candidates=[]
+                  chosen_ids={x["id"] for x in chosen}
                   for g in unassigned.values():
-                      if g["id"] in {x["id"] for x in chosen}: continue
+                      if g["id"] in chosen_ids: continue
                       h,a=tid(g,"homeTeam"),tid(g,"awayTeam")
                       if h in missing and a in missing:
-                          distance=abs((gdate(g)-seed).total_seconds())
-                          candidates.append((distance,gdate(g),g))
+                          candidates.append((abs((gdate(g)-seed).total_seconds()),gdate(g),g))
                   if not candidates: break
                   candidates.sort(key=lambda x:(x[0],x[1]))
                   g=candidates[0][2]
