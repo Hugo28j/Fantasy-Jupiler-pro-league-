@@ -425,21 +425,28 @@ function renderMatches(){
   }));
 }
 
-function matchEventBadges(row){
+function matchEventBadge(type,icon,label,count){
+  const n = Number(count || 0);
+  if(n <= 0) return "";
+  return '<span class="match-event-icon event-' + type + '" title="' + escapeHtml(label + (n > 1 ? " ×" + n : "")) + '">' +
+    icon + (n > 1 ? '<b>' + n + '</b>' : '') + '</span>';
+}
+
+function matchCardBadges(row){
   const stats = row.stats || {};
-  const badges = [];
-  const add = (type,icon,label,count) => {
-    const n = Number(count || 0);
-    if(n <= 0) return;
-    badges.push('<span class="match-event-icon event-' + type + '" title="' + escapeHtml(label + (n > 1 ? " ×" + n : "")) + '">' +
-      icon + (n > 1 ? '<b>' + n + '</b>' : '') + '</span>');
-  };
-  add("goal","⚽","Goal",stats.goal);
-  add("assist","A","Assist",stats.assist);
-  add("yellow","","Gele kaart",stats.yellow);
-  add("red","","Rode kaart",stats.red);
-  add("error","!","Fout leidend tot goal",stats.errorLeadToGoal);
-  return badges.join("");
+  return matchEventBadge("yellow","","Gele kaart",stats.yellow) +
+    matchEventBadge("red","","Rode kaart",stats.red);
+}
+
+function matchNameBadges(row){
+  const stats = row.stats || {};
+  return matchEventBadge("goal","⚽","Goal",stats.goal) +
+    matchEventBadge("assist","A","Assist",stats.assist) +
+    matchEventBadge("error","!","Fout leidend tot goal",stats.errorLeadToGoal);
+}
+
+function matchEventBadges(row){
+  return matchCardBadges(row) + matchNameBadges(row);
 }
 
 function matchSubstitutionLabel(row,match){
@@ -491,10 +498,12 @@ function matchPlayerButton(row,match,side,index,total){
   const x = xByPosition[zone] || (side === "home" ? 33 : 67);
   const y = slot?.y ?? Math.round(((index+1)/(total+1))*88+6);
   return '<button class="match-pitch-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '" style="--mx:' + x + '%;--my:' + y + '%">' +
-    '<span class="match-player-topline"><span class="match-event-strip">' + matchEventBadges(row) + '</span><span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span></span>' +
+    '<span class="match-card-strip">' + matchCardBadges(row) + '</span>' +
+    '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
     '<span class="match-score-chip ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
-    '<span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span>' +
+    '<span class="match-player-name-row"><span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span>' +
+      '<span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
   '</button>';
 }
 
@@ -549,8 +558,9 @@ function renderMatchBench(rows,match,side){
     const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
     return '<button class="match-bench-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '">' +
       '<span class="match-bench-avatar">' + initials(player.name || "?") + '</span>' +
-      '<span><strong>' + escapeHtml(player.name || "Onbekend") + '</strong><small class="match-bench-meta"><span class="match-event-strip bench-events">' +
-        matchEventBadges(row) + '</span>' + (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>') +
+      '<span><strong class="match-bench-name-row">' + escapeHtml(player.name || "Onbekend") +
+        '<span class="match-name-events bench-name-events">' + matchNameBadges(row) + matchCardBadges(row) + '</span></strong>' +
+        '<small class="match-bench-meta">' + (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>') +
       '</small></span>' +
       '<span class="match-bench-score ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
     '</button>';
