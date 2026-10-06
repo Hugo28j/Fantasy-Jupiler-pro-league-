@@ -102,9 +102,14 @@ Het huidige Sorare `PlayerGameStats`-schema bevat geen rechtstreeks veld voor **
 
 De twee handmatige tests zijn geslaagd wanneer een tweede normale run `pendingFixtures:0`, `processedFixtures:0` en `importedPlayerRows:0` teruggeeft.
 
-Plan daarna een normale POST naar `sync-jpl` met body `{}` ongeveer **iedere 2 uur**. De sync slaat fixtures met `stats_processed=true` over en verwerkt pas opnieuw zodra een nieuwe volledige speeldag klaar is.
+Migratie `005_secure_sorare_cron.sql` maakt daarna automatisch twee beveiligde Cron-jobs aan:
 
-Plan daarnaast **één keer per dag** een spelersrefresh met body `{"refreshPlayers":true}` zodat transfers, nieuwe spelers en kernwijzigingen worden bijgewerkt.
+- `fantasy-jpl-sync-2h`: iedere twee uur een normale sync;
+- `fantasy-jpl-player-refresh-daily`: één keer per dag een volledige spelersrefresh.
+
+De migratie genereert zelf een cryptografisch random cron-secret in de database. Die secret wordt nooit in GitHub of browsercode gezet. `sync-jpl` staat daarom op `verify_jwt=false`, maar weigert iedere request zonder de juiste interne `x-fantasy-cron-secret`.
+
+De normale sync verwerkt bovendien **alle** afgewerkte fixtures met `stats_processed=false`. Daardoor worden gemiste runs en later ingehaalde wedstrijden automatisch bijgewerkt.
 
 ## 3. Wat server-side wordt afgedwongen
 
