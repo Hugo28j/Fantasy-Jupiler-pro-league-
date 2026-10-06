@@ -11,7 +11,7 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Sorare game and competition schema
+      - name: Inspect Sorare fixture schema
         shell: python
         run: |
           import urllib.request
@@ -30,7 +30,7 @@ jobs:
                   print("NOT_FOUND")
                   return
               j=schema.find("\ntype ",i+5)
-              if j<0: j=min(len(schema),i+25000)
-              print(schema[i:j][:25000])
-          for name in ["Game","Competition","TournamentCalendarStage","StageGroup","FootballRoot"]:
+              if j<0: j=min(len(schema),i+22000)
+              print(schema[i:j][:22000])
+          for name in ["So5Fixture","GameWeek","Game","PlayerGameStats"]:
               block(name)
