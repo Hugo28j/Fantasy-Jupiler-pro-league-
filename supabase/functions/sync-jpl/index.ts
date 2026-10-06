@@ -10,6 +10,7 @@ const PLAYER_BATCH_SIZE = 8;
 const PLAYER_STATS_LAST = 30;
 const STAT_SCHEMA_VERSION = 2;
 const SCORING_VERSION = 2;
+const PRICE_MODEL_VERSION = 1;
 
 const weights: Record<string,Record<string,number>> = {
   GK:{minutes:.1,save:2,cleanSheet:15,savesInsideBox:4,punches:2,goalsConceded:-10,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:5,totalScoringAtt:.1,penAreaEntries:.3,errorLeadToGoal:-15},
@@ -62,6 +63,25 @@ function startingPrice(position:string, name:string, appearances=0, stars=0){
 function fantasyScore(position:string, stats:Record<string,number>){
   return Math.round(Object.entries(weights[position] || {})
     .reduce((total,[key,weight]) => total + num(stats[key])*weight,0)*100)/100;
+}
+
+function roundPrice(value:number){
+  return Math.round(value*10)/10;
+}
+
+function marketPriceDelta(price:number, points:number){
+  if(points <= 0) return -1;
+  const ratio = price > 0 ? (points/price)*100 : 0;
+  if(ratio < 30) return -1;
+  if(ratio < 40) return -0.7;
+  if(ratio < 50) return -0.5;
+  if(ratio < 90) return -0.3;
+  if(ratio < 100) return 0;
+  if(ratio < 110) return 0.3;
+  if(ratio < 120) return 0.5;
+  if(ratio < 140) return 1;
+  if(ratio < 160) return 1.5;
+  return 2;
 }
 
 function mapSorareStats(raw:any){
@@ -884,6 +904,10 @@ Deno.serve(async request => {
       versionRows.push(...(rows || []));
     }
 
+    const existingStatsByFixturePlayer = new Map(
+      versionRows.map((row:any) => [String(row.fixture_id) + "::" + String(row.player_id),row.stats || {}])
+    );
+
     const schemaRefreshIds = new Set<string>();
     for(const row of versionRows){
       const stats = row.stats || {};
@@ -1038,6 +1062,7 @@ Deno.serve(async request => {
               player_id:playerId,
               minutes:stats.minutes,
               stats:{
+                ...(existingStatsByFixturePlayer.get(fixtureId + "::" + playerId) || {}),
                 ...stats,
                 provider:"sorare",
                 sorareStatId:raw.id,
@@ -1114,6 +1139,117 @@ Deno.serve(async request => {
       if(error) throw error;
     }
 
+    // Dynamische marktwaarde: herbereken chronologisch vanaf de oorspronkelijke
+    // prijs. De historie blijft in stats-json staan, dus hiervoor is geen extra
+    // databasekolom of nieuwe migratie nodig.
+    let marketHistoryRowsUpdated = 0;
+    let marketPricesUpdated = 0;
+    const marketFixtureById = new Map(
+      finishedFixtures.map((fixture:any) => [String(fixture.id),fixture])
+    );
+    const freshMarketRows:any[] = [];
+    for(const idBatch of chunks(finishedFixtures.map((fixture:any)=>fixture.id),10)){
+      if(!idBatch.length) continue;
+      const {data:rows,error:marketRowsError} = await db
+        .from("player_match_stats")
+        .select("fixture_id,player_id,minutes,stats,fantasy_points")
+        .in("fixture_id",idBatch)
+        .limit(1000);
+      if(marketRowsError) throw marketRowsError;
+      freshMarketRows.push(...(rows || []));
+    }
+
+    const {data:marketPlayers,error:marketPlayersError} = await db
+      .from("players")
+      .select("id,provider_player_id,name,club_id,club_name,position,minutes,price,total_points,active");
+    if(marketPlayersError) throw marketPlayersError;
+
+    const playerRecordById = new Map((marketPlayers || []).map((player:any)=>[String(player.id),player]));
+    const historyByPlayer = new Map<string,any[]>();
+    for(const row of freshMarketRows){
+      const key = String(row.player_id);
+      if(!historyByPlayer.has(key)) historyByPlayer.set(key,[]);
+      historyByPlayer.get(key)!.push(row);
+    }
+
+    const historyUpdates:any[] = [];
+    const playerPriceUpdates:any[] = [];
+
+    for(const [playerId,history] of historyByPlayer){
+      const player:any = playerRecordById.get(playerId);
+      if(!player) continue;
+
+      history.sort((a,b) => {
+        const ak = marketFixtureById.get(String(a.fixture_id))?.kickoff || "";
+        const bk = marketFixtureById.get(String(b.fixture_id))?.kickoff || "";
+        return String(ak).localeCompare(String(bk));
+      });
+
+      const persistedBase = history
+        .map(row => Number((row.stats || {}).marketBasePrice))
+        .find(value => Number.isFinite(value) && value > 0);
+      const basePrice = roundPrice(persistedBase ?? Number(player.price || 1));
+      let currentPrice = Math.max(1,basePrice);
+
+      for(const row of history){
+        const stats = row.stats || {};
+        const before = roundPrice(currentPrice);
+        const points = Number(row.fantasy_points || 0);
+        const requestedDelta = marketPriceDelta(before,points);
+        const after = Math.max(1,roundPrice(before + requestedDelta));
+        const actualDelta = roundPrice(after - before);
+        const ratio = before > 0 ? Math.round((points/before)*1000)/10 : 0;
+
+        const changed =
+          Number(stats.priceModelVersion || 0) !== PRICE_MODEL_VERSION ||
+          Math.abs(Number(stats.marketBasePrice || 0)-basePrice) > 0.001 ||
+          Math.abs(Number(stats.priceBefore || 0)-before) > 0.001 ||
+          Math.abs(Number(stats.priceDelta || 0)-actualDelta) > 0.001 ||
+          Math.abs(Number(stats.priceAfter || 0)-after) > 0.001 ||
+          Math.abs(Number(stats.pricePerformancePct || 0)-ratio) > 0.001;
+
+        if(changed){
+          historyUpdates.push({
+            fixture_id:row.fixture_id,
+            player_id:row.player_id,
+            minutes:row.minutes,
+            stats:{
+              ...stats,
+              marketBasePrice:basePrice,
+              priceBefore:before,
+              priceDelta:actualDelta,
+              priceAfter:after,
+              pricePerformancePct:ratio,
+              priceModelVersion:PRICE_MODEL_VERSION
+            },
+            fantasy_points:row.fantasy_points,
+            updated_at:new Date().toISOString()
+          });
+        }
+        currentPrice = after;
+      }
+
+      if(Math.abs(Number(player.price || 0)-currentPrice) > 0.001){
+        playerPriceUpdates.push({
+          ...player,
+          price:currentPrice,
+          updated_at:new Date().toISOString()
+        });
+      }
+    }
+
+    for(const part of chunks(historyUpdates,200)){
+      const {error} = await db.from("player_match_stats").upsert(part,{onConflict:"fixture_id,player_id"});
+      if(error) throw error;
+      marketHistoryRowsUpdated += part.length;
+    }
+
+    for(const part of chunks(playerPriceUpdates,200)){
+      const {error} = await db.from("players").upsert(part,{onConflict:"id"});
+      if(error) throw error;
+      marketPricesUpdated += part.length;
+    }
+
     return Response.json({
       ok:true,
       source:"Sorare",
@@ -1133,6 +1269,8 @@ Deno.serve(async request => {
       lineupBackfillFixtures:pendingDetailIds.size,
       scoringSchemaRefreshFixtures:schemaRefreshIds.size,
       rescoredPlayerRows,
+      marketHistoryRowsUpdated,
+      marketPricesUpdated,
       processedFixtures,
       incompleteFixtures,
       importedPlayerRows,
