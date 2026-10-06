@@ -244,6 +244,8 @@ function filteredPlayers(){
   list.sort((a,b) => {
     if(sort === "price-asc") return a.price - b.price;
     if(sort === "minutes-desc") return (b.minutes ?? -1) - (a.minutes ?? -1);
+    if(sort === "points-desc") return Number(b.score || 0) - Number(a.score || 0);
+    if(sort === "points-asc") return Number(a.score || 0) - Number(b.score || 0);
     if(sort === "name") return a.name.localeCompare(b.name,"nl");
     return b.price - a.price;
   });
@@ -283,34 +285,19 @@ function renderPlayerProfile(player,matchRows=[]){
   const totalMinutes = rows.length ? rows.reduce((sum,row) => sum + Number(row.minutes || 0),0) : Number(player.minutes || 0);
   const totalPoints = rows.length ? rows.reduce((sum,row) => sum + Number(row.fantasy_points || 0),0) : Number(player.score || 0);
   const metrics = [
-    ["Goals",total("goal")],
-    ["Assists",total("assist")],
-    ["Schoten op doel",total("shotOnTarget")],
-    ["Geslaagde dribbels",total("successfulDribble")],
-
-    ["Tackles gewonnen",total("successfulTackles")],
-    ["Duels gewonnen",total("duelWon")],
-    ["Duels verloren",total("duelLost")],
-    ["Clearances",total("clearances")],
-    ["Intercepties",total("interceptions")],
-    ["Bal gewonnen",total("possessionWon")],
-    ["Bal verloren",total("possessionLost")],
-
-    ["Geslaagde passes",total("successfulPass")],
-    ["Geslaagde lange passes",total("successfulLongPass")],
-    ["Gemiste passes",total("passMissed")],
-
-    ["Overtredingen gemaakt",total("foulsMade")],
-    ["Overtredingen meegekregen",total("foulsDrawn")],
-    ["Gele kaarten",total("yellow")],
-    ["Rode kaarten",total("red")],
-
-    ["Reddingen",total("save")],
-    ["Reddingen in strafschopgebied",total("savesInsideBox")],
-    ["Punches",total("punches")],
-    ["Clean sheets",total("cleanSheet")],
-    ["Tegendoelpunten",total("goalsConceded")]
-  ];
+    ["Goals","goal"],["Assists","assist"],["Schoten op doel","shotOnTarget"],["Geslaagde dribbels","successfulDribble"],
+    ["Tackles gewonnen","successfulTackles"],["Duels gewonnen","duelWon"],["Duels verloren","duelLost"],
+    ["Clearances","clearances"],["Intercepties","interceptions"],["Bal gewonnen","possessionWon"],["Bal verloren","possessionLost"],
+    ["Geslaagde passes","successfulPass"],["Geslaagde lange passes","successfulLongPass"],["Gemiste passes","passMissed"],
+    ["Overtredingen gemaakt","foulsMade"],["Overtredingen meegekregen","foulsDrawn"],["Gele kaarten","yellow"],["Rode kaarten","red"],
+    ["Reddingen","save"],["Reddingen in strafschopgebied","savesInsideBox"],["Punches","punches"],
+    ["Clean sheets","cleanSheet"],["Tegendoelpunten","goalsConceded"]
+  ].map(([label,key]) => {
+    const value = total(key);
+    const weight = SCORING.rows[player.pos]?.[key];
+    const contribution = weight == null ? 0 : Math.round(value * Number(weight) * 100) / 100;
+    return [label,value,contribution];
+  });
   const matches = rows.slice().sort((a,b) => {
     const ad = a.fixtures?.kickoff || "";
     const bd = b.fixtures?.kickoff || "";
@@ -324,7 +311,7 @@ function renderPlayerProfile(player,matchRows=[]){
   document.getElementById("playerProfile").innerHTML =
     '<p class="eyebrow">SPELERSFICHE</p><div class="profile-hero"><div><span class="role-badge role-' + player.pos + '">' + player.pos + '</span><h2>' + escapeHtml(player.name) + '</h2><p>' + escapeHtml(player.club) + ' · ' + escapeHtml(POSITION_LABELS[player.pos]) + '</p></div><strong class="profile-price">' + money(Number(player.price)) + '</strong></div>' +
     '<div class="profile-highlights"><article><span>Totale score</span><strong>' + points(totalPoints) + '</strong></article><article><span>Speelminuten</span><strong>' + totalMinutes + '</strong></article><article><span>Wedstrijden</span><strong>' + rows.length + '</strong></article></div>' +
-    '<h3>Seizoenstatistieken</h3><div class="profile-stats">' + metrics.map(([label,value]) => '<div><span>' + label + '</span><strong>' + value + '</strong></div>').join("") + '</div>' +
+    '<h3>Seizoenstatistieken</h3><div class="profile-stats">' + metrics.map(([label,value,contribution]) => '<div><span>' + label + '</span><strong>' + value + ' <small>(' + scoreLabel(contribution) + ' pts)</small></strong></div>').join("") + '</div>' +
     '<div class="profile-section-head"><h3>Score per wedstrijd</h3><small>Inclusief +0,1 punt per minuut</small></div><div class="profile-matches">' + (matches || '<div class="empty-state">Nog geen verwerkte wedstrijdstatistieken.</div>') + '</div>';
 }
 
@@ -398,8 +385,24 @@ function matchPlayerButton(row,match,side,index,total){
   '</button>';
 }
 
+function inferredMatchStarters(rows){
+  const explicit = rows.filter(row => Number((row.stats || {}).gameStarted || 0) > 0);
+  if(explicit.length >= 7) return explicit;
+
+  const played = rows.filter(row => Number(row.minutes || 0) > 0)
+    .slice().sort((a,b) => Number(b.minutes || 0)-Number(a.minutes || 0));
+  const chosen = [];
+  const keeper = played.find(row => row.player?.position === "GK");
+  if(keeper) chosen.push(keeper);
+  for(const row of played){
+    if(chosen.length >= 11) break;
+    if(!chosen.includes(row)) chosen.push(row);
+  }
+  return chosen;
+}
+
 function renderMatchTeamPlayers(rows,match,side){
-  const starters = rows.filter(row => Number((row.stats || {}).gameStarted || 0) > 0);
+  const starters = inferredMatchStarters(rows);
   const groups = {GK:[],DEF:[],MID:[],FWD:[]};
   starters.forEach(row => {
     const pos = row.player?.position || "MID";
@@ -414,10 +417,17 @@ function renderMatchTeamPlayers(rows,match,side){
 }
 
 function renderMatchBench(rows,match,side){
-  const bench = rows.filter(row => {
+  const hasLineupMetadata = rows.some(row => {
     const stats = row.stats || {};
-    return Boolean(stats.onGameSheet) && Number(stats.gameStarted || 0) === 0;
+    return stats.gameStarted != null || stats.onGameSheet != null;
   });
+  const starterIds = new Set(inferredMatchStarters(rows).map(row => String(row.player_id)));
+  const bench = hasLineupMetadata
+    ? rows.filter(row => {
+        const stats = row.stats || {};
+        return Boolean(stats.onGameSheet) && Number(stats.gameStarted || 0) === 0;
+      })
+    : rows.filter(row => !starterIds.has(String(row.player_id)) && Number(row.minutes || 0) > 0);
   bench.sort((a,b) => Number(b.minutes || 0)-Number(a.minutes || 0));
   return bench.map(row => {
     const player = row.player || {};
@@ -433,16 +443,38 @@ function renderMatchBench(rows,match,side){
   }).join("") || '<div class="empty-state">Geen bankdata beschikbaar.</div>';
 }
 
+function normalizeClubName(value){
+  let normalized = String(value || "").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().replace(/[^a-z0-9]/g,"");
+  const aliases = {
+    stvv:"sinttruidensevv",
+    sinttruiden:"sinttruidensevv",
+    krcgenk:"genk",
+    clubbruggekv:"clubbrugge",
+    royantwerpfc:"royalantwerpfc",
+    unionsaintgilloise:"royaleunionsaintgilloise",
+    rusg:"royaleunionsaintgilloise"
+  };
+  return aliases[normalized] || normalized;
+}
+
+function sameClubName(a,b){
+  const left = normalizeClubName(a);
+  const right = normalizeClubName(b);
+  if(!left || !right) return false;
+  return left === right || (Math.min(left.length,right.length) >= 5 && (left.includes(right) || right.includes(left)));
+}
+
 function renderMatchDetail(match,rows=[]){
   const allRows = Array.isArray(rows) ? rows : [];
-  const homeRows = allRows.filter(row => (row.stats || {}).teamName === match.home || row.player?.club_name === match.home);
-  const awayRows = allRows.filter(row => (row.stats || {}).teamName === match.away || row.player?.club_name === match.away);
+  const homeRows = allRows.filter(row => sameClubName((row.stats || {}).teamName,match.home) || sameClubName(row.player?.club_name,match.home));
+  const awayRows = allRows.filter(row => sameClubName((row.stats || {}).teamName,match.away) || sameClubName(row.player?.club_name,match.away));
 
   document.getElementById("matchDetail").innerHTML =
     '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p><h2>' + escapeHtml(match.home) + ' <span>' + escapeHtml(String(match.homeScore)) + " – " + escapeHtml(String(match.awayScore)) + '</span> ' + escapeHtml(match.away) + '</h2><p>' + escapeHtml(match.date || "") + (match.status === "LIVE" ? ' · <strong class="live-text">LIVE</strong>' : "") + '</p></div></div>' +
     '<div class="real-match-pitch"><div class="real-pitch-lines"><span class="real-half"></span><span class="real-circle"></span><span class="real-box left"></span><span class="real-box right"></span></div>' +
       '<span class="team-pitch-label home">' + escapeHtml(match.home) + '</span><span class="team-pitch-label away">' + escapeHtml(match.away) + '</span>' +
       renderMatchTeamPlayers(homeRows,match,"home") + renderMatchTeamPlayers(awayRows,match,"away") +
+      ((!homeRows.length || !awayRows.length) ? '<div class="match-data-hint">Opstellingsmetadata wordt nog aangevuld door de Sorare-sync.</div>' : '') +
     '</div>' +
     '<section class="match-bench-section"><h3>Bank</h3><div class="match-benches"><div><h4>' + escapeHtml(match.home) + '</h4>' + renderMatchBench(homeRows,match,"home") + '</div><div><h4>' + escapeHtml(match.away) + '</h4>' + renderMatchBench(awayRows,match,"away") + '</div></div></section>';
 
