@@ -10,10 +10,10 @@ const PLAYER_BATCH_SIZE = 8;
 const PLAYER_STATS_LAST = 30;
 
 const weights: Record<string,Record<string,number>> = {
-  GK:{minutes:.1,save:2,cleanSheet:15,savesInsideBox:4,punches:2,goalsConceded:-10,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
-  DEF:{minutes:.1,cleanSheet:5,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.3,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
-  MID:{minutes:.1,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:.5,interceptions:.5,possessionWon:.4,possessionLost:-.3,successfulPass:.2,successfulLongPass:.5,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2},
-  FWD:{minutes:.1,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:.5,interceptions:.5,possessionWon:.2,possessionLost:-.1,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4}
+  GK:{minutes:.1,save:2,cleanSheet:15,savesInsideBox:4,punches:2,goalsConceded:-10,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
+  DEF:{minutes:.1,cleanSheet:5,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.3,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
+  MID:{minutes:.1,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:.5,interceptions:.5,possessionWon:.4,possessionLost:-.3,successfulPass:.2,successfulLongPass:.5,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2,bigChanceCreated:3,successfulFinalThirdPasses:.3,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
+  FWD:{minutes:.1,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:.5,interceptions:.5,possessionWon:.2,possessionLost:-.1,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4,bigChanceCreated:3,successfulFinalThirdPasses:.3,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1}
 };
 
 function env(name:string, fallback?:string){
@@ -89,7 +89,12 @@ function mapSorareStats(raw:any){
     keyPass:0,
     passMissed:num(raw.missedPass),
     successfulDribble:num(raw.wonContest),
-    shotOnTarget:num(raw.ontargetScoringAtt)
+    shotOnTarget:num(raw.ontargetScoringAtt),
+    bigChanceCreated:num(raw.bigChanceCreated),
+    successfulFinalThirdPasses:num(raw.successfulFinalThirdPasses),
+    bigChanceMissed:num(raw.bigChanceMissed),
+    penaltyWon:num(raw.penaltyWon),
+    totalScoringAtt:num(raw.totalScoringAtt)
   };
 }
 
@@ -923,6 +928,11 @@ Deno.serve(async request => {
                   missedPass
                   wonContest
                   ontargetScoringAtt
+                  bigChanceCreated
+                  successfulFinalThirdPasses
+                  bigChanceMissed
+                  penaltyWon
+                  totalScoringAtt
                   anyTeam {
                     __typename
                     ... on Club { id name slug }
@@ -1012,8 +1022,10 @@ Deno.serve(async request => {
           .eq("id",fixture.id);
         if(error) throw error;
 
-        if(pendingStatIds.has(id)){
+        if(pendingStatIds.has(id) || pendingDetailIds.has(id)){
           touchedGameweeks.add(Number(fixture.gameweek_id));
+        }
+        if(pendingStatIds.has(id)){
           processedFixtures += 1;
         }
       }
