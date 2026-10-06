@@ -291,7 +291,7 @@
     for(let from=0; from<10000; from+=pageSize){
       const {data,error} = await cloud.client
         .from("player_match_stats")
-        .select("player_id,stats,fixtures(kickoff,status)")
+        .select("player_id,minutes,stats,fixtures(kickoff,status)")
         .range(from,from+pageSize-1);
       if(error) throw error;
       rows.push(...(data || []));
@@ -319,6 +319,7 @@
     for(const row of priceRows){
       const fixture = Array.isArray(row.fixtures) ? row.fixtures[0] : row.fixtures;
       if(!fixture || fixture.status !== "FT") continue;
+      if(Number(row.minutes || 0) <= 0) continue;
       const deltaRaw = row.stats?.priceDelta;
       if(deltaRaw == null || !Number.isFinite(Number(deltaRaw))) continue;
       const kickoff = String(fixture.kickoff || "");
