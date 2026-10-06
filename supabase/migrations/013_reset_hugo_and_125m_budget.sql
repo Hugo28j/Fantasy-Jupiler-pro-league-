@@ -16,8 +16,8 @@ declare
   v_user uuid;
   v_count integer;
 begin
-  select count(*),min(id)
-  into v_count,v_user
+  select count(*)
+  into v_count
   from public.profiles
   where lower(trim(display_name))='hugo';
 
@@ -26,6 +26,12 @@ begin
   elsif v_count > 1 then
     raise exception 'Meerdere profielen met naam Hugo gevonden. Reset afgebroken voor veiligheid.';
   end if;
+
+  select id
+  into v_user
+  from public.profiles
+  where lower(trim(display_name))='hugo'
+  limit 1;
 
   delete from public.team_transfer_plans
   where user_id=v_user;
