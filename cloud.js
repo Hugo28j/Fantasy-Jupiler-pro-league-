@@ -49,7 +49,7 @@
     const dialog = document.createElement("dialog");
     dialog.id = "authDialog";
     dialog.className = "auth-dialog";
-    dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in met je naam en wachtwoord om je team, budget en score centraal te bewaren.</p><button id="googleAuthButton" class="google-auth-btn" type="button"><span class="google-g" aria-hidden="true">G</span><span>Doorgaan met Google</span></button><div class="auth-divider"><span>of met e-mail</span></div><label><span>Naam</span><input id="authIdentity" type="text" autocomplete="username" maxlength="28" placeholder="bv. Hugo"></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="4"></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
+    dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in met je naam en wachtwoord om je team, budget en score centraal te bewaren.</p><button id="googleAuthButton" class="google-auth-btn" type="button"><span class="google-g" aria-hidden="true">G</span><span>Doorgaan met Google</span></button><div class="auth-divider"><span>of met naam</span></div><label><span>Naam</span><input id="authIdentity" type="text" autocomplete="username" maxlength="28" placeholder="bv. Hugo"></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="4"></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
     document.body.appendChild(dialog);
 
     document.getElementById("authButton").addEventListener("click", onAuthButton);
@@ -121,8 +121,10 @@
       return;
     }
     const {error} = await cloud.client.auth.signInWithPassword({email,password});
-    if(error) authError(error.message);
-    else document.getElementById("authDialog").close();
+    if(error){
+      if(/invalid login credentials/i.test(error.message)) authError("Naam of wachtwoord is fout.");
+      else authError(error.message);
+    }else document.getElementById("authDialog").close();
   }
 
   function oauthReturnUrl(){
@@ -167,24 +169,40 @@
       return;
     }
 
-    const {data,error} = await cloud.client.auth.signUp({
-      email,
-      password,
-      options:{
-        data:{display_name:displayName}
-      }
-    });
+    const button = document.getElementById("signupButton");
+    button.disabled = true;
+    button.textContent = "Bezig…";
 
-    if(error){
-      if(/already|registered|exists/i.test(error.message)){
-        authError("Deze naam is al in gebruik.");
-      }else{
-        authError(error.message);
+    try{
+      const response = await fetch(cfg.supabaseUrl + "/functions/v1/register-username",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "apikey":cfg.supabaseAnonKey
+        },
+        body:JSON.stringify({username:displayName,password})
+      });
+
+      let payload = {};
+      try{ payload = await response.json(); }catch(_error){}
+
+      if(!response.ok || !payload.ok){
+        authError(payload.error || "Account kon niet worden gemaakt.");
+        return;
       }
-    }else if(data.session){
+
+      const {error} = await cloud.client.auth.signInWithPassword({email,password});
+      if(error){
+        authError("Account is gemaakt, maar automatisch inloggen lukte niet: " + error.message);
+        return;
+      }
+
       document.getElementById("authDialog").close();
-    }else{
-      authError("Account gemaakt, maar automatische login is nog niet actief. Zet e-mailbevestiging uit in Supabase Auth.");
+    }catch(error){
+      authError(error?.message || "Account kon niet worden gemaakt.");
+    }finally{
+      button.disabled = false;
+      button.textContent = "Account maken";
     }
   }
 
