@@ -343,7 +343,7 @@ function renderGameweekBalance(balanceRows=[]){
   const scoreValues = rows.map(row => Number(row.fantasy_points || 0));
   const top = rows[0];
   const gameweek = rows[0].gameweek_number;
-  source.textContent = "API‑Football · speeldag " + gameweek;
+  source.textContent = "Sorare · speeldag " + gameweek;
   source.classList.add("live");
   summary.innerHTML =
     '<article><span>Wedstrijden</span><strong>9</strong></article>' +
