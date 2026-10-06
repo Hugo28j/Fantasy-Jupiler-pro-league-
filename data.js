@@ -397,16 +397,16 @@ const MATCHES = [
 
 const SCORING = {
   columns: [
-    ["minutes","Speelminuut"],["save","Save"],["cleanSheet","Clean sheet"],["savesInsideBox","Saves inside box"],["punches","Punches"],
-    ["goalsConceded","Goals conceded"],["foulsMade","Fouls made"],["foulsDrawn","Fouls get"],
-    ["yellow","Yellow card"],["red","Red card"],["goal","Goal"],["assist","Assist"],
-    ["successfulTackles","Successful tackles"],["duelWon","Duel won"],["duelLost","Duel lost"],
-    ["clearances","Clearances"],["interceptions","Interceptions"],["possessionWon","Possession won"],
-    ["possessionLost","Possession lost"],["successfulPass","Successful pass"],
-    ["successfulLongPass","Successful Long Passes"],["keyPass","Key passes"],["passMissed","Pass missed"],
-    ["successfulDribble","Successful dribble"],["shotOnTarget","Shots on target"],
-    ["bigChanceCreated","Big chance created"],["successfulFinalThirdPasses","Successful final third passes"],
-    ["bigChanceMissed","Big chance missed"],["penaltyWon","Penalty won"],["totalScoringAtt","Total scoring attempts"]
+    ["minutes","Speelminuut"],["save","Redding"],["cleanSheet","Clean sheet"],["savesInsideBox","Redding in strafschopgebied"],["punches","Punch"],
+    ["goalsConceded","Tegendoelpunt"],["foulsMade","Overtreding gemaakt"],["foulsDrawn","Overtreding meegekregen"],
+    ["yellow","Gele kaart"],["red","Rode kaart"],["goal","Goal"],["assist","Assist"],
+    ["successfulTackles","Tackle gewonnen"],["duelWon","Duel gewonnen"],["duelLost","Duel verloren"],
+    ["clearances","Clearance"],["interceptions","Interceptie"],["possessionWon","Bal gewonnen"],
+    ["possessionLost","Bal verloren"],["successfulPass","Geslaagde pass"],
+    ["successfulLongPass","Geslaagde lange pass"],["passMissed","Gemiste pass"],
+    ["successfulDribble","Geslaagde dribbel"],["shotOnTarget","Schot op doel"],
+    ["bigChanceCreated","Grote kans gecreëerd"],["successfulFinalThirdPasses","Geslaagde pass laatste derde"],
+    ["bigChanceMissed","Grote kans gemist"],["penaltyWon","Penalty afgedwongen"],["totalScoringAtt","Doelpoging"]
   ],
   rows: {
     GK: {minutes:.1,save:2,cleanSheet:15,savesInsideBox:4,punches:2,goalsConceded:-10,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
