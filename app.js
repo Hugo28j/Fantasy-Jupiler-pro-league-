@@ -326,14 +326,17 @@ function scoreContributionClass(value){
 
 function renderSeasonStatGroups(metrics,position){
   const byKey = new Map(metrics.map(metric => [metric.key,metric]));
-  return statGroupDefinitions(position,metrics.map(metric => metric.key)).map((group,index) => {
-    const cards = group.keys.map(key => byKey.get(key)).filter(Boolean).map(metric =>
+  return statGroupDefinitions(position,metrics.map(metric => metric.key)).map(group => {
+    const groupMetrics = group.keys.map(key => byKey.get(key)).filter(Boolean);
+    const groupPoints = Math.round(groupMetrics.reduce((sum,metric) => sum + Number(metric.contribution || 0),0) * 100) / 100;
+    const cards = groupMetrics.map(metric =>
       '<div class="profile-stat-card"><span>' + escapeHtml(metric.label) + '</span><strong>' +
       metric.value + ' <small class="stat-contribution ' + scoreContributionClass(metric.contribution) + '">(' +
       scoreLabel(metric.contribution) + ' pts)</small></strong></div>'
     ).join("");
     return '<details class="stat-group" open><summary><span>' + escapeHtml(group.label) +
-      '</span><small>' + group.keys.length + ' stats</small></summary><div class="profile-stats stat-group-grid">' +
+      '</span><span class="stat-group-summary-meta"><strong class="stat-group-total ' + scoreContributionClass(groupPoints) + '">' +
+      scoreLabel(groupPoints) + ' pts</strong><small>' + group.keys.length + ' stats</small></span></summary><div class="profile-stats stat-group-grid">' +
       cards + '</div></details>';
   }).join("");
 }
@@ -341,13 +344,16 @@ function renderSeasonStatGroups(metrics,position){
 function renderMatchStatGroups(breakdown,position){
   const byKey = new Map(breakdown.map(item => [item.key,item]));
   return statGroupDefinitions(position,breakdown.map(item => item.key)).map(group => {
-    const rows = group.keys.map(key => byKey.get(key)).filter(Boolean).map(item =>
+    const groupItems = group.keys.map(key => byKey.get(key)).filter(Boolean);
+    const groupPoints = Math.round(groupItems.reduce((sum,item) => sum + Number(item.contribution || 0),0) * 100) / 100;
+    const rows = groupItems.map(item =>
       '<div class="match-stat-line"><span>' + escapeHtml(MATCH_STAT_LABELS[item.key] || item.key) +
       ' <small>(' + item.amount + ')</small></span><strong class="' +
       scoreContributionClass(item.contribution) + '">' + scoreLabel(item.contribution) + ' pts</strong></div>'
     ).join("");
     return '<details class="stat-group match-stat-group" open><summary><span>' + escapeHtml(group.label) +
-      '</span><small>' + group.keys.length + ' stats</small></summary><div class="match-stat-breakdown">' +
+      '</span><span class="stat-group-summary-meta"><strong class="stat-group-total ' + scoreContributionClass(groupPoints) + '">' +
+      scoreLabel(groupPoints) + ' pts</strong><small>' + group.keys.length + ' stats</small></span></summary><div class="match-stat-breakdown">' +
       rows + '</div></details>';
   }).join("");
 }
