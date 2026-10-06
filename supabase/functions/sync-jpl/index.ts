@@ -1,10 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const API_ROOT = "https://v3.football.api-sports.io";
-const FINISHED = new Set(["FT","AET","PEN"]);
-const TERMINAL = new Set(["FT","AET","PEN","PST","CANC","ABD","AWD","WO"]);
-const LIVE = new Set(["1H","HT","2H","ET","BT","P","SUSP","INT"]);
-const PLAYER_REFRESH_MS = 24 * 60 * 60 * 1000;
+const SORARE_GRAPHQL = "https://api.sorare.com/graphql";
+const COMPETITION_SLUG = "jupiler-pro-league";
+const SEASON_START = 2026;
+const SEASON_FROM = new Date("2026-07-01T00:00:00Z").getTime();
+const SEASON_TO = new Date("2027-07-01T00:00:00Z").getTime();
+const GAME_PAGE_SIZE = 50;
+const PLAYER_BATCH_SIZE = 8;
+const PLAYER_STATS_LAST = 15;
 
 const weights: Record<string,Record<string,number>> = {
   GK:{minutes:.1,save:3,cleanSheet:20,savesInsideBox:5,punches:2,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:2,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
@@ -19,263 +22,604 @@ function env(name:string, fallback?:string){
   return value;
 }
 
-async function football(path:string){
-  const response = await fetch(`${API_ROOT}${path}`,{headers:{"x-apisports-key":env("API_FOOTBALL_KEY")}});
-  if(!response.ok) throw new Error(`API-FOOTBALL ${response.status}: ${await response.text()}`);
-  const body = await response.json();
-  if(body.errors && Object.keys(body.errors).length) throw new Error(`API-FOOTBALL: ${JSON.stringify(body.errors)}`);
-  return body;
-}
-
-function roundNumber(label:string){
-  const found = String(label || "").match(/(\d+)\s*$/);
-  return found ? Number(found[1]) : null;
-}
-
-function positionCode(value:string){
-  const p = String(value || "").toLowerCase();
-  if(p.includes("goal")) return "GK";
-  if(p.includes("def")) return "DEF";
-  if(p.includes("mid")) return "MID";
-  return "FWD";
-}
-
-function startingPrice(position:string,minutes=0,name="",stat:any={}){
-  if(name.toLowerCase() === "hans vanaken") return 25;
-  if(minutes <= 0) return 1;
-  if(minutes < 90) return 2;
-  if(minutes < 270) return 4;
-  const base:Record<string,number> = {GK:8,DEF:9,MID:10,FWD:11};
-  const availability = Math.min(4,minutes/180);
-  const output = num(stat.goals?.total)*.75 + num(stat.goals?.assists)*.5;
-  const rating = Math.max(0,num(stat.games?.rating)-6.5);
-  return Math.min(24,Math.round((base[position]+availability+output+rating)*2)/2);
-}
-
 function num(value:unknown){
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function accuracy(value:unknown){
-  return num(String(value ?? "0").replace("%",""));
+function normalizeName(value:string){
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu,"")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g," ")
+    .trim();
 }
 
-function fantasyScore(position:string,stats:Record<string,number>){
-  return Math.round(Object.entries(weights[position] || {}).reduce((total,[key,weight]) => total + num(stats[key])*weight,0)*100)/100;
+function positionCode(value:string){
+  const p = String(value || "").toLowerCase();
+  if(p.includes("goal")) return "GK";
+  if(p.includes("def") || p.includes("back")) return "DEF";
+  if(p.includes("mid")) return "MID";
+  if(p.includes("forward") || p.includes("striker") || p.includes("wing")) return "FWD";
+  return null;
 }
 
-function mapStats(raw:any,position:string,teamGoalsConceded:number){
-  const passes = num(raw.passes?.total);
-  const successfulPass = Math.round(passes * accuracy(raw.passes?.accuracy) / 100);
-  const duelWon = num(raw.duels?.won);
-  const tackles = num(raw.tackles?.total);
-  const interceptions = num(raw.tackles?.interceptions);
-  const minutes = num(raw.games?.minutes);
+function startingPrice(position:string, name:string, appearances=0, stars=0){
+  if(normalizeName(name) === "hans vanaken") return 25;
+  const apps = Math.max(0,num(appearances));
+  if(apps === 0) return 1;
+  if(apps <= 2) return 2;
+  if(apps <= 5) return 4;
+  const base:Record<string,number> = {GK:6,DEF:7,MID:8,FWD:9};
+  const availability = Math.min(5,apps/2.5);
+  const quality = Math.min(10,Math.max(0,num(stars))*2);
+  return Math.min(24,Math.max(5,Math.round((base[position]+availability+quality)*2)/2));
+}
+
+function fantasyScore(position:string, stats:Record<string,number>){
+  return Math.round(Object.entries(weights[position] || {})
+    .reduce((total,[key,weight]) => total + num(stats[key])*weight,0)*100)/100;
+}
+
+function mapSorareStats(raw:any){
   return {
-    minutes,
-    save:num(raw.goals?.saves),
-    cleanSheet:position === "GK" && minutes > 0 && teamGoalsConceded === 0 ? 1 : 0,
-    savesInsideBox:0,
-    punches:0,
-    goalsConceded:minutes > 0 ? teamGoalsConceded : 0,
-    foulsMade:num(raw.fouls?.committed),
-    foulsDrawn:num(raw.fouls?.drawn),
-    yellow:num(raw.cards?.yellow),
-    red:num(raw.cards?.red),
-    goal:num(raw.goals?.total),
-    assist:num(raw.goals?.assists),
-    successfulTackles:tackles,
-    duelWon,
-    duelLost:Math.max(0,num(raw.duels?.total)-duelWon),
-    clearances:0,
-    interceptions,
-    possessionWon:tackles+interceptions,
-    possessionLost:0,
-    successfulPass,
-    successfulLongPass:0,
-    keyPass:num(raw.passes?.key),
-    passMissed:Math.max(0,passes-successfulPass),
-    successfulDribble:num(raw.dribbles?.success),
-    shotOnTarget:num(raw.shots?.on)
+    minutes:num(raw.minsPlayed),
+    save:num(raw.saves),
+    cleanSheet:num(raw.cleanSheet),
+    savesInsideBox:num(raw.savedIbox),
+    punches:num(raw.punches),
+    goalsConceded:num(raw.goalsConceded),
+    foulsMade:num(raw.fouls),
+    foulsDrawn:num(raw.wasFouled),
+    yellow:num(raw.yellowCard),
+    red:num(raw.redCard),
+    goal:num(raw.goals),
+    assist:num(raw.goalAssist),
+    successfulTackles:num(raw.wonTackle),
+    duelWon:num(raw.duelWon),
+    duelLost:num(raw.duelLost),
+    clearances:num(raw.totalClearance),
+    interceptions:num(raw.interceptionWon),
+    possessionWon:num(raw.possWon),
+    possessionLost:num(raw.possLostCtrl),
+    successfulPass:num(raw.accuratePass),
+    successfulLongPass:num(raw.accurateLongBalls),
+    // Sorare PlayerGameStats heeft momenteel geen rechtstreeks key-pass veld.
+    keyPass:0,
+    passMissed:num(raw.missedPass),
+    successfulDribble:num(raw.wonContest),
+    shotOnTarget:num(raw.ontargetScoringAtt)
   };
+}
+
+// De bestaande database gebruikt bigint provider/fixture IDs. Sorare gebruikt UUID-achtige
+// strings, dus we maken een stabiele positieve 63-bit FNV-1a hash.
+function stableBigint(value:string){
+  const bytes = new TextEncoder().encode(value);
+  let hash = 1469598103934665603n;
+  const prime = 1099511628211n;
+  for(const byte of bytes){
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64,hash*prime);
+  }
+  hash &= 0x7fffffffffffffffn;
+  if(hash === 0n) hash = 1n;
+  return hash.toString();
+}
+
+function playerDbId(slug:string){
+  return `sorare-${slug}`;
+}
+
+function fixtureDbId(providerId:string){
+  return stableBigint(`sorare-game:${providerId}`);
+}
+
+function statusCode(value:string){
+  const s = String(value || "").toLowerCase();
+  if(s === "played") return "FT";
+  if(s === "playing" || s === "live") return "LIVE";
+  if(s === "cancelled" || s === "canceled") return "CANC";
+  if(s === "postponed") return "PST";
+  return "NS";
+}
+
+function chunks<T>(items:T[],size:number){
+  const result:T[][] = [];
+  for(let i=0;i<items.length;i+=size) result.push(items.slice(i,i+size));
+  return result;
+}
+
+function assignRounds(games:any[]){
+  const sorted = [...games].sort((a,b) => new Date(a.date).getTime()-new Date(b.date).getTime());
+  const rounds:{games:any[],teams:Set<string>}[] = [];
+  for(const game of sorted){
+    const home = String(game.homeTeam?.id || game.homeTeam?.slug || "");
+    const away = String(game.awayTeam?.id || game.awayTeam?.slug || "");
+    if(!home || !away) continue;
+    let placed = false;
+    for(const round of rounds){
+      if(round.games.length >= 9) continue;
+      if(round.teams.has(home) || round.teams.has(away)) continue;
+      round.games.push(game);
+      round.teams.add(home);
+      round.teams.add(away);
+      placed = true;
+      break;
+    }
+    if(!placed){
+      rounds.push({games:[game],teams:new Set([home,away])});
+    }
+  }
+  return rounds.map((round,index) => ({number:index+1,games:round.games}));
 }
 
 Deno.serve(async request => {
   if(request.method !== "POST") return new Response("Method not allowed",{status:405});
   const started = Date.now();
+
   try{
-    const season = Number(env("API_FOOTBALL_SEASON","2026"));
-    const league = Number(env("API_FOOTBALL_LEAGUE_ID","144"));
-    const db = createClient(env("SUPABASE_URL"),env("SUPABASE_SERVICE_ROLE_KEY"),{auth:{persistSession:false}});
+    const apiKey = env("SORARE_API_KEY");
+    const db = createClient(
+      env("SUPABASE_URL"),
+      env("SUPABASE_SERVICE_ROLE_KEY"),
+      {auth:{persistSession:false}}
+    );
+
     let apiCalls = 0;
-    const fetchFootball = async (path:string) => {
+    const sorare = async (query:string, variables:Record<string,unknown>={}) => {
       apiCalls += 1;
-      return football(path);
+      for(let attempt=0;attempt<3;attempt++){
+        const response = await fetch(SORARE_GRAPHQL,{
+          method:"POST",
+          headers:{
+            "content-type":"application/json",
+            "APIKEY":apiKey,
+            "User-Agent":"Fantasy-JPL/1.0"
+          },
+          body:JSON.stringify({query,variables})
+        });
+
+        if(response.status === 429 && attempt < 2){
+          const waitSeconds = Math.max(1,num(response.headers.get("retry-after")) || 2);
+          await new Promise(resolve => setTimeout(resolve,waitSeconds*1000));
+          continue;
+        }
+
+        const body = await response.json();
+        if(!response.ok) throw new Error(`Sorare HTTP ${response.status}: ${JSON.stringify(body)}`);
+        if(body.errors?.length){
+          throw new Error(`Sorare GraphQL: ${body.errors.map((e:any)=>e.message).join(" | ")}`);
+        }
+        return body.data;
+      }
+      throw new Error("Sorare rate limit bleef actief na retries.");
     };
 
-    let forcePlayers = false;
-    try{
-      const body = await request.json();
-      forcePlayers = body?.refreshPlayers === true;
-    }catch{
-      // Een lege POST-body is normaal voor geplande synchronisaties.
-    }
+    let body:any = {};
+    try{ body = await request.json(); }catch{ /* lege POST is geldig */ }
+    const forcePlayers = body?.refreshPlayers === true;
 
     const {data:existingPlayers,error:existingPlayersError} = await db
       .from("players")
-      .select("provider_player_id,price,updated_at");
+      .select("id,name,price");
     if(existingPlayersError) throw existingPlayersError;
-    const existingPrices = new Map((existingPlayers || []).map(p => [Number(p.provider_player_id),Number(p.price)]));
-    const latestPlayerUpdate = (existingPlayers || []).reduce((latest,p) => {
-      const value = new Date(p.updated_at || 0).getTime();
-      return Math.max(latest,Number.isFinite(value) ? value : 0);
-    },0);
-    const playersNeedRefresh = forcePlayers
-      || (existingPlayers || []).length === 0
-      || !latestPlayerUpdate
-      || Date.now() - latestPlayerUpdate >= PLAYER_REFRESH_MS;
 
-    const fixturesPayload = await fetchFootball(`/fixtures?league=${league}&season=${season}`);
-    const fixtures = fixturesPayload.response || [];
-    const byRound = new Map<number,any[]>();
-    for(const item of fixtures){
-      const number = roundNumber(item.league?.round);
-      if(!number) continue;
-      if(!byRound.has(number)) byRound.set(number,[]);
-      byRound.get(number)!.push(item);
+    const priceByName = new Map(
+      (existingPlayers || []).map((p:any) => [normalizeName(p.name),Number(p.price)])
+    );
+    const sorareAlreadyLoaded = (existingPlayers || []).some((p:any) => String(p.id).startsWith("sorare-"));
+    const playersNeedRefresh = forcePlayers || !sorareAlreadyLoaded;
+
+    const competitionQuery = `
+      query {
+        football {
+          competition(slug:"${COMPETITION_SLUG}") {
+            id
+            name
+            slug
+            openForGameStats
+            teams(first:30) {
+              nodes {
+                __typename
+                ... on Club { id name slug }
+              }
+              pageInfo { hasNextPage endCursor }
+            }
+          }
+        }
+      }
+    `;
+    const competitionData = await sorare(competitionQuery);
+    const competition = competitionData?.football?.competition;
+    if(!competition) throw new Error("Sorare gaf de Jupiler Pro League niet terug.");
+    if(!competition.openForGameStats) throw new Error("Sorare markeert de Jupiler Pro League niet als openForGameStats.");
+
+    const clubs = (competition.teams?.nodes || [])
+      .filter((team:any) => team?.__typename === "Club" && team.slug);
+
+    if(clubs.length !== 18){
+      throw new Error(`Sorare gaf ${clubs.length} JPL-clubs terug; verwacht 18.`);
     }
-    const latestCompletedRound = [...byRound.entries()]
-      .filter(([,games]) => games.length === 9 && games.every(game => FINISHED.has(game.fixture.status.short)))
-      .sort(([a],[b]) => b-a)[0];
-    if(!latestCompletedRound) throw new Error("Geen volledig afgewerkte JPL-speeldag met 9 wedstrijden gevonden.");
-    const [latestCompletedNumber] = latestCompletedRound;
 
-    const gameweekIds = new Map<number,number>();
-    for(const [number,games] of byRound){
-      const lockAt = games.map(g => new Date(g.fixture.date).getTime()).sort((a,b) => a-b)[0];
-      const statuses = games.map(g => g.fixture.status.short);
-      const status = statuses.every(s => TERMINAL.has(s)) ? "finished" : (Date.now() >= lockAt || statuses.some(s => LIVE.has(s))) ? "active" : "upcoming";
-      const {data,error} = await db.from("gameweeks").upsert({season,number,name:`Speeldag ${number}`,lock_at:new Date(lockAt).toISOString(),status},{onConflict:"season,number"}).select("id").single();
-      if(error) throw error;
-      gameweekIds.set(number,data.id);
+    let importedPlayers = 0;
+    if(playersNeedRefresh){
+      const rows:any[] = [];
+      for(const club of clubs){
+        const rosterData = await sorare(`
+          query Roster($slug:String!) {
+            football {
+              club(slug:$slug) {
+                id
+                name
+                slug
+                activePlayers(first:50) {
+                  nodes {
+                    id
+                    slug
+                    displayName
+                    position
+                    gameplayTierStars
+                    lastFifteenSo5Appearances
+                  }
+                  pageInfo { hasNextPage endCursor }
+                }
+              }
+            }
+          }
+        `,{slug:club.slug});
+
+        const sourceClub = rosterData?.football?.club;
+        if(!sourceClub) throw new Error(`Sorare kon club ${club.slug} niet laden.`);
+
+        for(const player of sourceClub.activePlayers?.nodes || []){
+          const position = positionCode(player.position);
+          if(!position || !player.slug) continue;
+          const existingPrice = priceByName.get(normalizeName(player.displayName));
+          rows.push({
+            id:playerDbId(player.slug),
+            provider_player_id:stableBigint(`sorare-player:${player.id || player.slug}`),
+            name:player.displayName,
+            club_id:stableBigint(`sorare-club:${sourceClub.id}`),
+            club_name:sourceClub.name,
+            position,
+            minutes:0,
+            price:existingPrice ?? startingPrice(
+              position,
+              player.displayName,
+              player.lastFifteenSo5Appearances,
+              player.gameplayTierStars
+            ),
+            active:true,
+            updated_at:new Date().toISOString()
+          });
+        }
+      }
+
+      if(rows.length < 270){
+        throw new Error(`Sorare roster-import gaf slechts ${rows.length} bruikbare JPL-spelers terug.`);
+      }
+
+      const {error:deactivateError} = await db.from("players").update({active:false}).eq("active",true);
+      if(deactivateError) throw deactivateError;
+
+      for(const part of chunks(rows,200)){
+        const {error} = await db.from("players").upsert(part,{onConflict:"id"});
+        if(error) throw error;
+      }
+      importedPlayers = rows.length;
     }
 
-    const fixtureRows = fixtures.flatMap((item:any) => {
-      const number = roundNumber(item.league?.round);
+    const fetchGames = async (field:"pastGames"|"futureGames") => {
+      const collected:any[] = [];
+      let after:string|null = null;
+      for(let page=0;page<20;page++){
+        const data = await sorare(`
+          query Games($after:String) {
+            football {
+              competition(slug:"${COMPETITION_SLUG}") {
+                ${field}(first:${GAME_PAGE_SIZE},after:$after) {
+                  nodes {
+                    id
+                    date
+                    statusTyped
+                    homeScore
+                    awayScore
+                    homeTeam {
+                      __typename
+                      ... on Club { id name slug }
+                    }
+                    awayTeam {
+                      __typename
+                      ... on Club { id name slug }
+                    }
+                  }
+                  pageInfo { hasNextPage endCursor }
+                }
+              }
+            }
+          }
+        `,{after});
+
+        const connection = data?.football?.competition?.[field];
+        const nodes = connection?.nodes || [];
+        collected.push(...nodes);
+
+        if(!connection?.pageInfo?.hasNextPage || !connection.pageInfo.endCursor) break;
+
+        const times = nodes.map((g:any)=>new Date(g.date).getTime()).filter(Number.isFinite);
+        if(field === "pastGames" && times.length && Math.max(...times) < SEASON_FROM) break;
+        if(field === "futureGames" && times.length && Math.min(...times) >= SEASON_TO) break;
+
+        after = connection.pageInfo.endCursor;
+      }
+      return collected;
+    };
+
+    const [pastGames,futureGames] = await Promise.all([
+      fetchGames("pastGames"),
+      fetchGames("futureGames")
+    ]);
+
+    const gameMap = new Map<string,any>();
+    for(const game of [...pastGames,...futureGames]){
+      const time = new Date(game.date).getTime();
+      if(!Number.isFinite(time) || time < SEASON_FROM || time >= SEASON_TO) continue;
+      if(!game.id || !game.homeTeam?.id || !game.awayTeam?.id) continue;
+      gameMap.set(String(game.id),game);
+    }
+
+    const games = [...gameMap.values()];
+    if(games.length < 100){
+      throw new Error(`Sorare gaf slechts ${games.length} wedstrijden voor seizoen 2026/27 terug.`);
+    }
+
+    const rounds = assignRounds(games);
+    const completeRoundCount = rounds.filter(r=>r.games.length===9).length;
+    if(!completeRoundCount){
+      throw new Error("Kon geen volledige JPL-speeldag van 9 wedstrijden reconstrueren.");
+    }
+
+    const now = Date.now();
+    const gameweekRows = rounds.map(round => {
+      const times = round.games.map(g=>new Date(g.date).getTime()).filter(Number.isFinite);
+      const lockAt = Math.min(...times);
+      const finished = round.games.length === 9 && round.games.every(g=>String(g.statusTyped).toLowerCase()==="played");
+      const started = Number.isFinite(lockAt) && now >= lockAt;
+      return {
+        season:SEASON_START,
+        number:round.number,
+        name:`Speeldag ${round.number}`,
+        lock_at:new Date(lockAt).toISOString(),
+        status:finished ? "finished" : started ? "active" : "upcoming"
+      };
+    });
+
+    const {data:gameweeks,error:gameweekError} = await db
+      .from("gameweeks")
+      .upsert(gameweekRows,{onConflict:"season,number"})
+      .select("id,number,status,lock_at");
+    if(gameweekError) throw gameweekError;
+
+    const gameweekIds = new Map((gameweeks || []).map((g:any)=>[Number(g.number),Number(g.id)]));
+    const roundByProviderGame = new Map<string,number>();
+    for(const round of rounds){
+      for(const game of round.games) roundByProviderGame.set(String(game.id),round.number);
+    }
+
+    const fixtureRows = games.flatMap(game => {
+      const number = roundByProviderGame.get(String(game.id));
       const gameweekId = number ? gameweekIds.get(number) : null;
       if(!gameweekId) return [];
       return [{
-        id:item.fixture.id,gameweek_id:gameweekId,kickoff:item.fixture.date,
-        status:item.fixture.status.short,home_team:item.teams.home.name,away_team:item.teams.away.name,
-        home_score:item.goals.home,away_score:item.goals.away,updated_at:new Date().toISOString()
+        id:fixtureDbId(String(game.id)),
+        gameweek_id:gameweekId,
+        kickoff:game.date,
+        status:statusCode(game.statusTyped),
+        home_team:game.homeTeam?.name || "Onbekend",
+        away_team:game.awayTeam?.name || "Onbekend",
+        home_score:String(game.statusTyped).toLowerCase()==="played" ? num(game.homeScore) : null,
+        away_score:String(game.statusTyped).toLowerCase()==="played" ? num(game.awayScore) : null,
+        updated_at:new Date().toISOString()
       }];
     });
-    if(fixtureRows.length){
-      const {error} = await db.from("fixtures").upsert(fixtureRows,{onConflict:"id"});
+
+    for(const part of chunks(fixtureRows,200)){
+      const {error} = await db.from("fixtures").upsert(part,{onConflict:"id"});
       if(error) throw error;
     }
 
-    const playerRows:any[] = [];
-    if(playersNeedRefresh){
-      let page = 1;
-      do{
-        const payload = await fetchFootball(`/players?league=${league}&season=${season}&page=${page}`);
-        for(const entry of payload.response || []){
-          const stat = entry.statistics?.[0] || {};
-          const position = positionCode(stat.games?.position);
-          const minutes = num(stat.games?.minutes);
-          playerRows.push({
-            id:`af-${entry.player.id}`,provider_player_id:entry.player.id,name:entry.player.name,
-            club_id:stat.team?.id,club_name:stat.team?.name || "Onbekende club",position,minutes,
-            price:existingPrices.get(Number(entry.player.id)) ?? startingPrice(position,minutes,entry.player.name,stat),
-            active:true,updated_at:new Date().toISOString()
-          });
-        }
-        const total = num(payload.paging?.total) || 1;
-        page += 1;
-        if(page > total) break;
-      }while(page <= 50);
-      if(playerRows.length){
-        const {error} = await db.from("players").upsert(playerRows,{onConflict:"provider_player_id",ignoreDuplicates:false});
-        if(error) throw error;
-      }
-    }
+    const latestCompleted = rounds
+      .filter(r=>r.games.length===9 && r.games.every(g=>String(g.statusTyped).toLowerCase()==="played"))
+      .sort((a,b)=>b.number-a.number)[0];
 
-    const latestCompletedId = gameweekIds.get(latestCompletedNumber);
-    if(!latestCompletedId) throw new Error(`Speeldag ${latestCompletedNumber} ontbreekt in de database.`);
+    if(!latestCompleted) throw new Error("Geen volledig afgewerkte JPL-speeldag gevonden.");
+
+    const latestCompletedId = gameweekIds.get(latestCompleted.number);
+    if(!latestCompletedId) throw new Error("Laatste afgewerkte speeldag ontbreekt in de database.");
+
     const {data:pending,error:pendingError} = await db
       .from("fixtures")
       .select("id,gameweek_id,kickoff")
       .eq("gameweek_id",latestCompletedId)
       .eq("stats_processed",false)
-      .in("status",[...FINISHED])
+      .eq("status","FT")
       .order("kickoff",{ascending:true});
     if(pendingError) throw pendingError;
-    const rawFixture = new Map(fixtures.map((f:any) => [f.fixture.id,f]));
-    const touchedGameweeks = new Set<number>();
+
     let processedFixtures = 0;
     let importedPlayerRows = 0;
+    const incompleteFixtures:string[] = [];
+    const touchedGameweeks = new Set<number>();
 
-    for(const fixture of pending || []){
-      const payload = await fetchFootball(`/fixtures/players?fixture=${fixture.id}`);
-      const sourceFixture:any = rawFixture.get(fixture.id);
-      if(!payload.response?.length){
-        throw new Error(`API-FOOTBALL heeft nog geen spelerstatistieken voor wedstrijd ${fixture.id}.`);
+    if((pending || []).length){
+      const {data:activePlayers,error:activePlayersError} = await db
+        .from("players")
+        .select("id,name,position")
+        .eq("active",true)
+        .like("id","sorare-%");
+      if(activePlayersError) throw activePlayersError;
+
+      const slugs = (activePlayers || [])
+        .map((p:any)=>String(p.id).replace(/^sorare-/,""))
+        .filter(Boolean);
+
+      if(slugs.length < 270){
+        throw new Error(`Database bevat slechts ${slugs.length} actieve Sorare JPL-spelers. Voer eerst refreshPlayers uit.`);
       }
-      const rows:any[] = [];
-      for(const teamBlock of payload.response || []){
-        const isHome = sourceFixture && teamBlock.team.id === sourceFixture.teams.home.id;
-        const conceded = sourceFixture ? num(isHome ? sourceFixture.goals.away : sourceFixture.goals.home) : 0;
-        for(const entry of teamBlock.players || []){
-          const raw = entry.statistics?.[0] || {};
-          const position = positionCode(raw.games?.position);
-          const id = `af-${entry.player.id}`;
-          const stats = mapStats(raw,position,conceded);
-          await db.from("players").upsert({
-            id,provider_player_id:entry.player.id,name:entry.player.name,club_id:teamBlock.team.id,
-            club_name:teamBlock.team.name,position,minutes:0,
-            price:existingPrices.get(Number(entry.player.id)) ?? startingPrice(position,0,entry.player.name,raw),
-            active:true,updated_at:new Date().toISOString()
-          },{onConflict:"provider_player_id",ignoreDuplicates:true});
-          rows.push({fixture_id:fixture.id,player_id:id,minutes:num(raw.games?.minutes),stats,fantasy_points:fantasyScore(position,stats),updated_at:new Date().toISOString()});
+
+      const positionByPlayerId = new Map((activePlayers || []).map((p:any)=>[String(p.id),String(p.position)]));
+      const pendingById = new Map((pending || []).map((f:any)=>[String(f.id),f]));
+      const statRows:any[] = [];
+      const rowCountByFixture = new Map<string,number>();
+
+      for(const batch of chunks(slugs,PLAYER_BATCH_SIZE)){
+        const data = await sorare(`
+          query PlayerStats($slugs:[String!]!) {
+            players(slugs:$slugs) {
+              ... on Player {
+                id
+                slug
+                displayName
+                position
+                gameStats(last:${PLAYER_STATS_LAST},lowCoverage:true) {
+                  id
+                  minsPlayed
+                  saves
+                  savedIbox
+                  punches
+                  cleanSheet
+                  goalsConceded
+                  fouls
+                  wasFouled
+                  yellowCard
+                  redCard
+                  goals
+                  goalAssist
+                  wonTackle
+                  duelWon
+                  duelLost
+                  totalClearance
+                  interceptionWon
+                  possWon
+                  possLostCtrl
+                  accuratePass
+                  accurateLongBalls
+                  missedPass
+                  wonContest
+                  ontargetScoringAtt
+                  footballGame {
+                    id
+                    date
+                    statusTyped
+                    competition { slug }
+                  }
+                }
+              }
+            }
+          }
+        `,{slugs:batch});
+
+        for(const player of data?.players || []){
+          if(!player?.slug) continue;
+          const playerId = playerDbId(player.slug);
+          const position = positionByPlayerId.get(playerId) || positionCode(player.position);
+          if(!position) continue;
+
+          for(const raw of player.gameStats || []){
+            const sourceGame = raw.footballGame;
+            if(sourceGame?.competition?.slug !== COMPETITION_SLUG) continue;
+            if(String(sourceGame?.statusTyped).toLowerCase() !== "played") continue;
+
+            const fixtureId = fixtureDbId(String(sourceGame.id));
+            if(!pendingById.has(fixtureId)) continue;
+
+            const stats = mapSorareStats(raw);
+            statRows.push({
+              fixture_id:fixtureId,
+              player_id:playerId,
+              minutes:stats.minutes,
+              stats:{
+                ...stats,
+                provider:"sorare",
+                sorareStatId:raw.id,
+                sorareGameId:sourceGame.id
+              },
+              fantasy_points:fantasyScore(position,stats),
+              updated_at:new Date().toISOString()
+            });
+            rowCountByFixture.set(fixtureId,(rowCountByFixture.get(fixtureId)||0)+1);
+          }
         }
       }
-      if(rows.length){
-        const {error} = await db.from("player_match_stats").upsert(rows,{onConflict:"fixture_id,player_id"});
+
+      for(const part of chunks(statRows,200)){
+        const {error} = await db.from("player_match_stats").upsert(part,{onConflict:"fixture_id,player_id"});
         if(error) throw error;
-        importedPlayerRows += rows.length;
       }
-      const {error} = await db.from("fixtures").update({stats_processed:true,updated_at:new Date().toISOString()}).eq("id",fixture.id);
-      if(error) throw error;
-      touchedGameweeks.add(fixture.gameweek_id);
-      processedFixtures += 1;
+      importedPlayerRows = statRows.length;
+
+      for(const fixture of pending || []){
+        const id = String(fixture.id);
+        const count = rowCountByFixture.get(id) || 0;
+        // Een volledige wedstrijd hoort minstens de 22 starters te bevatten.
+        // We laten een fixture bewust pending bij te weinig Sorare-rijen.
+        if(count < 18){
+          incompleteFixtures.push(id);
+          continue;
+        }
+        const {error} = await db.from("fixtures")
+          .update({stats_processed:true,updated_at:new Date().toISOString()})
+          .eq("id",fixture.id);
+        if(error) throw error;
+        touchedGameweeks.add(Number(fixture.gameweek_id));
+        processedFixtures += 1;
+      }
     }
 
-    for(const [number,id] of gameweekIds){
-      const games = byRound.get(number) || [];
-      const lockAt = Math.min(...games.map(g => new Date(g.fixture.date).getTime()));
-      if(Date.now() >= lockAt) await db.rpc("lock_gameweek",{p_gameweek_id:id});
+    for(const gameweek of gameweeks || []){
+      if(gameweek.status === "active"){
+        const {error} = await db.rpc("lock_gameweek",{p_gameweek_id:gameweek.id});
+        if(error) throw error;
+      }
     }
-    for(const id of touchedGameweeks) await db.rpc("recalculate_gameweek_scores",{p_gameweek_id:id});
-    if(touchedGameweeks.size) await db.rpc("refresh_player_totals");
+
+    for(const id of touchedGameweeks){
+      const {error} = await db.rpc("recalculate_gameweek_scores",{p_gameweek_id:id});
+      if(error) throw error;
+    }
+    if(touchedGameweeks.size){
+      const {error} = await db.rpc("refresh_player_totals");
+      if(error) throw error;
+    }
 
     return Response.json({
       ok:true,
-      season,
-      league,
-      latestCompletedGameweek:latestCompletedNumber,
-      pendingFixtures:(pending || []).length,
+      source:"Sorare",
+      competition:COMPETITION_SLUG,
+      season:SEASON_START,
+      clubs:clubs.length,
+      reconstructedGameweeks:rounds.length,
+      completeGameweeks:completeRoundCount,
       fixtures:fixtureRows.length,
+      latestCompletedGameweek:latestCompleted.number,
       playerRefresh:playersNeedRefresh,
-      playersImported:playerRows.length,
+      playersImported:importedPlayers,
+      pendingFixtures:(pending || []).length,
       processedFixtures,
+      incompleteFixtures,
       importedPlayerRows,
+      unsupportedScoringStats:["keyPass"],
       apiCalls,
       durationMs:Date.now()-started
     });
   }catch(error){
     console.error(error);
-    return Response.json({ok:false,error:error instanceof Error ? error.message : String(error)},{status:500});
+    return Response.json({
+      ok:false,
+      source:"Sorare",
+      error:error instanceof Error ? error.message : String(error)
+    },{status:500});
   }
 });
