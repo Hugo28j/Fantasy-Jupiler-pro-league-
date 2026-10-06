@@ -707,9 +707,12 @@ Deno.serve(async request => {
     }
 
     const rounds = assignRounds(games);
-    const completeRoundCount = rounds.filter(r=>r.games.length===9).length;
-    if(!completeRoundCount){
-      throw new Error("Kon geen volledige JPL-speeldag van 9 wedstrijden reconstrueren.");
+    const scheduledGameweeks = rounds.length;
+    const playedGameweeks = rounds.filter(
+      r=>r.games.length===9 && r.games.every(g=>String(g.statusTyped).toLowerCase()==="played")
+    ).length;
+    if(scheduledGameweeks !== 34){
+      throw new Error(`Verwacht 34 JPL-speeldagen, kreeg ${scheduledGameweeks}.`);
     }
 
     const now = Date.now();
@@ -966,8 +969,8 @@ Deno.serve(async request => {
       competition:COMPETITION_SLUG,
       season:SEASON_START,
       clubs:clubs.length,
-      reconstructedGameweeks:rounds.length,
-      completeGameweeks:completeRoundCount,
+      scheduledGameweeks,
+      playedGameweeks,
       migratedUnsafeFixtureIds,
       fixtures:fixtureRows.length,
       latestCompletedGameweek:latestCompleted.number,
