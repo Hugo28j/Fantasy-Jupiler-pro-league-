@@ -10,10 +10,14 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Test round reconstruction
-        shell: python
+      - name: Solve official-like JPL rounds from Sorare schedule
+        shell: bash
         run: |
+          python -m pip install --quiet ortools
+          python <<'PY'
           import json, urllib.request, datetime
+          from collections import defaultdict
+          from ortools.sat.python import cp_model
 
           URL="https://api.sorare.com/graphql"
           COMP="jupiler-pro-league"
@@ -42,8 +46,8 @@ jobs:
                         {field}(first:35,after:$after) {{
                           nodes {{
                             id date
-                            homeTeam {{ __typename ... on Club {{ id }} }}
-                            awayTeam {{ __typename ... on Club {{ id }} }}
+                            homeTeam {{ __typename ... on Club {{ id name slug }} }}
+                            awayTeam {{ __typename ... on Club {{ id name slug }} }}
                           }}
                           pageInfo {{ hasNextPage endCursor }}
                         }}
@@ -66,52 +70,86 @@ jobs:
           games=list(games.values())
           games.sort(key=lambda g:g["date"])
           print("GAMES",len(games))
+          assert len(games)==306
 
           teams=sorted({g["homeTeam"]["id"] for g in games}|{g["awayTeam"]["id"] for g in games})
           print("TEAMS",len(teams))
+          assert len(teams)==18
 
-          def tid(g,side): return g[side]["id"]
-          def gdate(g): return datetime.datetime.fromisoformat(g["date"].replace("Z","+00:00"))
+          incident=defaultdict(list)
+          for i,g in enumerate(games):
+              incident[g["homeTeam"]["id"]].append(i)
+              incident[g["awayTeam"]["id"]].append(i)
 
-          unassigned={g["id"]:g for g in games}
-          rounds=[]
+          ord_by_team_game={}
+          for t,idxs in incident.items():
+              idxs.sort(key=lambda i:games[i]["date"])
+              assert len(idxs)==34
+              for pos,i in enumerate(idxs,1):
+                  ord_by_team_game[(t,i)]=pos
 
-          for round_no in range(1,35):
-              remaining=sorted(unassigned.values(),key=gdate)
-              if not remaining: break
-              seed=gdate(remaining[0])
-              chosen=[]
-              used=set()
+          model=cp_model.CpModel()
+          x={}
+          for i,g in enumerate(games):
+              oh=ord_by_team_game[(g["homeTeam"]["id"],i)]
+              oa=ord_by_team_game[(g["awayTeam"]["id"],i)]
+              center=round((oh+oa)/2)
+              lo=max(1,min(oh,oa)-8)
+              hi=min(34,max(oh,oa)+8)
+              # Broad enough to handle postponed games while keeping model compact.
+              for r in range(lo,hi+1):
+                  x[(i,r)]=model.NewBoolVar(f"x_{i}_{r}")
+              model.Add(sum(x[(i,r)] for r in range(lo,hi+1))==1)
 
-              for g in remaining:
-                  if (gdate(g)-seed).total_seconds() > 4.5*86400:
+          for t,idxs in incident.items():
+              for r in range(1,35):
+                  vars_here=[x[(i,r)] for i in idxs if (i,r) in x]
+                  if not vars_here:
+                      raise RuntimeError(f"No candidates for team {t} round {r}")
+                  model.Add(sum(vars_here)==1)
+
+          objective=[]
+          for (i,r),v in x.items():
+              g=games[i]
+              oh=ord_by_team_game[(g["homeTeam"]["id"],i)]
+              oa=ord_by_team_game[(g["awayTeam"]["id"],i)]
+              # Primary signal: where this match sits in both teams' chronological league schedules.
+              cost=abs(r-oh)+abs(r-oa)
+              objective.append(cost*v)
+          model.Minimize(sum(objective))
+
+          solver=cp_model.CpSolver()
+          solver.parameters.max_time_in_seconds=90
+          solver.parameters.num_search_workers=8
+          status=solver.Solve(model)
+          print("STATUS",solver.StatusName(status),"OBJECTIVE",solver.ObjectiveValue())
+          if status not in (cp_model.OPTIMAL,cp_model.FEASIBLE):
+              raise RuntimeError("No feasible round assignment")
+
+          rounds=defaultdict(list)
+          mapping=[]
+          for i,g in enumerate(games):
+              assigned=None
+              for r in range(1,35):
+                  if (i,r) in x and solver.Value(x[(i,r)]):
+                      assigned=r
                       break
-                  h,a=tid(g,"homeTeam"),tid(g,"awayTeam")
-                  if h in used or a in used: continue
-                  chosen.append(g); used|={h,a}
-                  if len(chosen)==9: break
+              assert assigned is not None
+              rounds[assigned].append(g)
+              mapping.append([g["id"],assigned])
 
-              while len(chosen)<9:
-                  missing=set(teams)-used
-                  candidates=[]
-                  chosen_ids={x["id"] for x in chosen}
-                  for g in unassigned.values():
-                      if g["id"] in chosen_ids: continue
-                      h,a=tid(g,"homeTeam"),tid(g,"awayTeam")
-                      if h in missing and a in missing:
-                          candidates.append((abs((gdate(g)-seed).total_seconds()),gdate(g),g))
-                  if not candidates: break
-                  candidates.sort(key=lambda x:(x[0],x[1]))
-                  g=candidates[0][2]
-                  chosen.append(g)
-                  used|={tid(g,"homeTeam"),tid(g,"awayTeam")}
+          for r in range(1,35):
+              b=rounds[r]
+              ts=[]
+              for g in b:
+                  ts += [g["homeTeam"]["id"],g["awayTeam"]["id"]]
+              assert len(b)==9 and len(set(ts))==18
+              dates=sorted(g["date"][:10] for g in b)
+              names=[f'{g["homeTeam"]["name"]} - {g["awayTeam"]["name"]}' for g in sorted(b,key=lambda z:z["date"])]
+              print("ROUND",r,"DATES",dates,"MATCHES",names)
 
-              print("ROUND",round_no,"N",len(chosen),"UNIQUE",len(used),"SEED",seed.date(),
-                    "DATES",[gdate(g).date().isoformat() for g in chosen])
-              if len(chosen)!=9 or len(used)!=18:
-                  print("FAILED_AT",round_no)
-                  break
-              for g in chosen: unassigned.pop(g["id"],None)
-              rounds.append(chosen)
-
-          print("ROUNDS",len(rounds),"UNASSIGNED",len(unassigned))
+          mapping.sort(key=lambda p:(p[1],p[0]))
+          print("MAPPING_JSON_BEGIN")
+          print(json.dumps(mapping,separators=(",",":")))
+          print("MAPPING_JSON_END")
+          PY
