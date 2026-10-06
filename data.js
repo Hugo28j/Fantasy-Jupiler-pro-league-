@@ -2,7 +2,7 @@ const DATA_META = {
   season: "2026/27",
   generatedAt: "2026-10-05",
   playerCoverage: "verified-active-seed",
-  priceNote: "Gebalanceerde fantasy-prijzen voor een startbudget van €150M"
+  priceNote: "Gebalanceerde fantasy-prijzen voor een startbudget van €125M"
 };
 
 const CLUBS = [
