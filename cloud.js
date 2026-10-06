@@ -246,11 +246,19 @@
   }
 
   async function loadFixtures(){
-    const {data,error} = await cloud.client.from("fixtures").select("id,kickoff,status,home_team,away_team,home_score,away_score,gameweeks(number)").order("kickoff",{ascending:false}).limit(30);
+    const {data,error} = await cloud.client
+      .from("fixtures")
+      .select("id,kickoff,status,home_team,away_team,home_score,away_score,gameweeks(number)")
+      .in("status",["FT","LIVE"])
+      .order("kickoff",{ascending:false})
+      .limit(120);
     if(error) throw error;
     if(!data || !data.length) return;
-    const date = new Intl.DateTimeFormat("nl-BE",{day:"numeric",month:"short",year:"numeric"});
+    const date = new Intl.DateTimeFormat("nl-BE",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
     MATCHES.splice(0,MATCHES.length,...data.map(f => ({
+      id:f.id,
+      kickoff:f.kickoff,
+      status:f.status,
       date:date.format(new Date(f.kickoff)),
       week:"Speeldag " + (f.gameweeks ? f.gameweeks.number : "?"),
       home:f.home_team,away:f.away_team,
@@ -258,6 +266,28 @@
       awayScore:f.away_score == null ? "–" : f.away_score
     })));
     renderMatches();
+  }
+
+  async function loadMatchDetail(fixtureId,fallbackMatch){
+    const match = fallbackMatch || MATCHES.find(m => String(m.id) === String(fixtureId));
+    if(!match) return;
+
+    const {data,error} = await cloud.client
+      .from("player_match_stats")
+      .select("player_id,minutes,stats,fantasy_points,players(id,name,club_name,position)")
+      .eq("fixture_id",fixtureId)
+      .limit(100);
+    if(error){
+      console.error(error);
+      document.getElementById("matchDetail").innerHTML = '<div class="empty-state">De wedstrijddata kon niet worden geladen.</div>';
+      return;
+    }
+
+    const rows = (data || []).map(row => {
+      const player = Array.isArray(row.players) ? row.players[0] : row.players;
+      return {...row,player:player || {id:row.player_id,name:"Onbekend",club_name:"",position:"MID"}};
+    });
+    renderMatchDetail(match,rows);
   }
 
   async function loadGameweekBalance(){
@@ -452,6 +482,9 @@
   wrapMutations();
   window.addEventListener("fantasy:player-profile",event => {
     if(cloud.enabled && cloud.client && event.detail?.playerId) loadPlayerStats(event.detail.playerId);
+  });
+  window.addEventListener("fantasy:match-detail",event => {
+    if(cloud.enabled && cloud.client && event.detail?.fixtureId) loadMatchDetail(event.detail.fixtureId,event.detail.match);
   });
 
   if(!cloud.enabled){
