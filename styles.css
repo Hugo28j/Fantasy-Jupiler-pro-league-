@@ -429,3 +429,7 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 }
 
 .team-pitch-label small{display:block;margin-top:2px;color:#86d5ff;font-size:9px;font-weight:900;letter-spacing:.06em}
+
+.market-price-change.positive{color:#58efa0}
+.market-price-change.negative{color:#ff6575}
+.market-price-change.neutral{color:#9fb0bd}
