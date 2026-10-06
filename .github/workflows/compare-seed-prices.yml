@@ -1,0 +1,54 @@
+name: Compare seed prices
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/compare-seed-prices.yml"
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare old seed names with current players
+        shell: python
+        run: |
+          import json,re,urllib.parse,urllib.request,unicodedata
+          cfg=open("config.js","r",encoding="utf-8").read()
+          url=re.search(r'supabaseUrl:\s*"([^"]+)"',cfg).group(1)
+          key=re.search(r'supabaseAnonKey:\s*"([^"]+)"',cfg).group(1)
+
+          def get(path,params):
+              qs=urllib.parse.urlencode(params,safe="(),*")
+              req=urllib.request.Request(url+"/rest/v1/"+path+"?"+qs,headers={"apikey":key,"Accept":"application/json","Range":"0-999"})
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return json.loads(r.read().decode())
+
+          def norm(s):
+              s=unicodedata.normalize("NFKD",s or "")
+              s="".join(c for c in s if not unicodedata.combining(c))
+              return re.sub(r"[^a-z0-9]","",s.lower())
+
+          source=open("data.js","r",encoding="utf-8").read()
+          seed=[]
+          for m in re.finditer(r'\{id:"[^"]+",name:"([^"]+)",club:"([^"]+)",pos:"(GK|DEF|MID|FWD)",minutes:(\d+),price:([0-9.]+)\}',source):
+              price=float(m.group(5))
+              balanced=25.0 if norm(m.group(1))=="hansvanaken" else min(24.0,round(price*3)/2)
+              seed.append({"name":m.group(1),"club":m.group(2),"price":balanced})
+
+          players=get("players",{"select":"id,name,club_name,position,price","active":"eq.true","order":"name.asc"})
+          current={norm(p["name"]):p for p in players}
+          matched=[]
+          unmatched=[]
+          for s in seed:
+              p=current.get(norm(s["name"]))
+              if p: matched.append((s["name"],s["price"],p["name"],p["price"]))
+              else: unmatched.append(s)
+
+          print("SEED_COUNT",len(seed))
+          print("CURRENT_COUNT",len(players))
+          print("MATCHED",len(matched))
+          print("UNMATCHED",len(unmatched))
+          print("UNMATCHED_SEED",json.dumps(unmatched,ensure_ascii=False))
+          print("HIGH_DIFF_MATCHES",json.dumps([x for x in matched if abs(float(x[3])-float(x[1]))>=5][:80],ensure_ascii=False))
