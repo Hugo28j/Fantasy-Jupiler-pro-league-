@@ -1,5 +1,5 @@
 const STORAGE_KEY = "fantasy-jpl-2026-v1";
-const START_BUDGET = 100;
+const START_BUDGET = 150;
 const REQUIRED_BY_POS = {GK:2,DEF:2,MID:2,FWD:2};
 
 const state = {
@@ -7,7 +7,8 @@ const state = {
   benchGK: null,
   benchOutfield: null,
   teamName: "Mijn Fantasy Team",
-  cash: START_BUDGET
+  cash: START_BUDGET,
+  budgetBase: START_BUDGET
 };
 
 let selectedMatchweek = null;
@@ -26,8 +27,13 @@ function loadState(){
     if(saved.benchGK && state.squad.includes(saved.benchGK)) state.benchGK = saved.benchGK;
     if(saved.benchOutfield && state.squad.includes(saved.benchOutfield)) state.benchOutfield = saved.benchOutfield;
     if(typeof saved.teamName === "string" && saved.teamName.trim()) state.teamName = saved.teamName.slice(0,28);
-    if(Number.isFinite(Number(saved.cash))) state.cash = Number(saved.cash);
-    else state.cash = Math.max(0,START_BUDGET-state.squad.map(playerById).filter(Boolean).reduce((sum,p)=>sum+Number(p.price||0),0));
+    const savedBudgetBase = Number(saved.budgetBase || 100);
+    if(Number.isFinite(Number(saved.cash))){
+      state.cash = Number(saved.cash) + Math.max(0,START_BUDGET-savedBudgetBase);
+    }else{
+      state.cash = Math.max(0,START_BUDGET-state.squad.map(playerById).filter(Boolean).reduce((sum,p)=>sum+Number(p.price||0),0));
+    }
+    state.budgetBase = START_BUDGET;
   }catch(e){ console.warn("Could not load saved fantasy team",e); }
 }
 
@@ -335,6 +341,7 @@ function filteredPlayers(){
     (!q || p.name.toLowerCase().includes(q) || p.club.toLowerCase().includes(q)) &&
     (pos === "ALL" || p.pos === pos) &&
     (club === "ALL" || p.club === club) &&
+    (p.pos === "GK" || Number(p.minutes || 0) > 0) &&
     Number(p.price || 0) >= minPrice &&
     Number(p.price || 0) <= maxPrice
   );
