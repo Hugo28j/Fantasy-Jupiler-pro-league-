@@ -49,7 +49,7 @@
     const dialog = document.createElement("dialog");
     dialog.id = "authDialog";
     dialog.className = "auth-dialog";
-    dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in om je team, budget en score centraal te bewaren.</p><button id="googleAuthButton" class="google-auth-btn" type="button"><span class="google-g" aria-hidden="true">G</span><span>Doorgaan met Google</span></button><div class="auth-divider"><span>of met e-mail</span></div><label><span>E-mailadres</span><input id="authEmail" type="email" autocomplete="email"></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="8"></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
+    dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in om je team, budget en score centraal te bewaren.</p><button id="googleAuthButton" class="google-auth-btn" type="button"><span class="google-g" aria-hidden="true">G</span><span>Doorgaan met Google</span></button><div class="auth-divider"><span>of met e-mail</span></div><label><span>E-mailadres</span><input id="authEmail" type="email" autocomplete="email"></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="4"></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
     document.body.appendChild(dialog);
 
     document.getElementById("authButton").addEventListener("click", onAuthButton);
@@ -143,8 +143,8 @@
   async function signUp(){
     authError("");
     const {email,password} = authValues();
-    if(!email || password.length < 8){
-      authError("Vul een geldig e-mailadres en minstens 8 tekens in.");
+    if(!email || password.length < 4){
+      authError("Vul een geldig e-mailadres en minstens 4 tekens in.");
       return;
     }
     const {data,error} = await cloud.client.auth.signUp({email,password,options:{emailRedirectTo:location.href.split("#")[0]}});
@@ -233,12 +233,37 @@
   }
 
   async function loadPlayers(){
-    const {data,error} = await cloud.client.from("players").select("id,name,club_name,position,minutes,price,total_points").eq("active",true).order("name");
+    const [{data,error},{data:priceRows,error:priceError}] = await Promise.all([
+      cloud.client.from("players").select("id,name,club_name,position,minutes,price,total_points").eq("active",true).order("name"),
+      cloud.client
+        .from("player_match_stats")
+        .select("player_id,stats,fixtures(kickoff,status)")
+        .limit(5000)
+    ]);
     if(error) throw error;
+    if(priceError) console.warn("Laatste prijswijziging kon niet worden geladen",priceError.message);
     if(!data || !data.length) return;
+
+    const latestPriceChange = new Map();
+    for(const row of priceRows || []){
+      const fixture = Array.isArray(row.fixtures) ? row.fixtures[0] : row.fixtures;
+      if(!fixture || fixture.status !== "FT") continue;
+      const deltaRaw = row.stats?.priceDelta;
+      if(deltaRaw == null || !Number.isFinite(Number(deltaRaw))) continue;
+      const kickoff = String(fixture.kickoff || "");
+      const previous = latestPriceChange.get(String(row.player_id));
+      if(!previous || kickoff > previous.kickoff){
+        latestPriceChange.set(String(row.player_id),{
+          kickoff,
+          delta:Number(deltaRaw)
+        });
+      }
+    }
+
     PLAYERS.splice(0,PLAYERS.length,...data.map(p => ({
       id:p.id,name:p.name,club:p.club_name,pos:p.position,minutes:p.minutes,
-      price:Number(p.price),score:Number(p.total_points || 0)
+      price:Number(p.price),score:Number(p.total_points || 0),
+      lastPriceDelta:latestPriceChange.get(String(p.id))?.delta ?? null
     })));
     const clubs = [...new Set(PLAYERS.map(p => p.club))].sort((a,b) => a.localeCompare(b,"nl"));
     CLUBS.splice(0,CLUBS.length,...clubs);
