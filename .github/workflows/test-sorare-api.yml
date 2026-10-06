@@ -10,63 +10,57 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Sorare rounds and positions
+      - name: Inspect Sorare stage groups and position
         shell: python
         run: |
           import json, urllib.request, urllib.error
-
-          GRAPHQL = "https://api.sorare.com/graphql"
-          SCHEMA = "https://api.sorare.com/graphql/schema"
+          GRAPHQL="https://api.sorare.com/graphql"
+          SCHEMA="https://api.sorare.com/graphql/schema"
 
           req=urllib.request.Request(SCHEMA,headers={"User-Agent":"Fantasy-JPL/1.0"})
           with urllib.request.urlopen(req,timeout=60) as r:
               schema=r.read().decode("utf-8",errors="replace")
 
-          for type_name in ["TournamentCalendarStage","TournamentCalendarRound","Player"]:
+          for type_name in ["StageGroup","TournamentCalendarStage","Player"]:
               marker=f"type {type_name} "
               i=schema.find(marker)
               if i<0: i=schema.find(f"type {type_name} {{")
               print(f"\n=== TYPE {type_name} ===")
-              if i<0:
-                  print("NOT FOUND")
-              else:
-                  j=schema.find("\ntype ",i+5)
-                  print(schema[i:(j if j>i else i+20000)][:20000])
+              if i<0: print("NOT FOUND"); continue
+              j=schema.find("\ntype ",i+5)
+              print(schema[i:(j if j>i else i+18000)][:18000])
 
-          def gql(name,query,variables=None):
-              payload=json.dumps({"query":query,"variables":variables or {}}).encode()
-              req=urllib.request.Request(GRAPHQL,data=payload,headers={
-                  "content-type":"application/json","User-Agent":"Fantasy-JPL/1.0"
-              },method="POST")
+          def gql(name,q):
+              payload=json.dumps({"query":q}).encode()
+              req=urllib.request.Request(GRAPHQL,data=payload,headers={"content-type":"application/json","User-Agent":"Fantasy-JPL/1.0"},method="POST")
               try:
                   with urllib.request.urlopen(req,timeout=60) as r:
-                      raw=r.read().decode("utf-8"); status=r.status
+                      raw=r.read().decode(); status=r.status
               except urllib.error.HTTPError as e:
-                  raw=e.read().decode("utf-8",errors="replace"); status=e.code
-              print(f"\n=== {name} HTTP {status} ===")
-              print(raw[:50000])
+                  raw=e.read().decode(errors="replace"); status=e.code
+              print(f"\n=== {name} HTTP {status} ===\n{raw[:40000]}")
 
-          gql("JPL_STAGES", """
+          gql("HANS_POSITION", """
           query {
-            football {
-              competition(slug: "jupiler-pro-league") {
-                stages(seasonStartYear: 2026) {
-                  __typename
-                  id
-                }
-              }
+            anyPlayer(slug:"hans-vanaken") {
+              ... on Player { id slug displayName position }
             }
           }
           """)
 
-          gql("HANS_POSITION", """
+          gql("JPL_STAGE_GROUPS", """
           query {
-            anyPlayer(slug: "hans-vanaken") {
-              ... on Player {
-                id
-                slug
-                displayName
-                positionTyped
+            football {
+              competition(slug:"jupiler-pro-league") {
+                stages(seasonStartYear:2026) {
+                  id
+                  name
+                  groups {
+                    __typename
+                    id
+                    name
+                  }
+                }
               }
             }
           }
