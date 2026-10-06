@@ -229,6 +229,7 @@
     const result = Array.isArray(data) ? data[0] : data;
     if(result && result.locked) cloud.locked = true;
     await loadTransferStatus();
+    await loadTeam();
   }
 
   async function loadPlayers(){
@@ -305,11 +306,12 @@
 
   async function loadTeam(){
     if(!cloud.user) return;
-    const {data,error} = await cloud.client.from("teams").select("team_name,squad_ids,bench_gk_id,bench_outfield_id,total_points").eq("user_id",cloud.user.id).maybeSingle();
+    const {data,error} = await cloud.client.from("teams").select("team_name,squad_ids,bench_gk_id,bench_outfield_id,budget,total_points").eq("user_id",cloud.user.id).maybeSingle();
     if(error) throw error;
     if(!data) return;
     cloud.loadingTeam = true;
     state.teamName = data.team_name || "Mijn Fantasy Team";
+    state.cash = Number(data.budget ?? START_BUDGET);
     state.squad = Array.isArray(data.squad_ids) ? data.squad_ids.filter(id => PLAYERS.some(p => p.id === id)) : [];
     state.benchGK = state.squad.includes(data.bench_gk_id) ? data.bench_gk_id : null;
     state.benchOutfield = state.squad.includes(data.bench_outfield_id) ? data.bench_outfield_id : null;
@@ -469,6 +471,7 @@
       state.benchGK = null;
       state.benchOutfield = null;
       state.teamName = "Mijn Fantasy Team";
+      state.cash = START_BUDGET;
       original.saveState();
       renderAll();
       updateEditability();
