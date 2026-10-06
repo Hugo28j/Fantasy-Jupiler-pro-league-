@@ -70,13 +70,13 @@ function roundPrice(value:number){
 }
 
 function marketPriceDelta(price:number, points:number){
-  if(points <= 0) return -1;
+  if(points <= 0) return -2;
   const ratio = price > 0 ? (points/price)*100 : 0;
-  if(ratio < 30) return -1;
-  if(ratio < 40) return -0.7;
-  if(ratio < 50) return -0.5;
-  if(ratio < 90) return -0.3;
-  if(ratio < 100) return 0;
+  if(ratio < 30) return -2;
+  if(ratio < 40) return -1;
+  if(ratio < 70) return -0.7;
+  if(ratio < 90) return -0.5;
+  if(ratio < 100) return -0.3;
   if(ratio < 110) return 0.3;
   if(ratio < 120) return 0.5;
   if(ratio < 140) return 1;
