@@ -49,11 +49,12 @@
     const dialog = document.createElement("dialog");
     dialog.id = "authDialog";
     dialog.className = "auth-dialog";
-    dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in om je team, budget en score centraal te bewaren.</p><label><span>E-mailadres</span><input id="authEmail" type="email" autocomplete="email" required></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="8" required></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
+    dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in om je team, budget en score centraal te bewaren.</p><button id="googleAuthButton" class="google-auth-btn" type="button"><span class="google-g" aria-hidden="true">G</span><span>Doorgaan met Google</span></button><div class="auth-divider"><span>of met e-mail</span></div><label><span>E-mailadres</span><input id="authEmail" type="email" autocomplete="email"></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="8"></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
     document.body.appendChild(dialog);
 
     document.getElementById("authButton").addEventListener("click", onAuthButton);
     document.getElementById("closeAuth").addEventListener("click", () => dialog.close());
+    document.getElementById("googleAuthButton").addEventListener("click", signInWithGoogle);
     document.getElementById("authForm").addEventListener("submit", event => { event.preventDefault(); signIn(); });
     document.getElementById("signupButton").addEventListener("click", signUp);
   }
@@ -100,9 +101,43 @@
 
   async function signIn(){
     authError("");
-    const {error} = await cloud.client.auth.signInWithPassword(authValues());
+    const {email,password} = authValues();
+    if(!email || !password){
+      authError("Vul je e-mailadres en wachtwoord in, of kies Google.");
+      return;
+    }
+    const {error} = await cloud.client.auth.signInWithPassword({email,password});
     if(error) authError(error.message);
     else document.getElementById("authDialog").close();
+  }
+
+  function oauthReturnUrl(){
+    return location.origin + location.pathname;
+  }
+
+  async function signInWithGoogle(){
+    authError("");
+    const button = document.getElementById("googleAuthButton");
+    button.disabled = true;
+    button.classList.add("loading");
+    try{
+      const {error} = await cloud.client.auth.signInWithOAuth({
+        provider:"google",
+        options:{
+          redirectTo:oauthReturnUrl(),
+          queryParams:{prompt:"select_account"}
+        }
+      });
+      if(error){
+        authError(error.message);
+        button.disabled = false;
+        button.classList.remove("loading");
+      }
+    }catch(error){
+      authError(error?.message || "Google-login kon niet worden gestart.");
+      button.disabled = false;
+      button.classList.remove("loading");
+    }
   }
 
   async function signUp(){
