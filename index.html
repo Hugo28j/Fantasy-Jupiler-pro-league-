@@ -152,8 +152,8 @@
       <div class="section-head">
         <div>
           <p class="eyebrow">JUPILER PRO LEAGUE</p>
-          <h2>Speeldag 7 · balansproef</h2>
-          <p class="muted">De 9 wedstrijden van de laatste volledig afgewerkte speeldag. Met de backend actief worden alle beschikbare spelerstatistieken via Sorare ingelezen en door jullie eigen puntentabel berekend.</p>
+          <h2>Wedstrijden & live scores</h2>
+          <p class="muted">Klik op een gespeelde of live wedstrijd voor de volledige opstelling, bank, wissels en fantasy-punten per speler.</p>
         </div>
       </div>
       <div id="matchesList" class="matches-list"></div>
@@ -173,7 +173,7 @@
           <article><span>Hoogste score</span><strong>—</strong></article>
         </div>
         <div id="positionBalance" class="position-balance"></div>
-        <p id="balanceNotice" class="balance-notice">Voer migratie 004 en de beveiligde API‑Football-sync uit om de echte spelersscores te zien.</p>
+        <p id="balanceNotice" class="balance-notice">De balans gebruikt de echte Sorare-spelerstats uit de laatste verwerkte speeldag.</p>
         <div class="table-wrap balance-table-wrap">
           <table id="balanceTable">
             <thead></thead>
@@ -218,6 +218,20 @@
     <div class="dialog-shell">
       <button class="dialog-close" type="button" data-close-dialog="playerDialog" aria-label="Sluiten">×</button>
       <div id="playerProfile"></div>
+    </div>
+  </dialog>
+
+  <dialog id="matchDialog" class="detail-dialog match-detail-dialog">
+    <div class="dialog-shell match-dialog-shell">
+      <button class="dialog-close" type="button" data-close-dialog="matchDialog" aria-label="Sluiten">×</button>
+      <div id="matchDetail"></div>
+    </div>
+  </dialog>
+
+  <dialog id="matchPlayerDialog" class="detail-dialog match-player-dialog">
+    <div class="dialog-shell">
+      <button class="dialog-close" type="button" data-close-dialog="matchPlayerDialog" aria-label="Sluiten">×</button>
+      <div id="matchPlayerDetail"></div>
     </div>
   </dialog>
 
