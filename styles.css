@@ -369,3 +369,25 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .match-player-topline{width:88px;top:-16px}
   .match-event-icon{width:13px;height:13px;font-size:8px}
 }
+
+/* Compactere match-eventplaatsing */
+.match-player-topline{display:none!important}
+.match-card-strip{position:absolute;left:24px;top:0;display:flex;gap:2px;z-index:7;pointer-events:none;transform:translate(-35%,-25%)}
+.match-card-strip .match-event-icon{width:14px;height:18px;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.72)}
+.match-sub-strip{position:absolute;right:2px;top:-5px;z-index:7;pointer-events:none;white-space:nowrap}
+.match-player-name-row{display:flex;align-items:center;justify-content:center;gap:4px;max-width:132px;margin-top:4px}
+.match-player-name-row .match-player-name{margin-top:0}
+.match-name-events{display:inline-flex;align-items:center;gap:2px;flex:0 0 auto;white-space:nowrap}
+.match-name-events .match-event-icon{width:14px;height:14px;font-size:9px;border-radius:4px}
+.match-name-events .event-yellow,.match-name-events .event-red{display:none}
+.match-bench-name-row{display:flex!important;align-items:center;gap:5px}
+.bench-name-events{display:inline-flex}
+.bench-name-events .event-yellow,.bench-name-events .event-red{display:inline-grid}
+.match-bench-meta{margin-top:2px}
+
+@media(max-width:760px){
+  .match-card-strip{left:19px;top:1px}
+  .match-sub-strip{right:-1px;top:-5px}
+  .match-player-name-row{max-width:90px;gap:2px}
+  .match-name-events .match-event-icon{width:12px;height:12px;font-size:8px}
+}
