@@ -1,1 +1,4 @@
 [functions.sync-jpl]\nverify_jwt = false\n
+
+[functions.register-username]
+verify_jwt = false
