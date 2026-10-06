@@ -9,7 +9,20 @@ De code voor punten 1–4 staat in de repository, maar GitHub Pages kan zelf gee
 3. Open **Authentication → URL Configuration**. Zet de GitHub Pages-URL als **Site URL** en voeg dezelfde URL toe bij **Redirect URLs**.
 4. Kopieer bij **Project Settings → API** de Project URL en de publieke anon/publishable key naar `config.js`.
 
-De publieke sleutel mag in de website staan. De `service_role`-sleutel en voetbal-API-key mogen daar nooit staan.
+### Google-login activeren
+
+De websitecode bevat een knop **Doorgaan met Google**. Om die te activeren:
+
+1. Open **Google Cloud Console → Google Auth Platform → Clients** en maak een OAuth-client van het type **Web application**.
+2. Voeg bij **Authorized JavaScript origins** de publieke oorsprong van de website toe, bijvoorbeeld `https://hugo28j.github.io`.
+3. Voeg bij **Authorized redirect URIs** de Supabase Auth callback toe: `https://<project-ref>.supabase.co/auth/v1/callback`. De exacte callback staat ook in **Supabase → Authentication → Sign In / Providers → Google**.
+4. Kopieer de Google **Client ID** en **Client Secret**.
+5. Open **Supabase → Authentication → Sign In / Providers → Google**, zet Google aan, plak Client ID + Client Secret en sla op.
+6. Controleer bij **Authentication → URL Configuration** dat de GitHub Pages-URL bij de Site URL en Redirect URLs staat.
+
+De Google Client Secret hoort alleen in Supabase/Google Cloud en nooit in GitHub of `config.js`. Een gebruiker die voor het eerst met Google inlogt, krijgt automatisch een Supabase-account; dezelfde Google-login opent later hetzelfde account.
+
+De publieke sleutel mag in de website staan. De `service_role`-sleutel, Google Client Secret en Sorare API key mogen daar nooit staan.
 
 ## 2. Automatische JPL-data via Sorare
 
