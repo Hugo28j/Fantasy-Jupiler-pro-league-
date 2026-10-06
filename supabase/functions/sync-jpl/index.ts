@@ -801,8 +801,8 @@ Deno.serve(async request => {
         status:statusCode(game.statusTyped),
         home_team:game.homeTeam?.name || "Onbekend",
         away_team:game.awayTeam?.name || "Onbekend",
-        home_score:String(game.statusTyped).toLowerCase()==="played" ? num(game.homeScore) : null,
-        away_score:String(game.statusTyped).toLowerCase()==="played" ? num(game.awayScore) : null,
+        home_score:["played","playing","live"].includes(String(game.statusTyped).toLowerCase()) ? num(game.homeScore) : null,
+        away_score:["played","playing","live"].includes(String(game.statusTyped).toLowerCase()) ? num(game.awayScore) : null,
         updated_at:new Date().toISOString()
       }];
     });
