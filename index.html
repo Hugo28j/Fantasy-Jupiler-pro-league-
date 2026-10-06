@@ -158,6 +158,12 @@
           <p class="muted">Klik op een gespeelde of live wedstrijd voor de volledige opstelling, bank, wissels en fantasy-punten per speler.</p>
         </div>
       </div>
+      <div class="matchweek-toolbar">
+        <label for="matchweekSelect">
+          <span>Speeldag kiezen</span>
+          <select id="matchweekSelect" aria-label="Speeldag kiezen"></select>
+        </label>
+      </div>
       <div id="matchesList" class="matches-list"></div>
 
       <section class="balance-panel" aria-labelledby="balanceTitle">
@@ -205,6 +211,7 @@
         <p><strong>Speelminuten:</strong> iedere speler krijgt +0,1 punt per gespeelde minuut. Een volledige wedstrijd van 90 minuten levert dus 9 punten op.</p>
         <p><strong>Bank:</strong> exact één keeper en één veldspeler. Een bankspeler valt alleen in als hij zelf minuten speelt en een overeenkomstige basisspeler 0 minuten heeft. De reservekeeper vervangt uitsluitend de basiskeeper. De veldreserve kan maximaal één DEF, MID of FWD vervangen. Als twee of meer veldspelers 0 minuten hebben, blijven de overige afwezige spelers op 0 punten.</p>
         <p><strong>Transfers:</strong> na je eerste vastgezette selectie krijg je per speeldag 2 gratis transfers; ongebruikte transfers worden niet opgespaard. Iedere extra inkomende speler kost 4 punten. Teruggaan naar je oorspronkelijke selectie telt niet als extra transfer; de database vergelijkt je definitieve selectie met de vorige vastgezette speeldag.</p>
+        <p><strong>Marktwaarde:</strong> de prijs verandert na iedere verwerkte wedstrijd op basis van fantasy-punten tegenover de prijs in miljoenen. 100% betekent bijvoorbeeld 25 punten voor een speler van €25M. De minimumprijs blijft €1M.</p>
       </div>
 
       <div class="table-wrap">
