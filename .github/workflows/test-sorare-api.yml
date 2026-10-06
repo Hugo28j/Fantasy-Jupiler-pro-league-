@@ -10,42 +10,64 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Sorare football schema
+      - name: Inspect Sorare query shapes
         shell: python
         run: |
-          import re, urllib.request
+          import json, urllib.request, urllib.error
 
           SCHEMA = "https://api.sorare.com/graphql/schema"
+          GRAPHQL = "https://api.sorare.com/graphql"
+
           req = urllib.request.Request(SCHEMA, headers={"User-Agent": "Fantasy-JPL/1.0"})
           with urllib.request.urlopen(req, timeout=60) as r:
               schema = r.read().decode("utf-8", errors="replace")
-          print("SCHEMA_BYTES", len(schema))
 
           def block(type_name):
               marker = f"type {type_name} "
               i = schema.find(marker)
               if i < 0:
-                  marker = f"type {type_name}{{"
-                  i = schema.find(marker)
-              if i < 0:
                   marker = f"type {type_name} {{"
                   i = schema.find(marker)
               if i < 0:
                   print(f"\n=== {type_name}: NOT FOUND ===")
-                  return ""
+                  return
               j = schema.find("\ntype ", i + 5)
               if j < 0: j = min(len(schema), i + 30000)
-              b = schema[i:j]
               print(f"\n=== {type_name} ===")
-              print(b[:30000])
-              return b
+              print(schema[i:j][:30000])
 
-          q = block("Query")
-          print("\n=== RELEVANT QUERY LINES ===")
-          for line in q.splitlines():
-              low=line.lower()
-              if any(k in low for k in ["club", "player", "competition", "game", "football"]):
-                  print(line)
-
-          for t in ["PlayerGameStats","Player","Club","Competition","Game","Membership","Season"]:
+          for t in [
+              "FootballRoot","SearchPlayers","SearchPlayer","SearchPlayerResult",
+              "CompetitionGames","Competition","Club","Game","PlayerGameStats"
+          ]:
               block(t)
+
+          def gql(name, query):
+              print(f"\n=== QUERY {name} ===")
+              payload=json.dumps({"query":query}).encode()
+              req=urllib.request.Request(GRAPHQL,data=payload,headers={
+                  "content-type":"application/json",
+                  "User-Agent":"Fantasy-JPL/1.0"
+              },method="POST")
+              try:
+                  with urllib.request.urlopen(req,timeout=60) as r:
+                      raw=r.read().decode("utf-8")
+                      print("HTTP",r.status)
+              except urllib.error.HTTPError as e:
+                  raw=e.read().decode("utf-8",errors="replace")
+                  print("HTTP",e.code)
+              print(raw[:20000])
+
+          gql("SEARCH_HANS", """
+          query {
+            searchPlayers(query: "Hans Vanaken", page: 0, pageSize: 10) {
+              __typename
+            }
+          }
+          """)
+
+          gql("FOOTBALL_TYPENAME", """
+          query {
+            football { __typename }
+          }
+          """)
