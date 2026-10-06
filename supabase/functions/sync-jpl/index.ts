@@ -8,7 +8,7 @@ const SEASON_TO = new Date("2027-07-01T00:00:00Z").getTime();
 const GAME_PAGE_SIZE = 50;
 const PLAYER_BATCH_SIZE = 8;
 const PLAYER_STATS_LAST = 30;
-const STAT_SCHEMA_VERSION = 2;
+const STAT_SCHEMA_VERSION = 3;
 const SCORING_VERSION = 2;
 const PRICE_MODEL_VERSION = 1;
 
@@ -1045,6 +1045,17 @@ Deno.serve(async request => {
           const position = positionByPlayerId.get(playerId) || positionCode(player.position);
           if(!position) continue;
 
+          const placeCounts = new Map<number,number>();
+          for(const historical of player.gameStats || []){
+            const sourceGame = historical.footballGame;
+            if(sourceGame?.competition?.slug !== COMPETITION_SLUG) continue;
+            if(num(historical.gameStarted) <= 0) continue;
+            const place = num(historical.formationPlace);
+            if(place > 0) placeCounts.set(place,(placeCounts.get(place)||0)+1);
+          }
+          const preferredFormationPlace = [...placeCounts.entries()]
+            .sort((a,b)=>b[1]-a[1] || a[0]-b[0])[0]?.[0] || null;
+
           for(const raw of player.gameStats || []){
             const sourceGame = raw.footballGame;
             if(sourceGame?.competition?.slug !== COMPETITION_SLUG) continue;
@@ -1070,6 +1081,7 @@ Deno.serve(async request => {
                 gameMinute:num(sourceGame.minute),
                 gameStarted:num(raw.gameStarted),
                 formationPlace:raw.formationPlace == null ? null : num(raw.formationPlace),
+                preferredFormationPlace,
                 fieldStatus:String(raw.fieldStatus || "UNKNOWN"),
                 onGameSheet:Boolean(raw.onGameSheet),
                 playedInGame:Boolean(raw.playedInGame),
@@ -1139,116 +1151,15 @@ Deno.serve(async request => {
       if(error) throw error;
     }
 
-    // Dynamische marktwaarde: herbereken chronologisch vanaf de oorspronkelijke
-    // prijs. De historie blijft in stats-json staan, dus hiervoor is geen extra
-    // databasekolom of nieuwe migratie nodig.
+    // Marktprijzen worden in PostgreSQL chronologisch herberekend. Dit gebruikt
+    // de historische fantasy-punten en bewaart per wedstrijd prijs vóór/na + verschil.
     let marketHistoryRowsUpdated = 0;
     let marketPricesUpdated = 0;
-    const marketFixtureById = new Map(
-      finishedFixtures.map((fixture:any) => [String(fixture.id),fixture])
-    );
-    const freshMarketRows:any[] = [];
-    for(const idBatch of chunks(finishedFixtures.map((fixture:any)=>fixture.id),10)){
-      if(!idBatch.length) continue;
-      const {data:rows,error:marketRowsError} = await db
-        .from("player_match_stats")
-        .select("fixture_id,player_id,minutes,stats,fantasy_points")
-        .in("fixture_id",idBatch)
-        .limit(1000);
-      if(marketRowsError) throw marketRowsError;
-      freshMarketRows.push(...(rows || []));
-    }
-
-    const {data:marketPlayers,error:marketPlayersError} = await db
-      .from("players")
-      .select("id,provider_player_id,name,club_id,club_name,position,minutes,price,total_points,active");
-    if(marketPlayersError) throw marketPlayersError;
-
-    const playerRecordById = new Map((marketPlayers || []).map((player:any)=>[String(player.id),player]));
-    const historyByPlayer = new Map<string,any[]>();
-    for(const row of freshMarketRows){
-      const key = String(row.player_id);
-      if(!historyByPlayer.has(key)) historyByPlayer.set(key,[]);
-      historyByPlayer.get(key)!.push(row);
-    }
-
-    const historyUpdates:any[] = [];
-    const playerPriceUpdates:any[] = [];
-
-    for(const [playerId,history] of historyByPlayer){
-      const player:any = playerRecordById.get(playerId);
-      if(!player) continue;
-
-      history.sort((a,b) => {
-        const ak = marketFixtureById.get(String(a.fixture_id))?.kickoff || "";
-        const bk = marketFixtureById.get(String(b.fixture_id))?.kickoff || "";
-        return String(ak).localeCompare(String(bk));
-      });
-
-      const persistedBase = history
-        .map(row => Number((row.stats || {}).marketBasePrice))
-        .find(value => Number.isFinite(value) && value > 0);
-      const basePrice = roundPrice(persistedBase ?? Number(player.price || 1));
-      let currentPrice = Math.max(1,basePrice);
-
-      for(const row of history){
-        const stats = row.stats || {};
-        const before = roundPrice(currentPrice);
-        const points = Number(row.fantasy_points || 0);
-        const requestedDelta = marketPriceDelta(before,points);
-        const after = Math.max(1,roundPrice(before + requestedDelta));
-        const actualDelta = roundPrice(after - before);
-        const ratio = before > 0 ? Math.round((points/before)*1000)/10 : 0;
-
-        const changed =
-          Number(stats.priceModelVersion || 0) !== PRICE_MODEL_VERSION ||
-          Math.abs(Number(stats.marketBasePrice || 0)-basePrice) > 0.001 ||
-          Math.abs(Number(stats.priceBefore || 0)-before) > 0.001 ||
-          Math.abs(Number(stats.priceDelta || 0)-actualDelta) > 0.001 ||
-          Math.abs(Number(stats.priceAfter || 0)-after) > 0.001 ||
-          Math.abs(Number(stats.pricePerformancePct || 0)-ratio) > 0.001;
-
-        if(changed){
-          historyUpdates.push({
-            fixture_id:row.fixture_id,
-            player_id:row.player_id,
-            minutes:row.minutes,
-            stats:{
-              ...stats,
-              marketBasePrice:basePrice,
-              priceBefore:before,
-              priceDelta:actualDelta,
-              priceAfter:after,
-              pricePerformancePct:ratio,
-              priceModelVersion:PRICE_MODEL_VERSION
-            },
-            fantasy_points:row.fantasy_points,
-            updated_at:new Date().toISOString()
-          });
-        }
-        currentPrice = after;
-      }
-
-      if(Math.abs(Number(player.price || 0)-currentPrice) > 0.001){
-        playerPriceUpdates.push({
-          ...player,
-          price:currentPrice,
-          updated_at:new Date().toISOString()
-        });
-      }
-    }
-
-    for(const part of chunks(historyUpdates,200)){
-      const {error} = await db.from("player_match_stats").upsert(part,{onConflict:"fixture_id,player_id"});
-      if(error) throw error;
-      marketHistoryRowsUpdated += part.length;
-    }
-
-    for(const part of chunks(playerPriceUpdates,200)){
-      const {error} = await db.from("players").upsert(part,{onConflict:"id"});
-      if(error) throw error;
-      marketPricesUpdated += part.length;
-    }
+    const {data:marketResult,error:marketError} = await db.rpc("recalculate_market_prices");
+    if(marketError) throw marketError;
+    const marketRow = Array.isArray(marketResult) ? marketResult[0] : marketResult;
+    marketHistoryRowsUpdated = Number(marketRow?.history_rows_updated || 0);
+    marketPricesUpdated = Number(marketRow?.players_updated || 0);
 
     return Response.json({
       ok:true,
