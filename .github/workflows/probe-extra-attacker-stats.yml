@@ -1,0 +1,31 @@
+name: Probe extra attacker stats
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/probe-extra-attacker-stats.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect Sorare attacker-related fields
+        shell: python
+        run: |
+          import urllib.request
+          req=urllib.request.Request("https://api.sorare.com/graphql/schema",headers={"User-Agent":"Fantasy-JPL/1.0"})
+          with urllib.request.urlopen(req,timeout=60) as r:
+              schema=r.read().decode("utf-8",errors="replace")
+          i=schema.find("type PlayerGameStats ")
+          if i<0: i=schema.find("type PlayerGameStats {")
+          j=schema.find("\ntype ",i+5)
+          block=schema[i:j]
+          keywords=[
+            "assist","chance","shot","scoring","cross","contest","offside","finalthird",
+            "penalty","touch","att3rd","attpen","box","goal","pass","dribble"
+          ]
+          for line in block.splitlines():
+              low=line.lower()
+              if any(k in low for k in keywords):
+                  print(line)
