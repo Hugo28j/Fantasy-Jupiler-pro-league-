@@ -6,6 +6,7 @@ const state = {
   squad: [],
   benchGK: null,
   benchOutfield: null,
+  captainId: null,
   teamName: "Mijn Fantasy Team",
   cash: START_BUDGET,
   budgetBase: START_BUDGET
@@ -26,6 +27,7 @@ function loadState(){
     if(Array.isArray(saved.squad)) state.squad = saved.squad.filter(id => PLAYERS.some(p => p.id === id));
     if(saved.benchGK && state.squad.includes(saved.benchGK)) state.benchGK = saved.benchGK;
     if(saved.benchOutfield && state.squad.includes(saved.benchOutfield)) state.benchOutfield = saved.benchOutfield;
+    if(saved.captainId && state.squad.includes(saved.captainId)) state.captainId = saved.captainId;
     if(typeof saved.teamName === "string" && saved.teamName.trim()) state.teamName = saved.teamName.slice(0,28);
     const savedBudgetBase = Number(saved.budgetBase || 100);
     if(Number.isFinite(Number(saved.cash))){
@@ -113,6 +115,7 @@ function sellPlayer(id){
   if(p) state.cash = Math.round((Number(state.cash || 0)+Number(p.price || 0))*10)/10;
   if(state.benchGK === id) state.benchGK = null;
   if(state.benchOutfield === id) state.benchOutfield = null;
+  if(state.captainId === id) state.captainId = null;
   saveState();
   renderAll();
   if(p) toast(p.name + " verkocht.");
@@ -169,6 +172,15 @@ function setBench(id){
   renderAll();
 }
 
+function setCaptain(id){
+  if(!state.squad.includes(id)) return;
+  state.captainId = id;
+  saveState();
+  renderAll();
+  const player = playerById(id);
+  if(player) toast(player.name + " is nu captain.");
+}
+
 function autoLineup(){
   if(!isSquadComplete()){ toast("Je hebt eerst exact 8 geldige spelers nodig."); return; }
   const keepers = squadPlayers().filter(p => p.pos === "GK").sort((a,b) => a.price - b.price);
@@ -186,6 +198,7 @@ function resetSquad(){
   state.squad = [];
   state.benchGK = null;
   state.benchOutfield = null;
+  state.captainId = null;
   saveState();
   renderAll();
 }
@@ -215,7 +228,10 @@ function lineupPlayerHtml(p,isBench){
     ? Number(liveScores[p.id] || 0)
     : Number(p.score || 0);
   const scoreClass = score >= 60 ? "hot" : score >= 30 ? "warm" : "cool";
-  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + '">' +
+  const isCaptain = state.captainId === p.id;
+  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + (isCaptain ? " is-captain":"") + '">' +
+    '<button class="captain-toggle ' + (isCaptain ? "selected":"") + '" data-id="' + escapeHtml(p.id) + '" type="button" aria-label="' +
+      (isCaptain ? "Captain" : "Maak captain") + '" title="' + (isCaptain ? "Captain" : "Maak captain") + '">C</button>' +
     '<button class="sorare-player-main player-name-link" data-player-id="' + escapeHtml(p.id) + '" type="button">' +
       '<span class="sorare-avatar role-ring-' + p.pos + '">' + initials(p.name) + '</span>' +
       '<span class="sorare-score ' + scoreClass + '">' + score.toFixed(0) + '</span>' +
@@ -300,6 +316,7 @@ function renderTeam(){
   }
 
   document.querySelectorAll("#team .bench-toggle").forEach(btn => btn.addEventListener("click", () => setBench(btn.dataset.id)));
+  document.querySelectorAll("#team .captain-toggle").forEach(btn => btn.addEventListener("click", () => setCaptain(btn.dataset.id)));
   document.querySelectorAll("#team .player-name-link").forEach(btn => btn.addEventListener("click", () => openPlayerProfile(btn.dataset.playerId)));
 }
 
@@ -1050,6 +1067,7 @@ function renderAll(){
   renderTeam();
   renderMarket();
   renderTeamName();
+  if(typeof updateInitialSetupTabs === "function") updateInitialSetupTabs();
 }
 
 function resolveAutomaticSubstitution(starters,bench,didPlay){
@@ -1083,10 +1101,31 @@ renderGameweekBalance();
 renderScoring();
 renderAll();
 
-document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
-  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
-  document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === btn.dataset.tab));
-}));
+window.FANTASY_INITIAL_SETUP_LOCK = Boolean(window.FANTASY_INITIAL_SETUP_LOCK);
+
+function updateInitialSetupTabs(){
+  const locked = Boolean(window.FANTASY_INITIAL_SETUP_LOCK) && !isSquadComplete();
+  document.querySelectorAll(".tab").forEach(button => {
+    const blocked = locked && button.dataset.tab !== "market";
+    button.classList.toggle("setup-locked",blocked);
+    button.setAttribute("aria-disabled",blocked ? "true" : "false");
+  });
+}
+
+function activateFantasyTab(tabId,force=false){
+  const locked = Boolean(window.FANTASY_INITIAL_SETUP_LOCK) && !isSquadComplete();
+  const targetId = locked && tabId !== "market" && !force ? "market" : tabId;
+  if(locked && targetId !== tabId){
+    toast("Kies eerst je 8 spelers op de transfermarkt.");
+  }
+  document.querySelectorAll(".tab").forEach(button => button.classList.toggle("active",button.dataset.tab === targetId));
+  document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.toggle("active",panel.id === targetId));
+  updateInitialSetupTabs();
+}
+
+window.activateFantasyTab = activateFantasyTab;
+
+document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => activateFantasyTab(btn.dataset.tab)));
 
 ["playerSearch","positionFilter","clubFilter","sortFilter"].forEach(id => {
   document.getElementById(id).addEventListener(id === "playerSearch" ? "input" : "change", renderMarket);
