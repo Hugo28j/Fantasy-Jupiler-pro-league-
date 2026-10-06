@@ -285,7 +285,10 @@ function renderPlayerProfile(player,matchRows=[]){
   const totalMinutes = rows.length ? rows.reduce((sum,row) => sum + Number(row.minutes || 0),0) : Number(player.minutes || 0);
   const totalPoints = rows.length ? rows.reduce((sum,row) => sum + Number(row.fantasy_points || 0),0) : Number(player.score || 0);
   const metrics = [
-    ["Goals","goal"],["Assists","assist"],["Schoten op doel","shotOnTarget"],["Geslaagde dribbels","successfulDribble"],
+    ["Goals","goal"],["Assists","assist"],["Schoten op doel","shotOnTarget"],["Doelpogingen","totalScoringAtt"],
+    ["Grote kansen gecreëerd","bigChanceCreated"],["Grote kansen gemist","bigChanceMissed"],
+    ["Penalty afgedwongen","penaltyWon"],["Geslaagde passes laatste derde","successfulFinalThirdPasses"],
+    ["Geslaagde dribbels","successfulDribble"],
     ["Tackles gewonnen","successfulTackles"],["Duels gewonnen","duelWon"],["Duels verloren","duelLost"],
     ["Clearances","clearances"],["Intercepties","interceptions"],["Bal gewonnen","possessionWon"],["Bal verloren","possessionLost"],
     ["Geslaagde passes","successfulPass"],["Geslaagde lange passes","successfulLongPass"],["Gemiste passes","passMissed"],
@@ -492,7 +495,9 @@ const MATCH_STAT_LABELS = {
   duelWon:"Duels gewonnen",duelLost:"Duels verloren",clearances:"Clearances",interceptions:"Intercepties",
   possessionWon:"Bal gewonnen",possessionLost:"Bal verloren",successfulPass:"Geslaagde passes",
   successfulLongPass:"Geslaagde lange passes",passMissed:"Gemiste passes",successfulDribble:"Geslaagde dribbels",
-  shotOnTarget:"Schoten op doel"
+  shotOnTarget:"Schoten op doel",bigChanceCreated:"Grote kansen gecreëerd",
+  successfulFinalThirdPasses:"Geslaagde passes laatste derde",bigChanceMissed:"Grote kansen gemist",
+  penaltyWon:"Penalty afgedwongen",totalScoringAtt:"Doelpogingen"
 };
 
 function renderMatchPlayerDetail(match,row){
