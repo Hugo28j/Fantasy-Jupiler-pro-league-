@@ -1,0 +1,73 @@
+name: Probe penalty area and formation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/probe-penalty-area-and-formation.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect Sorare schema and Club Brugge formation metadata
+        shell: python
+        run: |
+          import urllib.request,re,json,urllib.parse
+
+          # 1) Sorare schema: penalty-area / area-entry / attacking-area candidates.
+          req=urllib.request.Request("https://api.sorare.com/graphql/schema",headers={"User-Agent":"Fantasy-JPL/1.0"})
+          with urllib.request.urlopen(req,timeout=60) as r:
+              schema=r.read().decode("utf-8",errors="replace")
+          i=schema.find("type PlayerGameStats ")
+          if i<0: i=schema.find("type PlayerGameStats {")
+          j=schema.find("\ntype ",i+5)
+          block=schema[i:j]
+          print("=== AREA FIELDS ===")
+          for line in block.splitlines():
+              low=line.lower()
+              if any(k in low for k in ["area","entry","pen","touch","box","att3rd","attpen","finalthird","errorlead"]):
+                  print(line)
+
+          # 2) Public Supabase data: inspect actual formationPlace for Club Brugge - Genk.
+          cfg=open("config.js","r",encoding="utf-8").read()
+          url=re.search(r'supabaseUrl:\s*"([^"]+)"',cfg).group(1)
+          key=re.search(r'supabaseAnonKey:\s*"([^"]+)"',cfg).group(1)
+
+          def get(path,params):
+              qs=urllib.parse.urlencode(params,safe="(),*")
+              req=urllib.request.Request(url+"/rest/v1/"+path+"?"+qs,headers={"apikey":key,"Accept":"application/json","Range":"0-999"})
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return json.loads(r.read().decode())
+
+          fixtures=get("fixtures",{
+              "select":"id,kickoff,home_team,away_team",
+              "home_team":"eq.Club Brugge KV",
+              "away_team":"eq.KRC Genk",
+              "order":"kickoff.desc",
+              "limit":"1"
+          })
+          print("=== FIXTURE ===")
+          print(json.dumps(fixtures,ensure_ascii=False))
+          if fixtures:
+              fid=fixtures[0]["id"]
+              rows=get("player_match_stats",{
+                  "select":"player_id,minutes,stats,players(name,club_name,position)",
+                  "fixture_id":f"eq.{fid}",
+                  "limit":"100"
+              })
+              output=[]
+              for row in rows:
+                  p=row.get("players") or {}
+                  if isinstance(p,list): p=p[0] if p else {}
+                  if p.get("club_name") in ["Club Brugge","Club Brugge KV"]:
+                      st=row.get("stats") or {}
+                      output.append({
+                        "name":p.get("name"),"position":p.get("position"),"minutes":row.get("minutes"),
+                        "gameStarted":st.get("gameStarted"),"formationPlace":st.get("formationPlace"),
+                        "fieldStatus":st.get("fieldStatus")
+                      })
+              output.sort(key=lambda x:(x.get("formationPlace") is None,x.get("formationPlace") or 99,x.get("name") or ""))
+              print("=== CLUB BRUGGE FORMATION ===")
+              print(json.dumps(output,ensure_ascii=False,indent=2))
