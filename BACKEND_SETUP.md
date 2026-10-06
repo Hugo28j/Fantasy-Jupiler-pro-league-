@@ -11,24 +11,83 @@ De code voor punten 1–4 staat in de repository, maar GitHub Pages kan zelf gee
 
 De publieke sleutel mag in de website staan. De `service_role`-sleutel en voetbal-API-key mogen daar nooit staan.
 
-## 2. Automatische JPL-data
+## 2. Automatische JPL-data via Sorare
 
-1. Maak een gratis API‑Football/API‑Sports-account en sleutel aan. De gratis formule heeft 100 requests per dag. De sync is daarom zo opgebouwd dat reeds verwerkte wedstrijden worden overgeslagen en de volledige spelerslijst niet bij iedere run opnieuw wordt opgehaald.
-2. Installeer de Supabase CLI en koppel het project.
-3. Voeg de geheime sleutel toe en deploy de functie:
+De productie-sync gebruikt nu de officiële Sorare GraphQL API als databron. De Jupiler Pro League staat bij Sorare onder de competitie-slug `jupiler-pro-league`. Sorare levert de 18 clubs, de actieve spelerskernen, wedstrijden en gedetailleerde individuele player-game stats.
 
-```bash
-supabase secrets set API_FOOTBALL_KEY=JOUW_SLEUTEL API_FOOTBALL_LEAGUE_ID=144 API_FOOTBALL_SEASON=2026
-supabase functions deploy sync-jpl
+### Sorare developer key
+
+Maak in Sorare een developer API key aan via:
+
+<https://sorare.com/settings/developer>
+
+Bewaar die sleutel uitsluitend als Supabase secret. Zet hem nooit in `config.js`, GitHub, browser-JavaScript of een chatbericht.
+
+Voeg in **Supabase → Edge Functions → Secrets** deze secret toe:
+
+```text
+SORARE_API_KEY=JOUW_PRIVATE_SORARE_KEY
 ```
 
-4. Roep `sync-jpl` één keer handmatig aan vanuit **Edge Functions**. De eerste run haalt de kalender op, vult de spelerslijst en verwerkt alleen de nog niet verwerkte wedstrijden van de nieuwste volledig afgewerkte speeldag. Controleer in de JSON-respons vooral `ok`, `processedFixtures`, `playersImported` en `apiCalls`.
-5. Roep de functie daarna meteen een tweede keer aan. Als dezelfde speeldag al verwerkt is, hoort `processedFixtures` nu 0 te zijn en hoort de spelerslijst niet opnieuw opgehaald te worden (`playerRefresh:false`). Zo controleer je dat de gratis API-limiet niet onnodig wordt verbruikt.
-6. Plan de functie pas daarna automatisch. Gebruik op het gratis API-Football-plan **niet iedere 15 minuten**. Een veilige start is **iedere 2 uur** via **Integrations → Cron → Create job → Supabase Edge Function → sync-jpl**. Elke normale run gebruikt dan meestal alleen de fixture-aanvraag; de volledige spelerslijst wordt maximaal ongeveer één keer per 24 uur vernieuwd en reeds verwerkte wedstrijden worden overgeslagen.
+De Supabase-waarden `SUPABASE_URL` en `SUPABASE_SERVICE_ROLE_KEY` worden door de Edge Function-omgeving gebruikt en horen eveneens nooit in de publieke websitecode.
 
-API-FOOTBALL levert de meeste waarden uit de huidige puntentabel rechtstreeks. De velden `savesInsideBox`, `punches`, `clearances`, `possessionLost` en `successfulLongPass` zitten niet in zijn standaard player-fixture response en blijven daarom bewust 0; ze worden niet geschat. Als die vijf statistieken moeten meetellen, is een databron met die expliciete velden nodig en moet alleen de mapping in `supabase/functions/sync-jpl/index.ts` worden aangepast.
+### Deployen en eerste test
 
-Na de sync toont **Wedstrijden → Puntenbalans** alle spelers van die speeldag, hun minuten, score en iedere statistiek uit de puntentabel. Sorare is niet als hoofdbron gebruikt: toegang tot player-game-statistieken vereist daar authenticatie met een persoonlijk account/JWT, terwijl API‑Football een aparte serversleutel ondersteunt.
+Deploy daarna de nieuwste versie van:
+
+```text
+supabase/functions/sync-jpl/index.ts
+```
+
+als Edge Function `sync-jpl`.
+
+Voer de eerste test uit met een POST-body:
+
+```json
+{"refreshPlayers":true}
+```
+
+De eerste run:
+- haalt alle 18 JPL-clubs bij Sorare op;
+- importeert de actieve spelerskernen;
+- bouwt de 2026/27-speeldagen uit de Sorare-wedstrijdkalender;
+- importeert de laatste volledig afgewerkte speeldag;
+- berekent de fantasy-punten en zet volledig geïmporteerde fixtures op `stats_processed=true`.
+
+Controleer in de JSON-respons vooral `ok`, `clubs`, `playersImported`, `latestCompletedGameweek`, `processedFixtures`, `importedPlayerRows` en `apiCalls`.
+
+Voer daarna meteen een tweede test uit met:
+
+```json
+{}
+```
+
+Reeds verwerkte wedstrijden horen dan niet opnieuw geïmporteerd te worden. De spelerskernen worden alleen opnieuw opgehaald wanneer de database nog geen Sorare-spelers bevat of wanneer expliciet `{"refreshPlayers":true}` wordt gebruikt.
+
+### Mapping naar het fantasy-puntensysteem
+
+Sorare levert rechtstreeks de belangrijkste velden voor dit spel, waaronder:
+- minuten;
+- saves, saves inside box en punches;
+- clean sheets en goals conceded;
+- fouls gemaakt en gekregen;
+- gele en rode kaarten;
+- goals en assists;
+- tackles won;
+- duels won/lost;
+- clearances en interceptions;
+- possession won/lost;
+- accurate passes;
+- accurate long balls;
+- missed passes;
+- successful contests/dribbles;
+- shots on target.
+
+Het huidige Sorare `PlayerGameStats`-schema bevat geen rechtstreeks veld voor **key passes**. Daarom staat alleen `keyPass` voorlopig op 0. De sync meldt dit ook via `unsupportedScoringStats:["keyPass"]`; de andere velden worden rechtstreeks uit Sorare gemapt.
+
+### Automatische planning
+
+Plan automatische synchronisatie pas nadat de twee handmatige tests correct zijn. De sync slaat fixtures met `stats_processed=true` over. Een aparte periodieke spelersrefresh kan later met `{"refreshPlayers":true}` worden gepland zodat transfers en kernwijzigingen meekomen.
 
 ## 3. Wat server-side wordt afgedwongen
 
