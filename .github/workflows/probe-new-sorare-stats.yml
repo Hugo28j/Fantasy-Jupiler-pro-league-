@@ -1,0 +1,27 @@
+name: Probe new Sorare scoring stats
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/probe-new-sorare-stats.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect exact PlayerGameStats fields
+        shell: python
+        run: |
+          import urllib.request
+          req=urllib.request.Request("https://api.sorare.com/graphql/schema",headers={"User-Agent":"Fantasy-JPL/1.0"})
+          with urllib.request.urlopen(req,timeout=60) as r:
+              schema=r.read().decode("utf-8",errors="replace")
+          i=schema.find("type PlayerGameStats ")
+          if i<0: i=schema.find("type PlayerGameStats {")
+          j=schema.find("\ntype ",i+5)
+          block=schema[i:j]
+          wanted=["bigChance","FinalThird","penaltyWon","ScoringAtt"]
+          for line in block.splitlines():
+              if any(w.lower() in line.lower() for w in wanted):
+                  print(line)
