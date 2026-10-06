@@ -1,0 +1,96 @@
+name: Probe price history
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/probe-price-history.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check player prices and latest price deltas
+        shell: python
+        run: |
+          import json,re,urllib.parse,urllib.request
+          cfg=open("config.js","r",encoding="utf-8").read()
+          url=re.search(r'supabaseUrl:\s*"([^"]+)"',cfg).group(1)
+          key=re.search(r'supabaseAnonKey:\s*"([^"]+)"',cfg).group(1)
+
+          def get(path,params,range_header=None):
+              qs=urllib.parse.urlencode(params,safe="(),*")
+              headers={"apikey":key,"Accept":"application/json"}
+              if range_header: headers["Range"]=range_header
+              req=urllib.request.Request(url+"/rest/v1/"+path+"?"+qs,headers=headers)
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return json.loads(r.read().decode())
+
+          players=get("players",{
+              "select":"id,name,club_name,position,price,total_points,minutes,active",
+              "active":"eq.true",
+              "order":"name.asc"
+          },"0-999")
+
+          all_rows=[]
+          start=0
+          while True:
+              rows=get("player_match_stats",{
+                  "select":"player_id,minutes,fantasy_points,stats,fixtures(kickoff,status)",
+                  "order":"player_id.asc"
+              },f"{start}-{start+999}")
+              all_rows.extend(rows)
+              if len(rows)<1000: break
+              start += 1000
+              if start>10000: break
+
+          by={}
+          for row in all_rows:
+              fixture=row.get("fixtures") or {}
+              if isinstance(fixture,list): fixture=fixture[0] if fixture else {}
+              if fixture.get("status")!="FT": continue
+              by.setdefault(str(row["player_id"]),[]).append((fixture.get("kickoff") or "",row))
+
+          missing_price=[p for p in players if p.get("price") is None or float(p.get("price") or 0)<=0]
+          with_history=0
+          missing_delta=[]
+          missing_base=[]
+          for p in players:
+              hist=sorted(by.get(str(p["id"]),[]),key=lambda x:x[0])
+              if not hist: continue
+              with_history += 1
+              stats0=hist[0][1].get("stats") or {}
+              statsl=hist[-1][1].get("stats") or {}
+              if stats0.get("marketBasePrice") is None:
+                  missing_base.append((p["name"],p["id"]))
+              if statsl.get("priceDelta") is None:
+                  missing_delta.append((p["name"],p["id"],hist[-1][0],hist[-1][1].get("fantasy_points")))
+
+          sylla=[p for p in players if "sylla" in (p.get("name") or "").lower()]
+          sylla_out=[]
+          for p in sylla:
+              hist=sorted(by.get(str(p["id"]),[]),key=lambda x:x[0])
+              sylla_out.append({
+                  "player":p,
+                  "history":[
+                    {
+                      "kickoff":k,
+                      "minutes":r.get("minutes"),
+                      "fantasy_points":r.get("fantasy_points"),
+                      "marketBasePrice":(r.get("stats") or {}).get("marketBasePrice"),
+                      "priceBefore":(r.get("stats") or {}).get("priceBefore"),
+                      "priceDelta":(r.get("stats") or {}).get("priceDelta"),
+                      "priceAfter":(r.get("stats") or {}).get("priceAfter")
+                    } for k,r in hist
+                  ]
+              })
+
+          print("PLAYER_COUNT",len(players))
+          print("MATCH_ROW_COUNT",len(all_rows))
+          print("PLAYERS_WITH_HISTORY",with_history)
+          print("INVALID_CURRENT_PRICES",len(missing_price))
+          print("PLAYERS_HISTORY_MISSING_BASE",len(missing_base))
+          print("PLAYERS_LATEST_ROW_MISSING_DELTA",len(missing_delta))
+          print("MISSING_DELTA_SAMPLE",json.dumps(missing_delta[:20],ensure_ascii=False))
+          print("SYLLA",json.dumps(sylla_out,ensure_ascii=False))
