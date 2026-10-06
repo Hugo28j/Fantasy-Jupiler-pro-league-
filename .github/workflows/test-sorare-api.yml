@@ -10,7 +10,7 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Query Club Brugge and player stats
+      - name: Query smaller Sorare football calls
         shell: python
         run: |
           import json, urllib.request, urllib.error
@@ -33,16 +33,7 @@ jobs:
                   print("HTTP",e.code)
               print(raw[:40000])
 
-          gql("SEARCH_HANS", """
-          query {
-            searchPlayers(query: "Hans Vanaken", page: 1, pageSize: 10) {
-              nbHits
-              hitIds
-            }
-          }
-          """)
-
-          gql("CLUB_BRUGGE", """
+          gql("CLUB_BRUGGE_PLAYERS", """
           query {
             football {
               club(slug: "club-brugge") {
@@ -53,54 +44,65 @@ jobs:
                   id
                   name
                   slug
-                  displayName
                   openForGameStats
                 }
-                activePlayers(first: 8) {
+                activePlayers(first: 50) {
                   nodes {
                     id
                     slug
                     displayName
                     optaId
-                    gameStats(last: 2) {
-                      id
-                      minsPlayed
-                      saves
-                      savedIbox
-                      punches
-                      cleanSheet
-                      goalsConceded
-                      fouls
-                      wasFouled
-                      yellowCard
-                      redCard
-                      goals
-                      goalAssist
-                      wonTackle
-                      duelWon
-                      duelLost
-                      totalClearance
-                      interceptionWon
-                      possWon
-                      possLostCtrl
-                      accuratePass
-                      accurateLongBalls
-                      missedPass
-                      wonContest
-                      ontargetScoringAtt
-                      footballGame {
-                        id
-                        date
-                        statusTyped
-                        homeScore
-                        awayScore
-                        competition {
-                          id
-                          name
-                          slug
-                        }
-                      }
-                    }
+                  }
+                }
+              }
+            }
+          }
+          """)
+
+          gql("HANS_STATS", """
+          query {
+            anyPlayer(slug: "hans-vanaken") {
+              ... on Player {
+                id
+                slug
+                displayName
+                activeClub {
+                  id
+                  name
+                  slug
+                }
+                gameStats(last: 5) {
+                  id
+                  minsPlayed
+                  saves
+                  savedIbox
+                  punches
+                  cleanSheet
+                  goalsConceded
+                  fouls
+                  wasFouled
+                  yellowCard
+                  redCard
+                  goals
+                  goalAssist
+                  wonTackle
+                  duelWon
+                  duelLost
+                  totalClearance
+                  interceptionWon
+                  possWon
+                  possLostCtrl
+                  accuratePass
+                  accurateLongBalls
+                  missedPass
+                  wonContest
+                  ontargetScoringAtt
+                  footballGame {
+                    id
+                    date
+                    statusTyped
+                    homeScore
+                    awayScore
                   }
                 }
               }
