@@ -300,7 +300,7 @@ function renderPlayerProfile(player,matchRows=[]){
     const weight = SCORING.rows[player.pos]?.[key];
     const contribution = weight == null ? 0 : Math.round(value * Number(weight) * 100) / 100;
     return [label,value,contribution,key,weight];
-  }).filter(([, , , , weight]) => weight != null);
+  }).filter(([, , , , weight]) => weight != null && Number(weight) !== 0);
   const matches = rows.slice().sort((a,b) => {
     const ad = a.fixtures?.kickoff || "";
     const bd = b.fixtures?.kickoff || "";
@@ -507,11 +507,13 @@ function renderMatchPlayerDetail(match,row){
   const weights = SCORING.rows[position] || {};
   const orderedKeys = SCORING.columns.map(([key]) => key).filter(key => key !== "keyPass");
   const breakdown = orderedKeys.map(key => {
+    const rawWeight = weights[key];
+    if(rawWeight == null || Number(rawWeight) === 0) return null;
     const amount = Number(stats[key] || 0);
-    const weight = Number(weights[key] || 0);
+    const weight = Number(rawWeight);
     const contribution = Math.round(amount*weight*100)/100;
     return {key,amount,contribution};
-  }).filter(item => item.amount !== 0 || item.key === "minutes");
+  }).filter(item => item && (item.amount !== 0 || item.key === "minutes"));
 
   const rowsHtml = breakdown.map(item =>
     '<div class="match-stat-line"><span>' + escapeHtml(MATCH_STAT_LABELS[item.key] || item.key) + ' <small>(' + item.amount + ')</small></span>' +
