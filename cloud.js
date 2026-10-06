@@ -12,7 +12,9 @@
     loadingTeam: false,
     currentGameweekId: null,
     currentGameweekNumber: null,
-    liveScoreTimer: null
+    liveScoreTimer: null,
+    initialSetupComplete: false,
+    onboardingSeen: false
   };
 
   const original = {
@@ -20,6 +22,7 @@
     buyPlayer,
     sellPlayer,
     setBench,
+    setCaptain,
     autoLineup,
     resetSquad,
     renderMarket,
@@ -54,6 +57,31 @@
     dialog.className = "auth-dialog";
     dialog.innerHTML = '<form id="authForm"><h2>Fantasy-account</h2><p>Log in met je naam en wachtwoord om je team, budget en score centraal te bewaren.</p><button id="googleAuthButton" class="google-auth-btn" type="button"><span class="google-g" aria-hidden="true">G</span><span>Doorgaan met Google</span></button><div class="auth-divider"><span>of met naam</span></div><label><span>Naam</span><input id="authIdentity" type="text" autocomplete="username" maxlength="28" placeholder="bv. Hugo"></label><label><span>Wachtwoord</span><input id="authPassword" type="password" autocomplete="current-password" minlength="4"></label><div id="authError" class="auth-error" role="alert"></div><div class="auth-actions"><button id="closeAuth" class="btn secondary-btn" type="button">Annuleren</button><button id="signupButton" class="btn secondary-btn" type="button">Account maken</button><button class="btn primary-btn" type="submit">Inloggen</button></div></form>';
     document.body.appendChild(dialog);
+
+    const onboarding = document.createElement("dialog");
+    onboarding.id = "onboardingDialog";
+    onboarding.className = "onboarding-dialog";
+    onboarding.innerHTML =
+      '<div class="onboarding-shell">' +
+        '<p class="eyebrow">EERSTE SELECTIE</p>' +
+        '<h2>Bouw eerst je ploeg</h2>' +
+        '<p>Je kiest <strong>8 spelers</strong>: 2 keepers, 2 verdedigers, 2 middenvelders en 2 aanvallers. Je start met <strong>€125M</strong>.</p>' +
+        '<p>Daarvan staan <strong>6 spelers in de basis</strong> en <strong>2 op de bank</strong>: precies 1 reservekeeper en 1 veldspeler. Er kan maximaal 1 keeper in de basis staan. De reservekeeper kan alleen de keeper vervangen wanneer die niet speelt; de veldreserve kan maximaal één niet-spelende veldspeler vervangen.</p>' +
+        '<p>Voor je eerste speeldag mag je onbeperkt je selectie aanpassen. Daarna krijg je <strong>2 gratis transfers per speeldag</strong>; extra transfers kosten punten.</p>' +
+        '<button id="onboardingOk" class="btn primary-btn" type="button">Oké, naar de transfermarkt</button>' +
+      '</div>';
+    document.body.appendChild(onboarding);
+
+    document.getElementById("onboardingOk").addEventListener("click",async () => {
+      onboarding.close();
+      cloud.onboardingSeen = true;
+      if(window.activateFantasyTab) window.activateFantasyTab("market",true);
+      try{
+        await cloud.client.rpc("mark_onboarding_seen");
+      }catch(error){
+        console.warn("Onboardingstatus kon niet worden opgeslagen",error);
+      }
+    });
 
     document.getElementById("authButton").addEventListener("click", onAuthButton);
     document.getElementById("closeAuth").addEventListener("click", () => dialog.close());
@@ -231,6 +259,7 @@
     buyPlayer = function(id){ if(requireEditable()) return original.buyPlayer(id); };
     sellPlayer = function(id){ if(requireEditable()) return original.sellPlayer(id); };
     setBench = function(id){ if(requireEditable()) return original.setBench(id); };
+    setCaptain = function(id){ if(requireEditable()) return original.setCaptain(id); };
     autoLineup = function(){ if(requireEditable()) return original.autoLineup(); };
     resetSquad = function(){ if(requireEditable()) return original.resetSquad(); };
     renderMarket = function(){
@@ -269,7 +298,8 @@
       p_name: state.teamName,
       p_squad_ids: state.squad,
       p_bench_gk_id: state.benchGK,
-      p_bench_outfield_id: state.benchOutfield
+      p_bench_outfield_id: state.benchOutfield,
+      p_captain_id: state.captainId
     });
     if(error){
       if(/locked|vergrendeld|deadline/i.test(error.message)){
@@ -406,7 +436,7 @@
 
   async function loadTeam(){
     if(!cloud.user) return;
-    const {data,error} = await cloud.client.from("teams").select("team_name,squad_ids,bench_gk_id,bench_outfield_id,budget,total_points").eq("user_id",cloud.user.id).maybeSingle();
+    const {data,error} = await cloud.client.from("teams").select("team_name,squad_ids,bench_gk_id,bench_outfield_id,captain_id,budget,total_points,initial_setup_complete,onboarding_seen").eq("user_id",cloud.user.id).maybeSingle();
     if(error) throw error;
     if(!data) return;
     cloud.loadingTeam = true;
@@ -415,6 +445,19 @@
     state.squad = Array.isArray(data.squad_ids) ? data.squad_ids.filter(id => PLAYERS.some(p => p.id === id)) : [];
     state.benchGK = state.squad.includes(data.bench_gk_id) ? data.bench_gk_id : null;
     state.benchOutfield = state.squad.includes(data.bench_outfield_id) ? data.bench_outfield_id : null;
+    state.captainId = state.squad.includes(data.captain_id) ? data.captain_id : null;
+    cloud.initialSetupComplete = Boolean(data.initial_setup_complete);
+    cloud.onboardingSeen = Boolean(data.onboarding_seen);
+    window.FANTASY_INITIAL_SETUP_LOCK = !cloud.initialSetupComplete;
+
+    if(!cloud.initialSetupComplete && window.activateFantasyTab){
+      window.activateFantasyTab("market",true);
+    }
+    if(!cloud.initialSetupComplete && !cloud.onboardingSeen){
+      const onboarding = document.getElementById("onboardingDialog");
+      if(onboarding && !onboarding.open) onboarding.showModal();
+    }
+
     original.saveState();
     cloud.loadingTeam = false;
     renderAll();
@@ -465,7 +508,9 @@
       const starters = (row.starter_ids || []).map(id => playerById(id) || {id,name:id,pos:""});
       const benchIds = [row.bench_gk_id,row.bench_outfield_id].filter(Boolean);
       const bench = benchIds.map(id => playerById(id) || {id,name:"Onbekende speler",pos:""});
-      const lineup = starters.map(player => '<div class="history-player"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(player.pos) + ' · basis</small></div>').join("") +
+      const lineup = starters.map(player => '<div class="history-player"><strong>' + escapeHtml(player.name) +
+        (String(row.captain_id || "") === String(player.id) ? ' <span class="history-captain">C</span>' : '') +
+        '</strong><small>' + escapeHtml(player.pos) + ' · basis</small></div>').join("") +
         bench.map(player => '<div class="history-player bench"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(player.pos) + ' · bank</small></div>').join("");
       const transferCost = Number(row.breakdown?.transfer_cost || 0);
       return '<article class="history-card"><div class="history-card-head"><div><strong>Speeldag ' + row.gameweek_number + '</strong><small>' + (transferCost ? " · −" + transferCost + " transferpunten" : "") + '</small></div><strong>' + points(row.points) + '</strong></div><div class="history-lineup">' + (lineup || '<span class="muted">Geen vastgezette spelers.</span>') + '</div></article>';
@@ -624,7 +669,11 @@
       state.squad = [];
       state.benchGK = null;
       state.benchOutfield = null;
+      state.captainId = null;
       state.teamName = "Mijn Fantasy Team";
+      cloud.initialSetupComplete = false;
+      cloud.onboardingSeen = false;
+      window.FANTASY_INITIAL_SETUP_LOCK = false;
       state.cash = START_BUDGET;
       original.saveState();
       renderAll();
