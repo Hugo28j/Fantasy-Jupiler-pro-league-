@@ -8,12 +8,14 @@ const SEASON_TO = new Date("2027-07-01T00:00:00Z").getTime();
 const GAME_PAGE_SIZE = 50;
 const PLAYER_BATCH_SIZE = 8;
 const PLAYER_STATS_LAST = 30;
+const STAT_SCHEMA_VERSION = 2;
+const SCORING_VERSION = 2;
 
 const weights: Record<string,Record<string,number>> = {
-  GK:{minutes:.1,save:2,cleanSheet:15,savesInsideBox:4,punches:2,goalsConceded:-10,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
-  DEF:{minutes:.1,cleanSheet:5,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.3,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
-  MID:{minutes:.1,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:.5,interceptions:.5,possessionWon:.4,possessionLost:-.3,successfulPass:.2,successfulLongPass:.5,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2,bigChanceCreated:3,successfulFinalThirdPasses:.3,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
-  FWD:{minutes:.1,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:.5,interceptions:.5,possessionWon:.2,possessionLost:-.1,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4,bigChanceCreated:3,successfulFinalThirdPasses:.3,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1}
+  GK:{minutes:.1,save:2,cleanSheet:15,savesInsideBox:4,punches:2,goalsConceded:-10,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:5,totalScoringAtt:.1,penAreaEntries:.3,errorLeadToGoal:-15},
+  DEF:{minutes:.1,cleanSheet:5,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.3,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.4,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:5,totalScoringAtt:.2,penAreaEntries:.3,errorLeadToGoal:-15},
+  MID:{minutes:.1,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:.5,interceptions:.5,possessionWon:.4,possessionLost:-.3,successfulPass:.2,successfulLongPass:.5,keyPass:.6,passMissed:-.3,successfulDribble:.6,shotOnTarget:2,bigChanceCreated:3,successfulFinalThirdPasses:.3,bigChanceMissed:-2,penaltyWon:5,totalScoringAtt:.4,penAreaEntries:.3,errorLeadToGoal:-15},
+  FWD:{minutes:.1,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:.5,interceptions:.5,possessionWon:.2,possessionLost:-.1,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.8,shotOnTarget:4,bigChanceCreated:3,successfulFinalThirdPasses:.3,bigChanceMissed:-2,penaltyWon:5,totalScoringAtt:.4,penAreaEntries:.5,errorLeadToGoal:-15}
 };
 
 function env(name:string, fallback?:string){
@@ -94,7 +96,9 @@ function mapSorareStats(raw:any){
     successfulFinalThirdPasses:num(raw.successfulFinalThirdPasses),
     bigChanceMissed:num(raw.bigChanceMissed),
     penaltyWon:num(raw.penaltyWon),
-    totalScoringAtt:num(raw.totalScoringAtt)
+    totalScoringAtt:num(raw.totalScoringAtt),
+    penAreaEntries:num(raw.penAreaEntries),
+    errorLeadToGoal:num(raw.errorLeadToGoal)
   };
 }
 
@@ -863,10 +867,69 @@ Deno.serve(async request => {
     const pendingStatIds = new Set((pending || []).map((f:any)=>String(f.id)));
     const pendingDetailIds = new Set((pendingDetails || []).map((f:any)=>String(f.id)));
 
+    // Geen nieuwe SQL-migratie nodig voor toekomstige scoringwijzigingen:
+    // - nieuwe Sorare-statvelden -> bump STAT_SCHEMA_VERSION en refresh alleen die fixtures;
+    // - alleen andere puntengewichten -> bump SCORING_VERSION en herbereken uit opgeslagen JSON.
+    const finishedFixtures = fixtureRows.filter((f:any)=>f.status === "FT");
+    const finishedFixtureById = new Map(finishedFixtures.map((f:any)=>[String(f.id),f]));
+    const versionRows:any[] = [];
+    for(const idBatch of chunks(finishedFixtures.map((f:any)=>f.id),75)){
+      if(!idBatch.length) continue;
+      const {data:rows,error:versionError} = await db
+        .from("player_match_stats")
+        .select("fixture_id,player_id,minutes,stats,players(position)")
+        .in("fixture_id",idBatch)
+        .limit(10000);
+      if(versionError) throw versionError;
+      versionRows.push(...(rows || []));
+    }
+
+    const schemaRefreshIds = new Set<string>();
+    for(const row of versionRows){
+      const stats = row.stats || {};
+      if(Number(stats.statSchemaVersion || 0) !== STAT_SCHEMA_VERSION){
+        schemaRefreshIds.add(String(row.fixture_id));
+      }
+    }
+    for(const fixtureId of schemaRefreshIds){
+      const fixture = finishedFixtureById.get(fixtureId);
+      if(fixture) targetById.set(fixtureId,fixture);
+    }
+
+    const scoreOnlyUpdates:any[] = [];
+    const scoreOnlyGameweeks = new Set<number>();
+    for(const row of versionRows){
+      const fixtureId = String(row.fixture_id);
+      if(schemaRefreshIds.has(fixtureId)) continue;
+      const stats = row.stats || {};
+      if(Number(stats.scoringVersion || 0) === SCORING_VERSION) continue;
+      const joinedPlayer = Array.isArray(row.players) ? row.players[0] : row.players;
+      const position = String(joinedPlayer?.position || "");
+      if(!weights[position]) continue;
+      scoreOnlyUpdates.push({
+        fixture_id:row.fixture_id,
+        player_id:row.player_id,
+        minutes:row.minutes,
+        stats:{...stats,scoringVersion:SCORING_VERSION},
+        fantasy_points:fantasyScore(position,stats),
+        updated_at:new Date().toISOString()
+      });
+      const fixture = finishedFixtureById.get(fixtureId);
+      if(fixture) scoreOnlyGameweeks.add(Number(fixture.gameweek_id));
+    }
+
     let processedFixtures = 0;
     let importedPlayerRows = 0;
+    let rescoredPlayerRows = 0;
     const incompleteFixtures:string[] = [];
     const touchedGameweeks = new Set<number>();
+
+    for(const part of chunks(scoreOnlyUpdates,200)){
+      const {error} = await db.from("player_match_stats").upsert(part,{onConflict:"fixture_id,player_id"});
+      if(error) throw error;
+      rescoredPlayerRows += part.length;
+    }
+    for(const id of scoreOnlyGameweeks) touchedGameweeks.add(id);
 
     if(targetById.size){
       const {data:activePlayers,error:activePlayersError} = await db
@@ -933,6 +996,8 @@ Deno.serve(async request => {
                   bigChanceMissed
                   penaltyWon
                   totalScoringAtt
+                  penAreaEntries
+                  errorLeadToGoal
                   anyTeam {
                     __typename
                     ... on Club { id name slug }
@@ -985,7 +1050,9 @@ Deno.serve(async request => {
                 playedInGame:Boolean(raw.playedInGame),
                 teamId:raw.anyTeam?.id || null,
                 teamName:raw.anyTeam?.name || null,
-                teamSlug:raw.anyTeam?.slug || null
+                teamSlug:raw.anyTeam?.slug || null,
+                statSchemaVersion:STAT_SCHEMA_VERSION,
+                scoringVersion:SCORING_VERSION
               },
               fantasy_points:fantasyScore(position,stats),
               updated_at:new Date().toISOString()
@@ -1022,7 +1089,7 @@ Deno.serve(async request => {
           .eq("id",fixture.id);
         if(error) throw error;
 
-        if(pendingStatIds.has(id) || pendingDetailIds.has(id)){
+        if(pendingStatIds.has(id) || pendingDetailIds.has(id) || schemaRefreshIds.has(id)){
           touchedGameweeks.add(Number(fixture.gameweek_id));
         }
         if(pendingStatIds.has(id)){
@@ -1064,6 +1131,8 @@ Deno.serve(async request => {
       pendingFixtures:(pending || []).length,
       liveFixtures:(liveFixtures || []).length,
       lineupBackfillFixtures:pendingDetailIds.size,
+      scoringSchemaRefreshFixtures:schemaRefreshIds.size,
+      rescoredPlayerRows,
       processedFixtures,
       incompleteFixtures,
       importedPlayerRows,
