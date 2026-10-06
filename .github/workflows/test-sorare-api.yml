@@ -1,0 +1,130 @@
+name: Test Sorare football API
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/test-sorare-api.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Sorare GraphQL
+        shell: python
+        run: |
+          import json, re, urllib.request, urllib.error
+
+          GRAPHQL = "https://api.sorare.com/graphql"
+          SCHEMA = "https://api.sorare.com/graphql/schema"
+
+          def http_get(url):
+              req = urllib.request.Request(url, headers={
+                  "User-Agent": "Fantasy-JPL/1.0",
+                  "Accept": "text/plain,application/json"
+              })
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return r.status, r.read().decode("utf-8", errors="replace")
+
+          def gql(name, query, variables=None):
+              print(f"\n=== {name} ===")
+              payload = json.dumps({"query": query, "variables": variables or {}}).encode()
+              req = urllib.request.Request(
+                  GRAPHQL,
+                  data=payload,
+                  headers={
+                      "content-type": "application/json",
+                      "User-Agent": "Fantasy-JPL/1.0"
+                  },
+                  method="POST"
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      raw = r.read().decode("utf-8")
+                      print("HTTP", r.status)
+              except urllib.error.HTTPError as e:
+                  raw = e.read().decode("utf-8", errors="replace")
+                  print("HTTP", e.code)
+              print(raw[:12000])
+              try:
+                  return json.loads(raw)
+              except Exception:
+                  return None
+
+          print("=== SCHEMA DOWNLOAD ===")
+          try:
+              status, schema = http_get(SCHEMA)
+              print("HTTP", status, "SCHEMA_BYTES", len(schema))
+              for type_name in [
+                  "type Query", "type Player", "type PlayerGameStats", "type Game",
+                  "type Club", "type Team", "type Competition", "type So5Fixture"
+              ]:
+                  pos = schema.find(type_name)
+                  print("\n---", type_name, "---")
+                  if pos >= 0:
+                      print(schema[pos:pos+9000])
+                  else:
+                      print("NOT_FOUND")
+          except Exception as e:
+              print("SCHEMA_ERROR", repr(e))
+
+          gql("TYPENAME", "query { __typename }")
+
+          gql("QUERY_FIELDS", """
+          query {
+            __type(name: "Query") {
+              fields {
+                name
+                args { name type { kind name ofType { kind name } } }
+              }
+            }
+          }
+          """)
+
+          gql("PLAYER_FIELDS", """
+          query {
+            __type(name: "Player") {
+              fields {
+                name
+                args { name type { kind name ofType { kind name } } }
+                type { kind name ofType { kind name } }
+              }
+            }
+          }
+          """)
+
+          gql("PLAYER_GAME_STATS_FIELDS", """
+          query {
+            __type(name: "PlayerGameStats") {
+              fields {
+                name
+                args { name type { kind name ofType { kind name } } }
+                type { kind name ofType { kind name } }
+              }
+            }
+          }
+          """)
+
+          gql("CLUB_FIELDS", """
+          query {
+            __type(name: "Club") {
+              fields {
+                name
+                args { name type { kind name ofType { kind name } } }
+                type { kind name ofType { kind name } }
+              }
+            }
+          }
+          """)
+
+          gql("COMPETITION_FIELDS", """
+          query {
+            __type(name: "Competition") {
+              fields {
+                name
+                args { name type { kind name ofType { kind name } } }
+                type { kind name ofType { kind name } }
+              }
+            }
+          }
+          """)
