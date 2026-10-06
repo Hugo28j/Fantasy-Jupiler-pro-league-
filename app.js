@@ -9,6 +9,8 @@ const state = {
   teamName: "Mijn Fantasy Team"
 };
 
+let selectedMatchweek = null;
+
 function loadState(){
   try{
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -387,9 +389,20 @@ function renderPlayerProfile(player,matchRows=[]){
     return bd.localeCompare(ad);
   }).map(row => {
     const fixture = row.fixtures || {};
+    const stats = row.stats || {};
     const gameweek = fixture.gameweeks?.number || "?";
     const date = fixture.kickoff ? new Intl.DateTimeFormat("nl-BE",{day:"numeric",month:"short"}).format(new Date(fixture.kickoff)) : "";
-    return '<div class="profile-match"><div><strong>Speeldag ' + gameweek + '</strong><small>' + escapeHtml(date + " · " + (fixture.home_team || "") + " – " + (fixture.away_team || "")) + '</small></div><span>' + Number(row.minutes || 0) + ' min</span><strong>' + points(row.fantasy_points) + '</strong></div>';
+    const delta = Number(stats.priceDelta);
+    const hasPriceMove = Number.isFinite(delta);
+    const priceMoveClass = delta > 0 ? "positive" : delta < 0 ? "negative" : "neutral";
+    const priceMove = hasPriceMove
+      ? '<span class="profile-price-move ' + priceMoveClass + '">' + (delta > 0 ? "+" : delta < 0 ? "−" : "±") +
+        '€' + Math.abs(delta).toFixed(1).replace(".",",") + 'M</span>'
+      : '<span class="profile-price-move neutral">—</span>';
+    return '<div class="profile-match"><div><strong>Speeldag ' + gameweek + '</strong><small>' +
+      escapeHtml(date + " · " + (fixture.home_team || "") + " – " + (fixture.away_team || "")) +
+      '</small></div><span>' + Number(row.minutes || 0) + ' min</span><strong>' + points(row.fantasy_points) +
+      '</strong>' + priceMove + '</div>';
   }).join("");
   document.getElementById("playerProfile").innerHTML =
     '<p class="eyebrow">SPELERSFICHE</p><div class="profile-hero"><div><span class="role-badge role-' + player.pos + '">' + player.pos + '</span><h2>' + escapeHtml(player.name) + '</h2><p>' + escapeHtml(player.club) + ' · ' + escapeHtml(POSITION_LABELS[player.pos]) + '</p></div><strong class="profile-price">' + money(Number(player.price)) + '</strong></div>' +
@@ -407,19 +420,59 @@ function openPlayerProfile(id){
   window.dispatchEvent(new CustomEvent("fantasy:player-profile",{detail:{playerId:id}}));
 }
 
+function matchweekNumber(match){
+  const direct = Number(match?.gameweek);
+  if(Number.isFinite(direct) && direct > 0) return direct;
+  const parsed = String(match?.week || "").match(/\d+/);
+  return parsed ? Number(parsed[0]) : null;
+}
+
 function renderMatches(){
   const target = document.getElementById("matchesList");
-  target.innerHTML = MATCHES.map(m => {
-    const clickable = Boolean(m.id) && ["FT","LIVE"].includes(String(m.status || ""));
-    const tag = m.status === "LIVE" ? '<span class="match-live-badge">LIVE</span>' : "";
+  const select = document.getElementById("matchweekSelect");
+  const weeks = [...new Set(MATCHES.map(matchweekNumber).filter(Number.isFinite))].sort((a,b) => a-b);
+
+  if(weeks.length){
+    const stillValid = weeks.includes(Number(selectedMatchweek));
+    if(!stillValid){
+      const liveWeek = weeks.find(week => MATCHES.some(m => matchweekNumber(m) === week && m.status === "LIVE"));
+      const nextWeek = weeks.find(week => MATCHES.some(m => matchweekNumber(m) === week && !["FT","CANC"].includes(String(m.status || ""))));
+      const played = weeks.filter(week => MATCHES.some(m => matchweekNumber(m) === week && m.status === "FT"));
+      selectedMatchweek = liveWeek ?? nextWeek ?? (played.length ? played[played.length-1] : weeks[0]);
+    }
+  }
+
+  if(select){
+    select.innerHTML = weeks.map(week => '<option value="' + week + '">Speeldag ' + week + '</option>').join("");
+    if(selectedMatchweek != null) select.value = String(selectedMatchweek);
+    select.onchange = () => {
+      selectedMatchweek = Number(select.value);
+      renderMatches();
+    };
+  }
+
+  const visible = MATCHES
+    .filter(m => !weeks.length || matchweekNumber(m) === Number(selectedMatchweek))
+    .slice()
+    .sort((a,b) => String(a.kickoff || "").localeCompare(String(b.kickoff || "")));
+
+  target.innerHTML = visible.map(m => {
+    const status = String(m.status || "");
+    const clickable = Boolean(m.id) && ["FT","LIVE"].includes(status);
+    const tag = status === "LIVE"
+      ? '<span class="match-live-badge">LIVE</span>'
+      : !["FT","CANC"].includes(status) ? '<span class="match-upcoming-badge">KOMEND</span>' : "";
+    const scoreText = ["FT","LIVE"].includes(status)
+      ? escapeHtml(String(m.homeScore)) + "–" + escapeHtml(String(m.awayScore))
+      : "vs";
     const content = '<span class="date">' + escapeHtml(m.date || "") + '</span>' +
       '<strong class="home">' + escapeHtml(m.home || "") + '</strong>' +
-      '<span class="match-score">' + escapeHtml(String(m.homeScore)) + "–" + escapeHtml(String(m.awayScore)) + tag + '</span>' +
+      '<span class="match-score' + (!["FT","LIVE"].includes(status) ? " future" : "") + '">' + scoreText + tag + '</span>' +
       '<strong>' + escapeHtml(m.away || "") + '</strong><span class="matchweek">' + escapeHtml(m.week || "") + '</span>';
     return clickable
       ? '<button class="match-row match-row-button" type="button" data-fixture-id="' + escapeHtml(String(m.id)) + '">' + content + '</button>'
-      : '<div class="match-row">' + content + '</div>';
-  }).join("");
+      : '<div class="match-row match-row-future">' + content + '</div>';
+  }).join("") || '<div class="empty-state">Geen wedstrijden gevonden voor deze speeldag.</div>';
 
   target.querySelectorAll(".match-row-button").forEach(button => button.addEventListener("click",() => {
     const id = button.dataset.fixtureId;
