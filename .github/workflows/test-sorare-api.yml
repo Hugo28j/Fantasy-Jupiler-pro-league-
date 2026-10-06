@@ -1,35 +1,19 @@
-name: Test Sorare football API
+name: Check Sorare sync
+
 on:
   workflow_dispatch:
   push:
-    paths: [".github/workflows/test-sorare-api.yml"]
+    paths:
+      - "supabase/functions/sync-jpl/index.ts"
+      - ".github/workflows/test-sorare-api.yml"
+
 jobs:
-  probe:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate Sorare batch player query shape
-        shell: python
-        run: |
-          import json, urllib.request, urllib.error
-          q = """
-          query {
-            players(slugs:["hans-vanaken"]) {
-              id
-              slug
-              displayName
-              position
-              activeClub { id name slug }
-              gameStats(last:2) {
-                id minsPlayed goals goalAssist accuratePass
-                footballGame { id date statusTyped competition { slug } }
-              }
-            }
-          }
-          """
-          req=urllib.request.Request("https://api.sorare.com/graphql",data=json.dumps({"query":q}).encode(),headers={"content-type":"application/json","User-Agent":"Fantasy-JPL/1.0"},method="POST")
-          try:
-              with urllib.request.urlopen(req,timeout=60) as r:
-                  raw=r.read().decode(); print("HTTP",r.status)
-          except urllib.error.HTTPError as e:
-              raw=e.read().decode(errors="replace"); print("HTTP",e.code)
-          print(raw)
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Edge Function
+        run: deno check supabase/functions/sync-jpl/index.ts
