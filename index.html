@@ -121,6 +121,23 @@
         </label>
       </div>
 
+      <div class="price-range-filter">
+        <div class="price-range-head">
+          <span>Prijsrange</span>
+          <strong id="priceRangeValue">€1,0M – €50,0M</strong>
+        </div>
+        <div class="dual-range" aria-label="Prijsrange">
+          <div class="dual-range-track"></div>
+          <div id="priceRangeFill" class="dual-range-fill"></div>
+          <input id="priceMinFilter" class="dual-range-input" type="range" min="1" max="50" step="0.5" value="1" aria-label="Minimumprijs">
+          <input id="priceMaxFilter" class="dual-range-input" type="range" min="1" max="50" step="0.5" value="50" aria-label="Maximumprijs">
+        </div>
+        <div class="price-range-scale">
+          <span>Goedkoop</span>
+          <span>Duur</span>
+        </div>
+      </div>
+
       <div class="market-summary">
         <span id="marketCount"></span>
         <span id="selectionWarning" class="warning-text"></span>
