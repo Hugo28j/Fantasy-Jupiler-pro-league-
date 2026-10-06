@@ -1,5 +1,5 @@
 const STORAGE_KEY = "fantasy-jpl-2026-v1";
-const START_BUDGET = 150;
+const START_BUDGET = 125;
 const REQUIRED_BY_POS = {GK:2,DEF:2,MID:2,FWD:2};
 
 const state = {
@@ -29,7 +29,7 @@ function loadState(){
     if(typeof saved.teamName === "string" && saved.teamName.trim()) state.teamName = saved.teamName.slice(0,28);
     const savedBudgetBase = Number(saved.budgetBase || 100);
     if(Number.isFinite(Number(saved.cash))){
-      state.cash = Number(saved.cash) + Math.max(0,START_BUDGET-savedBudgetBase);
+      state.cash = Math.max(0,Number(saved.cash) + (START_BUDGET-savedBudgetBase));
     }else{
       state.cash = Math.max(0,START_BUDGET-state.squad.map(playerById).filter(Boolean).reduce((sum,p)=>sum+Number(p.price||0),0));
     }
