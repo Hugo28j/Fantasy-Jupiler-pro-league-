@@ -10,40 +10,15 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Sorare query shapes
+      - name: Query Club Brugge and player stats
         shell: python
         run: |
           import json, urllib.request, urllib.error
 
-          SCHEMA = "https://api.sorare.com/graphql/schema"
           GRAPHQL = "https://api.sorare.com/graphql"
 
-          req = urllib.request.Request(SCHEMA, headers={"User-Agent": "Fantasy-JPL/1.0"})
-          with urllib.request.urlopen(req, timeout=60) as r:
-              schema = r.read().decode("utf-8", errors="replace")
-
-          def block(type_name):
-              marker = f"type {type_name} "
-              i = schema.find(marker)
-              if i < 0:
-                  marker = f"type {type_name} {{"
-                  i = schema.find(marker)
-              if i < 0:
-                  print(f"\n=== {type_name}: NOT FOUND ===")
-                  return
-              j = schema.find("\ntype ", i + 5)
-              if j < 0: j = min(len(schema), i + 30000)
-              print(f"\n=== {type_name} ===")
-              print(schema[i:j][:30000])
-
-          for t in [
-              "FootballRoot","SearchPlayers","SearchPlayer","SearchPlayerResult",
-              "CompetitionGames","Competition","Club","Game","PlayerGameStats"
-          ]:
-              block(t)
-
           def gql(name, query):
-              print(f"\n=== QUERY {name} ===")
+              print(f"\n=== {name} ===")
               payload=json.dumps({"query":query}).encode()
               req=urllib.request.Request(GRAPHQL,data=payload,headers={
                   "content-type":"application/json",
@@ -56,18 +31,79 @@ jobs:
               except urllib.error.HTTPError as e:
                   raw=e.read().decode("utf-8",errors="replace")
                   print("HTTP",e.code)
-              print(raw[:20000])
+              print(raw[:40000])
 
           gql("SEARCH_HANS", """
           query {
-            searchPlayers(query: "Hans Vanaken", page: 0, pageSize: 10) {
-              __typename
+            searchPlayers(query: "Hans Vanaken", page: 1, pageSize: 10) {
+              nbHits
+              hitIds
             }
           }
           """)
 
-          gql("FOOTBALL_TYPENAME", """
+          gql("CLUB_BRUGGE", """
           query {
-            football { __typename }
+            football {
+              club(slug: "club-brugge") {
+                id
+                name
+                slug
+                domesticLeague {
+                  id
+                  name
+                  slug
+                  displayName
+                  openForGameStats
+                }
+                activePlayers(first: 8) {
+                  nodes {
+                    id
+                    slug
+                    displayName
+                    optaId
+                    gameStats(last: 2) {
+                      id
+                      minsPlayed
+                      saves
+                      savedIbox
+                      punches
+                      cleanSheet
+                      goalsConceded
+                      fouls
+                      wasFouled
+                      yellowCard
+                      redCard
+                      goals
+                      goalAssist
+                      wonTackle
+                      duelWon
+                      duelLost
+                      totalClearance
+                      interceptionWon
+                      possWon
+                      possLostCtrl
+                      accuratePass
+                      accurateLongBalls
+                      missedPass
+                      wonContest
+                      ontargetScoringAtt
+                      footballGame {
+                        id
+                        date
+                        statusTyped
+                        homeScore
+                        awayScore
+                        competition {
+                          id
+                          name
+                          slug
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
           """)
