@@ -1,67 +1,35 @@
 name: Test Sorare football API
-
 on:
   workflow_dispatch:
   push:
-    paths:
-      - ".github/workflows/test-sorare-api.yml"
-
+    paths: [".github/workflows/test-sorare-api.yml"]
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Sorare stage groups and position
+      - name: Validate Sorare batch player query shape
         shell: python
         run: |
           import json, urllib.request, urllib.error
-          GRAPHQL="https://api.sorare.com/graphql"
-          SCHEMA="https://api.sorare.com/graphql/schema"
-
-          req=urllib.request.Request(SCHEMA,headers={"User-Agent":"Fantasy-JPL/1.0"})
-          with urllib.request.urlopen(req,timeout=60) as r:
-              schema=r.read().decode("utf-8",errors="replace")
-
-          for type_name in ["StageGroup","TournamentCalendarStage","Player"]:
-              marker=f"type {type_name} "
-              i=schema.find(marker)
-              if i<0: i=schema.find(f"type {type_name} {{")
-              print(f"\n=== TYPE {type_name} ===")
-              if i<0: print("NOT FOUND"); continue
-              j=schema.find("\ntype ",i+5)
-              print(schema[i:(j if j>i else i+18000)][:18000])
-
-          def gql(name,q):
-              payload=json.dumps({"query":q}).encode()
-              req=urllib.request.Request(GRAPHQL,data=payload,headers={"content-type":"application/json","User-Agent":"Fantasy-JPL/1.0"},method="POST")
-              try:
-                  with urllib.request.urlopen(req,timeout=60) as r:
-                      raw=r.read().decode(); status=r.status
-              except urllib.error.HTTPError as e:
-                  raw=e.read().decode(errors="replace"); status=e.code
-              print(f"\n=== {name} HTTP {status} ===\n{raw[:40000]}")
-
-          gql("HANS_POSITION", """
+          q = """
           query {
-            anyPlayer(slug:"hans-vanaken") {
-              ... on Player { id slug displayName position }
-            }
-          }
-          """)
-
-          gql("JPL_STAGE_GROUPS", """
-          query {
-            football {
-              competition(slug:"jupiler-pro-league") {
-                stages(seasonStartYear:2026) {
-                  id
-                  name
-                  groups {
-                    __typename
-                    id
-                    name
-                  }
-                }
+            players(slugs:["hans-vanaken"]) {
+              id
+              slug
+              displayName
+              position
+              activeClub { id name slug }
+              gameStats(last:2) {
+                id minsPlayed goals goalAssist accuratePass
+                footballGame { id date statusTyped competition { slug } }
               }
             }
           }
-          """)
+          """
+          req=urllib.request.Request("https://api.sorare.com/graphql",data=json.dumps({"query":q}).encode(),headers={"content-type":"application/json","User-Agent":"Fantasy-JPL/1.0"},method="POST")
+          try:
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  raw=r.read().decode(); print("HTTP",r.status)
+          except urllib.error.HTTPError as e:
+              raw=e.read().decode(errors="replace"); print("HTTP",e.code)
+          print(raw)
