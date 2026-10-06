@@ -275,7 +275,11 @@ function renderMarket(){
     return '<article class="player-card ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
       '<div class="player-card-head"><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><span class="price">' + money(p.price) + '</span></div>' +
       '<h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3><div class="club">' + escapeHtml(p.club) + '</div>' +
-      '<div class="player-meta"><div><span>Minuten 26/27</span><strong>' + (p.minutes == null ? "Actief" : p.minutes) + '</strong></div><div><span>Fantasy score</span><strong>' + points(p.score).replace(" pts","") + '</strong></div></div>' +
+      '<div class="player-meta"><div><span>Laatste prijswijziging</span><strong class="market-price-change ' +
+        (Number(p.lastPriceDelta || 0) > 0 ? "positive" : Number(p.lastPriceDelta || 0) < 0 ? "negative" : "neutral") + '">' +
+        (p.lastPriceDelta == null ? "—" : (Number(p.lastPriceDelta) > 0 ? "+" : Number(p.lastPriceDelta) < 0 ? "−" : "±") +
+        "€" + Math.abs(Number(p.lastPriceDelta || 0)).toFixed(1).replace(".",",") + "M") +
+      '</strong></div><div><span>Fantasy score</span><strong>' + points(p.score).replace(" pts","") + '</strong></div></div>' +
       '<div class="player-actions"><button class="details-btn" data-player-id="' + escapeHtml(p.id) + '">Statistieken</button>' +
       '<button class="buy-btn ' + (owned ? "remove":"") + '" data-action="' + (owned ? "sell":"buy") + '" data-id="' + escapeHtml(p.id) + '" ' + (disabled ? "disabled":"") + '>' +
         (owned ? "Verkopen" : (disabled ? "Niet beschikbaar" : "Kopen")) + '</button></div>' +
