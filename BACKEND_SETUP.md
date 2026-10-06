@@ -100,7 +100,11 @@ Het huidige Sorare `PlayerGameStats`-schema bevat geen rechtstreeks veld voor **
 
 ### Automatische planning
 
-Plan automatische synchronisatie pas nadat de twee handmatige tests correct zijn. De sync slaat fixtures met `stats_processed=true` over. Een aparte periodieke spelersrefresh kan later met `{"refreshPlayers":true}` worden gepland zodat transfers en kernwijzigingen meekomen.
+De twee handmatige tests zijn geslaagd wanneer een tweede normale run `pendingFixtures:0`, `processedFixtures:0` en `importedPlayerRows:0` teruggeeft.
+
+Plan daarna een normale POST naar `sync-jpl` met body `{}` ongeveer **iedere 2 uur**. De sync slaat fixtures met `stats_processed=true` over en verwerkt pas opnieuw zodra een nieuwe volledige speeldag klaar is.
+
+Plan daarnaast **één keer per dag** een spelersrefresh met body `{"refreshPlayers":true}` zodat transfers, nieuwe spelers en kernwijzigingen worden bijgewerkt.
 
 ## 3. Wat server-side wordt afgedwongen
 
