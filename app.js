@@ -581,8 +581,23 @@ function formationSideRank(row,position,total){
 function lineY(index,total,side,zone){
   if(total <= 1) return 50;
 
-  // Een dubbel middenveld hoort compact centraal te staan, niet bijna op de zijlijn.
+  // Compacte centrale linies.
+  // 2 middenvelders: dubbele pivot centraal.
   if(zone === "MID" && total === 2){
+    const compact = [40,60];
+    const base = compact[index] ?? 50;
+    return side === "away" ? 100-base : base;
+  }
+
+  // 3 middenvelders: centrale driehoek/linie, vooral voor 5-3-2 en 4-3-3.
+  if(zone === "MID" && total === 3){
+    const compact = [34,50,66];
+    const base = compact[index] ?? 50;
+    return side === "away" ? 100-base : base;
+  }
+
+  // 2 aanvallers: twee spitsen dichter bij elkaar rond het centrum.
+  if(zone === "FWD" && total === 2){
     const compact = [40,60];
     const base = compact[index] ?? 50;
     return side === "away" ? 100-base : base;
