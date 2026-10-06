@@ -275,7 +275,11 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .match-pitch-player{position:absolute;left:var(--mx);top:var(--my);transform:translate(-50%,-50%);width:115px;border:0;background:transparent;color:#fff;display:grid;justify-items:center;cursor:pointer;z-index:4}
 .match-avatar{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:#10293a;border:2px solid rgba(255,255,255,.35);font-weight:950}
 .match-score-chip{margin-top:-8px;min-width:28px;border-radius:999px;padding:2px 6px;color:#07131c;font-size:10px;font-weight:950;border:2px solid rgba(8,22,30,.8)}
-.match-score-chip.hot{background:#35e38a}.match-score-chip.warm{background:#f1d43b}.match-score-chip.cool{background:#ff844a}
+.match-score-chip.score-negative{background:#ff4d5f;color:#fff}
+.match-score-chip.score-orange{background:#ff844a}
+.match-score-chip.score-yellow{background:#f1d43b}
+.match-score-chip.score-green{background:#35e38a}
+.match-score-chip.score-blue{background:#61d7ff}
 .match-player-name{margin-top:4px;max-width:110px;padding:4px 6px;border-radius:7px;background:rgba(4,14,20,.8);font-size:10px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub-event{position:absolute;top:-7px;right:8px;padding:2px 4px;border-radius:6px;font-size:9px;font-weight:950;background:#111}
 .sub-on{color:#65efa0}.sub-off{color:#ff835d}
@@ -314,3 +318,9 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 
 .profile-stats strong small{font-size:10px;font-weight:800;color:var(--accent);white-space:nowrap}
 .match-data-hint{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;background:rgba(5,18,27,.88);border:1px solid var(--border);border-radius:9px;padding:7px 10px;color:var(--muted);font-size:10px;white-space:nowrap}
+
+.match-bench-score.score-negative{color:#ff6575}
+.match-bench-score.score-orange{color:#ff9a62}
+.match-bench-score.score-yellow{color:#f5de55}
+.match-bench-score.score-green{color:#55e99a}
+.match-bench-score.score-blue{color:#75dcff}
