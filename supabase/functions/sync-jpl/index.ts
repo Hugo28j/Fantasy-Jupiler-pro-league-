@@ -93,8 +93,8 @@ function mapSorareStats(raw:any){
   };
 }
 
-// De bestaande database gebruikt bigint provider/fixture IDs. Sorare gebruikt UUID-achtige
-// strings, dus we maken een stabiele positieve 63-bit FNV-1a hash.
+// De databasekolommen zijn bigint, maar PostgREST/JavaScript moet deze IDs exact kunnen
+// teruglezen. Daarom houden we Sorare-hashes bewust binnen Number.MAX_SAFE_INTEGER.
 function stableBigint(value:string){
   const bytes = new TextEncoder().encode(value);
   let hash = 1469598103934665603n;
@@ -103,7 +103,7 @@ function stableBigint(value:string){
     hash ^= BigInt(byte);
     hash = BigInt.asUintN(64,hash*prime);
   }
-  hash &= 0x7fffffffffffffffn;
+  hash &= 0x1fffffffffffffn; // 53 bits: veilig exact in JavaScript
   if(hash === 0n) hash = 1n;
   return hash.toString();
 }
@@ -133,26 +133,32 @@ function chunks<T>(items:T[],size:number){
 
 function assignRounds(games:any[]){
   const sorted = [...games].sort((a,b) => new Date(a.date).getTime()-new Date(b.date).getTime());
-  const rounds:{games:any[],teams:Set<string>}[] = [];
-  for(const game of sorted){
-    const home = String(game.homeTeam?.id || game.homeTeam?.slug || "");
-    const away = String(game.awayTeam?.id || game.awayTeam?.slug || "");
-    if(!home || !away) continue;
-    let placed = false;
-    for(const round of rounds){
-      if(round.games.length >= 9) continue;
-      if(round.teams.has(home) || round.teams.has(away)) continue;
-      round.games.push(game);
-      round.teams.add(home);
-      round.teams.add(away);
-      placed = true;
-      break;
-    }
-    if(!placed){
-      rounds.push({games:[game],teams:new Set([home,away])});
-    }
+
+  if(sorted.length !== 306){
+    throw new Error(`JPL-kalender bevat ${sorted.length} wedstrijden; verwacht exact 306 voor 34 speeldagen.`);
   }
-  return rounds.map((round,index) => ({number:index+1,games:round.games}));
+
+  const rounds = chunks(sorted,9).map((roundGames,index) => {
+    const teams = new Set<string>();
+    for(const game of roundGames){
+      const home = String(game.homeTeam?.id || game.homeTeam?.slug || "");
+      const away = String(game.awayTeam?.id || game.awayTeam?.slug || "");
+      if(!home || !away) throw new Error(`Speeldag ${index+1} bevat een wedstrijd zonder twee clubs.`);
+      teams.add(home);
+      teams.add(away);
+    }
+    if(roundGames.length !== 9 || teams.size !== 18){
+      throw new Error(
+        `Sorare-kalender kan niet veilig in speeldagen worden verdeeld: speeldag ${index+1} heeft ${roundGames.length} wedstrijden en ${teams.size} unieke clubs.`
+      );
+    }
+    return {number:index+1,games:roundGames};
+  });
+
+  if(rounds.length !== 34){
+    throw new Error(`JPL-kalender gaf ${rounds.length} speeldagen; verwacht 34.`);
+  }
+  return rounds;
 }
 
 Deno.serve(async request => {
@@ -203,14 +209,17 @@ Deno.serve(async request => {
 
     const {data:existingPlayers,error:existingPlayersError} = await db
       .from("players")
-      .select("id,name,price");
+      .select("id,name,price,provider_player_id");
     if(existingPlayersError) throw existingPlayersError;
 
     const priceByName = new Map(
       (existingPlayers || []).map((p:any) => [normalizeName(p.name),Number(p.price)])
     );
     const sorareAlreadyLoaded = (existingPlayers || []).some((p:any) => String(p.id).startsWith("sorare-"));
-    const playersNeedRefresh = forcePlayers || !sorareAlreadyLoaded;
+    const unsafeProviderIds = (existingPlayers || []).some((p:any) =>
+      String(p.id).startsWith("sorare-") && Math.abs(Number(p.provider_player_id || 0)) > Number.MAX_SAFE_INTEGER
+    );
+    const playersNeedRefresh = forcePlayers || !sorareAlreadyLoaded || unsafeProviderIds;
 
     const competitionQuery = `
       query {
@@ -403,6 +412,41 @@ Deno.serve(async request => {
     if(gameweekError) throw gameweekError;
 
     const gameweekIds = new Map((gameweeks || []).map((g:any)=>[Number(g.number),Number(g.id)]));
+
+    // De eerste Sorare-versie gebruikte 63-bit hashes. Die kunnen bij JSON -> JavaScript
+    // afgerond worden, waardoor player stats nooit aan de juiste fixture gekoppeld raakten.
+    // Ruim die legacy fixtures éénmalig op; ON DELETE CASCADE verwijdert ook lege/oude stats.
+    const seasonGameweekIds = [...gameweekIds.values()];
+    let migratedUnsafeFixtureIds = false;
+    if(seasonGameweekIds.length){
+      const {data:existingSeasonFixtures,error:existingFixtureError} = await db
+        .from("fixtures")
+        .select("id")
+        .in("gameweek_id",seasonGameweekIds)
+        .limit(1000);
+      if(existingFixtureError) throw existingFixtureError;
+
+      const hasUnsafeFixtureIds = (existingSeasonFixtures || []).some((fixture:any) =>
+        Math.abs(Number(fixture.id || 0)) > Number.MAX_SAFE_INTEGER
+      );
+      if(hasUnsafeFixtureIds){
+        const {error:cleanupError} = await db
+          .from("fixtures")
+          .delete()
+          .in("gameweek_id",seasonGameweekIds);
+        if(cleanupError) throw cleanupError;
+        migratedUnsafeFixtureIds = true;
+      }
+    }
+
+    // Verwijder een eventuele foutieve extra speeldag uit de eerdere reconstructie.
+    const {error:extraGameweekError} = await db
+      .from("gameweeks")
+      .delete()
+      .eq("season",SEASON_START)
+      .gt("number",34);
+    if(extraGameweekError) throw extraGameweekError;
+
     const roundByProviderGame = new Map<string,number>();
     for(const round of rounds){
       for(const game of round.games) roundByProviderGame.set(String(game.id),round.number);
@@ -602,6 +646,7 @@ Deno.serve(async request => {
       clubs:clubs.length,
       reconstructedGameweeks:rounds.length,
       completeGameweeks:completeRoundCount,
+      migratedUnsafeFixtureIds,
       fixtures:fixtureRows.length,
       latestCompletedGameweek:latestCompleted.number,
       playerRefresh:playersNeedRefresh,
