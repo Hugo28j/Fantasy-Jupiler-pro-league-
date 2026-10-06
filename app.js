@@ -578,8 +578,16 @@ function formationSideRank(row,position,total){
   return 50 + String(row.player?.name || row.player_id || "").charCodeAt(0);
 }
 
-function lineY(index,total,side){
+function lineY(index,total,side,zone){
   if(total <= 1) return 50;
+
+  // Een dubbel middenveld hoort compact centraal te staan, niet bijna op de zijlijn.
+  if(zone === "MID" && total === 2){
+    const compact = [40,60];
+    const base = compact[index] ?? 50;
+    return side === "away" ? 100-base : base;
+  }
+
   const min = 18;
   const max = 82;
   const base = min + ((max-min)*index)/(total-1);
@@ -606,8 +614,16 @@ function matchPlayerButton(row,match,side,index,total,zone){
   const xByPosition = side === "home"
     ? {GK:7,DEF:20,MID:33,FWD:45}
     : {GK:93,DEF:80,MID:67,FWD:55};
-  const x = xByPosition[zone || pos] || (side === "home" ? 33 : 67);
-  const y = lineY(index,total,side);
+
+  let x = xByPosition[zone || pos] || (side === "home" ? 33 : 67);
+
+  // Bij een vijfmansdefensie zijn de buitenste twee wingbacks.
+  // Die staan iets hoger dan de drie centrale verdedigers.
+  if(zone === "DEF" && total === 5 && (index === 0 || index === total-1)){
+    x += side === "home" ? 5 : -5;
+  }
+
+  const y = lineY(index,total,side,zone || pos);
 
   return '<button class="match-pitch-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '" style="--mx:' + x + '%;--my:' + y + '%">' +
     '<span class="match-card-strip">' + matchCardBadges(row) + '</span>' +
