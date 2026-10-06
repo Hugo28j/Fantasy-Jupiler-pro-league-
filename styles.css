@@ -404,3 +404,26 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .stat-group-summary-meta{gap:7px}
   .stat-group-total{font-size:11px}
 }
+
+/* Speeldagkiezer */
+.matchweek-toolbar{display:flex;justify-content:flex-end;margin:0 0 14px}
+.matchweek-toolbar label{display:grid;gap:5px;min-width:190px}
+.matchweek-toolbar label span{font-size:11px;color:var(--muted);font-weight:800}
+.matchweek-toolbar select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1d2c;color:var(--text);font-weight:850}
+.match-row-future{opacity:.9}
+.match-score.future{color:#aebdca;font-size:13px;min-width:44px;text-align:center}
+.match-upcoming-badge{display:block;margin-top:3px;color:#7dc7ff;font-size:8px;letter-spacing:.07em}
+
+/* Prijsbeweging per speeldag in spelersfiche */
+.profile-match{grid-template-columns:1fr auto auto auto}
+.profile-price-move{min-width:72px;text-align:right;font-weight:950;font-size:12px}
+.profile-price-move.positive{color:#58efa0}
+.profile-price-move.negative{color:#ff6575}
+.profile-price-move.neutral{color:#9fb0bd}
+
+@media(max-width:500px){
+  .matchweek-toolbar{justify-content:stretch}
+  .matchweek-toolbar label{width:100%;min-width:0}
+  .profile-match{grid-template-columns:1fr auto auto}
+  .profile-price-move{grid-column:2 / 4}
+}
