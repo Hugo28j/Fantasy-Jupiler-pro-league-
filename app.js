@@ -338,9 +338,156 @@ function openPlayerProfile(id){
 }
 
 function renderMatches(){
-  document.getElementById("matchesList").innerHTML = MATCHES.map(m =>
-    '<div class="match-row"><span class="date">' + m.date + '</span><strong class="home">' + m.home + '</strong><span class="match-score">' + m.homeScore + "–" + m.awayScore + '</span><strong>' + m.away + '</strong><span class="matchweek">' + m.week + '</span></div>'
+  const target = document.getElementById("matchesList");
+  target.innerHTML = MATCHES.map(m => {
+    const clickable = Boolean(m.id) && ["FT","LIVE"].includes(String(m.status || ""));
+    const tag = m.status === "LIVE" ? '<span class="match-live-badge">LIVE</span>' : "";
+    const content = '<span class="date">' + escapeHtml(m.date || "") + '</span>' +
+      '<strong class="home">' + escapeHtml(m.home || "") + '</strong>' +
+      '<span class="match-score">' + escapeHtml(String(m.homeScore)) + "–" + escapeHtml(String(m.awayScore)) + tag + '</span>' +
+      '<strong>' + escapeHtml(m.away || "") + '</strong><span class="matchweek">' + escapeHtml(m.week || "") + '</span>';
+    return clickable
+      ? '<button class="match-row match-row-button" type="button" data-fixture-id="' + escapeHtml(String(m.id)) + '">' + content + '</button>'
+      : '<div class="match-row">' + content + '</div>';
+  }).join("");
+
+  target.querySelectorAll(".match-row-button").forEach(button => button.addEventListener("click",() => {
+    const id = button.dataset.fixtureId;
+    const match = MATCHES.find(m => String(m.id) === String(id));
+    const dialog = document.getElementById("matchDialog");
+    document.getElementById("matchDetail").innerHTML = '<div class="empty-state match-loading">Wedstrijdopstelling laden…</div>';
+    if(!dialog.open) dialog.showModal();
+    window.dispatchEvent(new CustomEvent("fantasy:match-detail",{detail:{fixtureId:id,match}}));
+  }));
+}
+
+function matchSubstitutionLabel(row,match){
+  const stats = row.stats || {};
+  const minutes = Number(row.minutes || stats.minutes || 0);
+  const started = Number(stats.gameStarted || 0) > 0;
+  const fieldStatus = String(stats.fieldStatus || "");
+  const currentMinute = Math.max(0,Number(stats.gameMinute || 0));
+  const referenceMinute = match?.status === "LIVE" && currentMinute > 0 ? currentMinute : 90;
+
+  if(started && fieldStatus === "SUBSTITUTED" && minutes < referenceMinute){
+    return '<span class="sub-event sub-off">↓ ' + Math.max(1,Math.round(minutes)) + "′</span>";
+  }
+  if(!started && minutes > 0){
+    const onMinute = Math.max(1,Math.round(referenceMinute-minutes));
+    return '<span class="sub-event sub-on">↑ ' + onMinute + "′</span>";
+  }
+  return "";
+}
+
+function matchPlayerButton(row,match,side,index,total){
+  const player = row.player || {};
+  const stats = row.stats || {};
+  const pos = player.position || "MID";
+  const score = Number(row.fantasy_points || 0);
+  const scoreClass = score >= 60 ? "hot" : score >= 30 ? "warm" : "cool";
+  const xByPosition = side === "home"
+    ? {GK:7,DEF:20,MID:33,FWD:45}
+    : {GK:93,DEF:80,MID:67,FWD:55};
+  const x = xByPosition[pos] || (side === "home" ? 33 : 67);
+  const y = Math.round(((index+1)/(total+1))*88+6);
+  return '<button class="match-pitch-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '" style="--mx:' + x + '%;--my:' + y + '%">' +
+    matchSubstitutionLabel(row,match) +
+    '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
+    '<span class="match-score-chip ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
+    '<span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span>' +
+  '</button>';
+}
+
+function renderMatchTeamPlayers(rows,match,side){
+  const starters = rows.filter(row => Number((row.stats || {}).gameStarted || 0) > 0);
+  const groups = {GK:[],DEF:[],MID:[],FWD:[]};
+  starters.forEach(row => {
+    const pos = row.player?.position || "MID";
+    (groups[pos] || groups.MID).push(row);
+  });
+  Object.values(groups).forEach(group => group.sort((a,b) =>
+    Number((a.stats || {}).formationPlace ?? 99)-Number((b.stats || {}).formationPlace ?? 99)
+  ));
+  return Object.entries(groups).flatMap(([,group]) =>
+    group.map((row,index) => matchPlayerButton(row,match,side,index,group.length))
   ).join("");
+}
+
+function renderMatchBench(rows,match,side){
+  const bench = rows.filter(row => {
+    const stats = row.stats || {};
+    return Boolean(stats.onGameSheet) && Number(stats.gameStarted || 0) === 0;
+  });
+  bench.sort((a,b) => Number(b.minutes || 0)-Number(a.minutes || 0));
+  return bench.map(row => {
+    const player = row.player || {};
+    const score = Number(row.fantasy_points || 0);
+    const played = Number(row.minutes || 0) > 0;
+    return '<button class="match-bench-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '">' +
+      '<span class="match-bench-avatar">' + initials(player.name || "?") + '</span>' +
+      '<span><strong>' + escapeHtml(player.name || "Onbekend") + '</strong><small>' +
+        (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>') +
+      '</small></span>' +
+      '<span class="match-bench-score">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
+    '</button>';
+  }).join("") || '<div class="empty-state">Geen bankdata beschikbaar.</div>';
+}
+
+function renderMatchDetail(match,rows=[]){
+  const allRows = Array.isArray(rows) ? rows : [];
+  const homeRows = allRows.filter(row => (row.stats || {}).teamName === match.home || row.player?.club_name === match.home);
+  const awayRows = allRows.filter(row => (row.stats || {}).teamName === match.away || row.player?.club_name === match.away);
+
+  document.getElementById("matchDetail").innerHTML =
+    '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p><h2>' + escapeHtml(match.home) + ' <span>' + escapeHtml(String(match.homeScore)) + " – " + escapeHtml(String(match.awayScore)) + '</span> ' + escapeHtml(match.away) + '</h2><p>' + escapeHtml(match.date || "") + (match.status === "LIVE" ? ' · <strong class="live-text">LIVE</strong>' : "") + '</p></div></div>' +
+    '<div class="real-match-pitch"><div class="real-pitch-lines"><span class="real-half"></span><span class="real-circle"></span><span class="real-box left"></span><span class="real-box right"></span></div>' +
+      '<span class="team-pitch-label home">' + escapeHtml(match.home) + '</span><span class="team-pitch-label away">' + escapeHtml(match.away) + '</span>' +
+      renderMatchTeamPlayers(homeRows,match,"home") + renderMatchTeamPlayers(awayRows,match,"away") +
+    '</div>' +
+    '<section class="match-bench-section"><h3>Bank</h3><div class="match-benches"><div><h4>' + escapeHtml(match.home) + '</h4>' + renderMatchBench(homeRows,match,"home") + '</div><div><h4>' + escapeHtml(match.away) + '</h4>' + renderMatchBench(awayRows,match,"away") + '</div></div></section>';
+
+  const rowByPlayer = new Map(allRows.map(row => [String(row.player_id),row]));
+  document.querySelectorAll("#matchDetail [data-match-player]").forEach(button => button.addEventListener("click",() => {
+    const row = rowByPlayer.get(String(button.dataset.matchPlayer));
+    if(row) renderMatchPlayerDetail(match,row);
+  }));
+}
+
+const MATCH_STAT_LABELS = {
+  minutes:"Speelminuten",save:"Reddingen",cleanSheet:"Clean sheet",savesInsideBox:"Reddingen in strafschopgebied",
+  punches:"Punches",goalsConceded:"Tegendoelpunten",foulsMade:"Overtredingen gemaakt",foulsDrawn:"Overtredingen meegekregen",
+  yellow:"Gele kaarten",red:"Rode kaarten",goal:"Goals",assist:"Assists",successfulTackles:"Tackles gewonnen",
+  duelWon:"Duels gewonnen",duelLost:"Duels verloren",clearances:"Clearances",interceptions:"Intercepties",
+  possessionWon:"Bal gewonnen",possessionLost:"Bal verloren",successfulPass:"Geslaagde passes",
+  successfulLongPass:"Geslaagde lange passes",passMissed:"Gemiste passes",successfulDribble:"Geslaagde dribbels",
+  shotOnTarget:"Schoten op doel"
+};
+
+function renderMatchPlayerDetail(match,row){
+  const player = row.player || {};
+  const position = player.position || "MID";
+  const stats = {...(row.stats || {}),minutes:Number(row.minutes || 0)};
+  const weights = SCORING.rows[position] || {};
+  const orderedKeys = SCORING.columns.map(([key]) => key).filter(key => key !== "keyPass");
+  const breakdown = orderedKeys.map(key => {
+    const amount = Number(stats[key] || 0);
+    const weight = Number(weights[key] || 0);
+    const contribution = Math.round(amount*weight*100)/100;
+    return {key,amount,contribution};
+  }).filter(item => item.amount !== 0 || item.key === "minutes");
+
+  const rowsHtml = breakdown.map(item =>
+    '<div class="match-stat-line"><span>' + escapeHtml(MATCH_STAT_LABELS[item.key] || item.key) + ' <small>(' + item.amount + ')</small></span>' +
+    '<strong class="' + (item.contribution < 0 ? "negative":"positive") + '">' + scoreLabel(item.contribution) + ' pts</strong></div>'
+  ).join("");
+
+  const dialog = document.getElementById("matchPlayerDialog");
+  document.getElementById("matchPlayerDetail").innerHTML =
+    '<p class="eyebrow">WEDSTRIJDSTATISTIEKEN</p>' +
+    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2>' + escapeHtml(player.name || "Onbekend") + '</h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong>' + points(row.fantasy_points) + '</strong></div>' +
+    '<div class="match-stat-breakdown">' + rowsHtml + '</div>' +
+    '<div class="match-stat-total"><span>Totaal deze wedstrijd</span><strong>' + points(row.fantasy_points) + '</strong></div>';
+  if(!dialog.open) dialog.showModal();
 }
 
 function renderGameweekBalance(balanceRows=[]){
