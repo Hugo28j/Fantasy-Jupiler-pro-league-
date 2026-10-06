@@ -256,6 +256,8 @@ grant execute on function public.lock_gameweek(bigint) to service_role;
 
 
 
+drop function if exists public.public_manager_history(uuid);
+
 create or replace function public.public_manager_history(p_manager uuid)
 returns table(
   gameweek_number integer,
