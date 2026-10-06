@@ -7,6 +7,7 @@ on:
       - "supabase/functions/sync-jpl/index.ts"
       - "app.js"
       - "cloud.js"
+      - "data.js"
       - ".github/workflows/test-sorare-api.yml"
 
 jobs:
@@ -23,3 +24,4 @@ jobs:
         run: |
           node --check app.js
           node --check cloud.js
+          node --check data.js
