@@ -299,8 +299,8 @@ function renderPlayerProfile(player,matchRows=[]){
     const value = total(key);
     const weight = SCORING.rows[player.pos]?.[key];
     const contribution = weight == null ? 0 : Math.round(value * Number(weight) * 100) / 100;
-    return [label,value,contribution];
-  });
+    return [label,value,contribution,key,weight];
+  }).filter(([, , , , weight]) => weight != null);
   const matches = rows.slice().sort((a,b) => {
     const ad = a.fixtures?.kickoff || "";
     const bd = b.fixtures?.kickoff || "";
