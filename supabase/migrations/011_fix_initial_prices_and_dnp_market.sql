@@ -441,12 +441,12 @@ begin
         end;
 
         v_delta := case
-          when v_points <= 0 then -1.0
-          when v_ratio < 30 then -1.0
-          when v_ratio < 40 then -0.7
-          when v_ratio < 50 then -0.5
-          when v_ratio < 90 then -0.3
-          when v_ratio < 100 then 0.0
+          when v_points <= 0 then -2.0
+          when v_ratio < 30 then -2.0
+          when v_ratio < 40 then -1.0
+          when v_ratio < 70 then -0.7
+          when v_ratio < 90 then -0.5
+          when v_ratio < 100 then -0.3
           when v_ratio < 110 then 0.3
           when v_ratio < 120 then 0.5
           when v_ratio < 140 then 1.0
@@ -465,7 +465,7 @@ begin
         'priceDelta',v_delta,
         'priceAfter',v_after,
         'pricePerformancePct',v_ratio,
-        'priceModelVersion',2
+        'priceModelVersion',3
       ),
       updated_at=now()
       where fixture_id=r.fixture_id
