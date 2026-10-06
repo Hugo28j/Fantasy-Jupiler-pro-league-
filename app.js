@@ -534,10 +534,27 @@ function matchSubstitutionLabel(row,match){
 }
 
 const FORMATION_SIDE_ORDER = {
-  GK:[1],
-  DEF:[3,4,5,6,2],
-  MID:[11,8,4,10,7,2],
-  FWD:[11,9,10,7]
+  GK:{default:[1]},
+  DEF:{
+    3:[4,5,6],
+    4:[3,6,5,2],
+    5:[3,4,5,6,2],
+    default:[3,4,5,6,2]
+  },
+  MID:{
+    2:[4,8],
+    3:[8,4,7],
+    4:[11,8,4,7],
+    5:[11,8,4,7,2],
+    default:[11,8,4,10,7,2]
+  },
+  FWD:{
+    1:[9],
+    2:[9,10],
+    3:[11,9,10],
+    4:[11,9,10,7],
+    default:[11,9,10,7]
+  }
 };
 
 function matchFormationPlace(row){
@@ -548,9 +565,10 @@ function matchFormationPlace(row){
   return preferred > 0 ? preferred : 0;
 }
 
-function formationSideRank(row,position){
+function formationSideRank(row,position,total){
   const place = matchFormationPlace(row);
-  const order = FORMATION_SIDE_ORDER[position] || [];
+  const config = FORMATION_SIDE_ORDER[position] || {};
+  const order = config[total] || config.default || [];
   const rank = order.indexOf(place);
   if(rank >= 0) return rank;
   return 50 + String(row.player?.name || row.player_id || "").charCodeAt(0);
@@ -624,7 +642,7 @@ function renderMatchTeamPlayers(rows,match,side){
   return ["GK","DEF","MID","FWD"].flatMap(zone => {
     const group = groups[zone];
     group.sort((a,b) => {
-      const rankDiff = formationSideRank(a,zone)-formationSideRank(b,zone);
+      const rankDiff = formationSideRank(a,zone,group.length)-formationSideRank(b,zone,group.length);
       if(rankDiff) return rankDiff;
       return String(a.player?.name || "").localeCompare(String(b.player?.name || ""),"nl");
     });
