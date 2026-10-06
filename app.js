@@ -143,43 +143,84 @@ function renderRequirements(){
 function lineupPlayerHtml(p,isBench){
   const benchLabel = p.pos === "GK" ? "Reservekeeper" : "Reserve veldspeler";
   const buttonText = isBench ? "Naar basis" : "Op bank";
-  return '<div class="lineup-player ' + (isBench ? "benched":"") + '">' +
-    '<div class="player-avatar">' + initials(p.name) + '</div>' +
-    '<div class="info"><button class="player-name-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button><small>' + escapeHtml(p.club) + ' · ' + (isBench ? benchLabel : POSITION_LABELS[p.pos]) + '</small></div>' +
-    '<span class="role-badge role-' + p.pos + '">' + p.pos + '</span>' +
-    '<div class="lineup-actions"><button class="icon-btn bench-toggle" data-id="' + p.id + '">' + buttonText + '</button></div>' +
-  '</div>';
+  const score = Number(p.score || 0);
+  const scoreClass = score >= 60 ? "hot" : score >= 30 ? "warm" : "cool";
+  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + '">' +
+    '<button class="sorare-player-main player-name-link" data-player-id="' + escapeHtml(p.id) + '" type="button">' +
+      '<span class="sorare-avatar role-ring-' + p.pos + '">' + initials(p.name) + '</span>' +
+      '<span class="sorare-score ' + scoreClass + '">' + score.toFixed(0) + '</span>' +
+      '<span class="sorare-player-name">' + escapeHtml(p.name) + '</span>' +
+      '<span class="sorare-player-meta">' + escapeHtml(p.club) + ' · ' + (isBench ? benchLabel : POSITION_LABELS[p.pos]) + '</span>' +
+    '</button>' +
+    '<div class="sorare-player-footer">' +
+      '<span class="role-badge role-' + p.pos + '">' + p.pos + '</span>' +
+      '<span class="sorare-price">' + money(p.price) + '</span>' +
+      '<button class="bench-toggle mini-action" data-id="' + escapeHtml(p.id) + '" type="button">' + buttonText + '</button>' +
+    '</div>' +
+  '</article>';
+}
+
+function pitchRowHtml(position,players){
+  const rowClass = "pitch-row pitch-row-" + position.toLowerCase();
+  if(!players.length){
+    return '<div class="' + rowClass + '"><div class="pitch-slot-empty"><span>' + POSITION_LABELS[position] + '</span></div></div>';
+  }
+  return '<div class="' + rowClass + '">' + players.map(p =>
+    '<div class="pitch-player-wrap">' + lineupPlayerHtml(p,false) + '</div>'
+  ).join("") + '</div>';
+}
+
+function renderPitch(players){
+  const groups = {GK:[],DEF:[],MID:[],FWD:[]};
+  players.forEach(p => { if(groups[p.pos]) groups[p.pos].push(p); });
+  return '<div class="pitch-markings" aria-hidden="true"><span class="pitch-halfway"></span><span class="pitch-circle"></span><span class="pitch-box top"></span><span class="pitch-box bottom"></span><span class="pitch-goal top"></span><span class="pitch-goal bottom"></span></div>' +
+    '<div class="pitch-formation">' +
+      pitchRowHtml("FWD",groups.FWD) +
+      pitchRowHtml("MID",groups.MID) +
+      pitchRowHtml("DEF",groups.DEF) +
+      pitchRowHtml("GK",groups.GK) +
+    '</div>';
 }
 
 function renderTeam(){
   const starting = document.getElementById("startingXI");
   const bench = document.getElementById("bench");
   const auto = document.getElementById("autoLineupBtn");
+  const lineupTitle = document.getElementById("lineupTitle");
+  const lineupPill = document.getElementById("lineupPill");
   auto.disabled = !isSquadComplete();
 
   if(!state.squad.length){
-    starting.className = "pitch-list empty-state";
-    starting.textContent = "Koop spelers op de transfermarkt om je team te bouwen.";
-    bench.className = "bench-list empty-state";
-    bench.textContent = "Je bank wordt zichtbaar zodra je spelers hebt gekocht.";
+    starting.className = "fantasy-pitch pitch-empty";
+    starting.innerHTML = '<div class="pitch-markings" aria-hidden="true"><span class="pitch-halfway"></span><span class="pitch-circle"></span><span class="pitch-box top"></span><span class="pitch-box bottom"></span><span class="pitch-goal top"></span><span class="pitch-goal bottom"></span></div><div class="pitch-empty-message"><strong>Bouw je ploeg</strong><span>Koop spelers op de transfermarkt en ze verschijnen hier op het veld.</span></div>';
+    bench.className = "sorare-bench empty-state";
+    bench.textContent = "Je bank verschijnt hier zodra je selectie volledig is.";
+    if(lineupTitle) lineupTitle.textContent = "Basis · 6 spelers";
+    if(lineupPill) lineupPill.textContent = "1 GK + 5 veldspelers";
     return;
   }
 
   if(!isSquadComplete()){
-    starting.className = "pitch-list";
-    starting.innerHTML = squadPlayers().map(p => lineupPlayerHtml(p,false)).join("");
-    bench.className = "bench-list empty-state";
-    bench.textContent = "Voltooi eerst de 2-2-2-2 selectie. Daarna kies je je bank.";
+    starting.className = "fantasy-pitch";
+    starting.innerHTML = renderPitch(squadPlayers());
+    bench.className = "sorare-bench empty-state";
+    bench.textContent = "Voltooi eerst de 2-2-2-2 selectie. Daarna kies je 1 reservekeeper en 1 veldreserve.";
+    if(lineupTitle) lineupTitle.textContent = "Selectie · " + state.squad.length + " / 8";
+    if(lineupPill) lineupPill.textContent = "Nog bezig met bouwen";
   }else{
-    starting.className = "pitch-list";
     const starters = lineupPlayers();
-    starting.innerHTML = starters.length ? starters.map(p => lineupPlayerHtml(p,false)).join("") : '<div class="empty-state">Kies je bankspelers.</div>';
-    bench.className = "bench-list";
+    starting.className = "fantasy-pitch";
+    starting.innerHTML = renderPitch(starters);
+    bench.className = "sorare-bench";
     const bp = benchPlayers();
-    bench.innerHTML = bp.length ? bp.map(p => lineupPlayerHtml(p,true)).join("") : '<div class="empty-state">Kies één keeper en één veldspeler voor de bank.</div>';
+    bench.innerHTML = bp.length
+      ? bp.map(p => lineupPlayerHtml(p,true)).join("")
+      : '<div class="empty-state bench-empty">Kies één keeper en één veldspeler voor de bank.</div>';
+    if(lineupTitle) lineupTitle.textContent = "Basis · " + starters.length + " spelers";
+    if(lineupPill) lineupPill.textContent = isLineupComplete() ? "Opstelling klaar ✓" : "Kies nog je bank";
   }
 
-  document.querySelectorAll(".bench-toggle").forEach(btn => btn.addEventListener("click", () => setBench(btn.dataset.id)));
+  document.querySelectorAll("#team .bench-toggle").forEach(btn => btn.addEventListener("click", () => setBench(btn.dataset.id)));
   document.querySelectorAll("#team .player-name-link").forEach(btn => btn.addEventListener("click", () => openPlayerProfile(btn.dataset.playerId)));
 }
 
