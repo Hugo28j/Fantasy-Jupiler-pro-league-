@@ -10,16 +10,15 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Query smaller Sorare football calls
+      - name: Test JPL discovery and batched stats
         shell: python
         run: |
           import json, urllib.request, urllib.error
 
           GRAPHQL = "https://api.sorare.com/graphql"
 
-          def gql(name, query):
-              print(f"\n=== {name} ===")
-              payload=json.dumps({"query":query}).encode()
+          def gql(name, query, variables=None):
+              payload=json.dumps({"query":query,"variables":variables or {}}).encode()
               req=urllib.request.Request(GRAPHQL,data=payload,headers={
                   "content-type":"application/json",
                   "User-Agent":"Fantasy-JPL/1.0"
@@ -27,85 +26,119 @@ jobs:
               try:
                   with urllib.request.urlopen(req,timeout=60) as r:
                       raw=r.read().decode("utf-8")
-                      print("HTTP",r.status)
+                      status=r.status
               except urllib.error.HTTPError as e:
                   raw=e.read().decode("utf-8",errors="replace")
-                  print("HTTP",e.code)
-              print(raw[:40000])
+                  status=e.code
+              print(f"\n=== {name} HTTP {status} ===")
+              print(raw[:50000])
+              try: return json.loads(raw)
+              except: return {}
 
-          gql("CLUB_BRUGGE_PLAYERS", """
+          club = gql("CLUB_BRUGGE", """
           query {
             football {
-              club(slug: "club-brugge") {
+              club(slug: "club-brugge-brugge") {
                 id
                 name
                 slug
-                domesticLeague {
-                  id
-                  name
-                  slug
-                  openForGameStats
-                }
+                domesticLeague { id name slug openForGameStats }
                 activePlayers(first: 50) {
-                  nodes {
-                    id
-                    slug
-                    displayName
-                    optaId
-                  }
+                  nodes { id slug displayName optaId }
+                  pageInfo { hasNextPage endCursor }
                 }
               }
             }
           }
           """)
 
-          gql("HANS_STATS", """
-          query {
-            anyPlayer(slug: "hans-vanaken") {
-              ... on Player {
-                id
-                slug
-                displayName
-                activeClub {
-                  id
-                  name
-                  slug
-                }
-                gameStats(last: 5) {
-                  id
-                  minsPlayed
-                  saves
-                  savedIbox
-                  punches
-                  cleanSheet
-                  goalsConceded
-                  fouls
-                  wasFouled
-                  yellowCard
-                  redCard
-                  goals
-                  goalAssist
-                  wonTackle
-                  duelWon
-                  duelLost
-                  totalClearance
-                  interceptionWon
-                  possWon
-                  possLostCtrl
-                  accuratePass
-                  accurateLongBalls
-                  missedPass
-                  wonContest
-                  ontargetScoringAtt
-                  footballGame {
+          c=((club.get("data") or {}).get("football") or {}).get("club") or {}
+          league=c.get("domesticLeague") or {}
+          players=((c.get("activePlayers") or {}).get("nodes") or [])
+          print("CLUB_PLAYER_COUNT",len(players))
+          print("LEAGUE",league)
+          slugs=[p.get("slug") for p in players if p.get("slug")][:4]
+          print("BATCH_SLUGS",slugs)
+
+          if league.get("slug"):
+              gql("JPL", """
+              query Jpl($slug: String!) {
+                football {
+                  competition(slug: $slug) {
                     id
-                    date
-                    statusTyped
-                    homeScore
-                    awayScore
+                    name
+                    slug
+                    openForGameStats
+                    teams(first: 30) {
+                      nodes {
+                        __typename
+                        ... on Club { id name slug }
+                      }
+                      pageInfo { hasNextPage endCursor }
+                    }
+                    pastGames(first: 12) {
+                      nodes {
+                        id
+                        date
+                        statusTyped
+                        homeScore
+                        awayScore
+                        homeTeam { __typename ... on Club { id name slug } }
+                        awayTeam { __typename ... on Club { id name slug } }
+                      }
+                    }
+                    futureGames(first: 12) {
+                      nodes {
+                        id
+                        date
+                        statusTyped
+                        homeTeam { __typename ... on Club { id name slug } }
+                        awayTeam { __typename ... on Club { id name slug } }
+                      }
+                    }
                   }
                 }
               }
-            }
-          }
-          """)
+              """,{"slug":league["slug"]})
+
+          if slugs:
+              gql("BATCH_PLAYER_STATS", """
+              query Batch($slugs: [String!]!) {
+                players(slugs: $slugs) {
+                  __typename
+                  ... on Player {
+                    id
+                    slug
+                    displayName
+                    gameStats(last: 2) {
+                      id
+                      minsPlayed
+                      saves
+                      savedIbox
+                      punches
+                      cleanSheet
+                      goalsConceded
+                      fouls
+                      wasFouled
+                      yellowCard
+                      redCard
+                      goals
+                      goalAssist
+                      wonTackle
+                      duelWon
+                      duelLost
+                      totalClearance
+                      interceptionWon
+                      possWon
+                      possLostCtrl
+                      accuratePass
+                      accurateLongBalls
+                      missedPass
+                      wonContest
+                      ontargetScoringAtt
+                      footballGame { id date statusTyped }
+                    }
+                  }
+                }
+              }
+              """,{"slugs":slugs})
