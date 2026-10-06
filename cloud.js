@@ -249,22 +249,25 @@
     const {data,error} = await cloud.client
       .from("fixtures")
       .select("id,kickoff,status,home_team,away_team,home_score,away_score,gameweeks(number)")
-      .in("status",["FT","LIVE"])
-      .order("kickoff",{ascending:false})
-      .limit(120);
+      .order("kickoff",{ascending:true})
+      .limit(400);
     if(error) throw error;
     if(!data || !data.length) return;
     const date = new Intl.DateTimeFormat("nl-BE",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
-    MATCHES.splice(0,MATCHES.length,...data.map(f => ({
-      id:f.id,
-      kickoff:f.kickoff,
-      status:f.status,
-      date:date.format(new Date(f.kickoff)),
-      week:"Speeldag " + (f.gameweeks ? f.gameweeks.number : "?"),
-      home:f.home_team,away:f.away_team,
-      homeScore:f.home_score == null ? "–" : f.home_score,
-      awayScore:f.away_score == null ? "–" : f.away_score
-    })));
+    MATCHES.splice(0,MATCHES.length,...data.map(f => {
+      const gameweek = f.gameweeks ? Number(f.gameweeks.number) : null;
+      return {
+        id:f.id,
+        kickoff:f.kickoff,
+        status:f.status,
+        date:date.format(new Date(f.kickoff)),
+        gameweek,
+        week:"Speeldag " + (gameweek || "?"),
+        home:f.home_team,away:f.away_team,
+        homeScore:f.home_score == null ? "–" : f.home_score,
+        awayScore:f.away_score == null ? "–" : f.away_score
+      };
+    }));
     renderMatches();
   }
 
