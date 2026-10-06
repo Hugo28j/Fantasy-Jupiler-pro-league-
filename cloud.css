@@ -6,6 +6,16 @@
 .auth-dialog form{padding:22px;display:grid;gap:14px}
 .auth-dialog h2{margin:0}.auth-dialog p{margin:0;color:var(--muted);line-height:1.45}
 .auth-actions{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap}
+
+.google-auth-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid rgba(255,255,255,.18);background:#fff;color:#1f2937;border-radius:11px;padding:11px 14px;font:inherit;font-weight:850;cursor:pointer;transition:transform .12s ease,border-color .12s ease,opacity .12s ease}
+.google-auth-btn:hover{transform:translateY(-1px);border-color:#fff}
+.google-auth-btn:disabled{opacity:.62;cursor:wait;transform:none}
+.google-auth-btn.loading span:last-child{font-size:0}
+.google-auth-btn.loading span:last-child::after{content:"Google openen…";font-size:14px}
+.google-g{width:23px;height:23px;display:grid;place-items:center;border-radius:50%;font-weight:950;font-family:Arial,sans-serif;color:#4285f4;background:#fff;border:1px solid #dadce0}
+.auth-divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.auth-divider::before,.auth-divider::after{content:"";height:1px;background:rgba(255,255,255,.1);flex:1}
+.auth-divider span{white-space:nowrap}
 .auth-error{min-height:18px;color:#ff9eaa;font-size:13px}
 .backend-banner{margin:0 auto 18px;padding:12px 14px;border:1px solid rgba(246,196,83,.35);border-radius:12px;background:rgba(246,196,83,.08);color:#f7d985;font-size:13px;line-height:1.45}
 .deadline-card{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:0 0 16px;padding:12px 14px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}
