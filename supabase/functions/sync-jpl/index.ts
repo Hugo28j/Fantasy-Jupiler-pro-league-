@@ -826,19 +826,57 @@ Deno.serve(async request => {
     // bijgewerkt zodra de cron opnieuw draait.
     const {data:pending,error:pendingError} = await db
       .from("fixtures")
-      .select("id,gameweek_id,kickoff")
+      .select("id,gameweek_id,kickoff,status")
       .in("gameweek_id",seasonGameweekIds)
       .eq("stats_processed",false)
       .eq("status","FT")
       .order("kickoff",{ascending:true});
     if(pendingError) throw pendingError;
 
+    const {data:liveFixtures,error:liveError} = await db
+      .from("fixtures")
+      .select("id,gameweek_id,kickoff,status")
+      .in("gameweek_id",seasonGameweekIds)
+      .eq("status","LIVE")
+      .order("kickoff",{ascending:true});
+    if(liveError) throw liveError;
+
+    // De eerste stats-import bevatte nog geen opstellingsmetadata. Controleer één rij
+    // van de laatste afgewerkte speeldag en refresh die speeldag exact één keer indien nodig.
+    const latestFixtureIds = latestCompleted.games.map((g:any)=>fixtureDbId(String(g.id)));
+    let needsLineupBackfill = false;
+    if(latestFixtureIds.length){
+      const {data:sampleMeta,error:sampleMetaError} = await db
+        .from("player_match_stats")
+        .select("stats")
+        .eq("fixture_id",latestFixtureIds[0])
+        .limit(1);
+      if(sampleMetaError) throw sampleMetaError;
+      const sampleStats = sampleMeta?.[0]?.stats || {};
+      needsLineupBackfill = sampleMeta?.length > 0 && sampleStats.gameStarted == null;
+    }
+
+    const targetById = new Map<string,any>();
+    for(const fixture of pending || []) targetById.set(String(fixture.id),fixture);
+    for(const fixture of liveFixtures || []) targetById.set(String(fixture.id),fixture);
+    if(needsLineupBackfill){
+      for(const game of latestCompleted.games){
+        const id = fixtureDbId(String(game.id));
+        targetById.set(id,{
+          id,
+          gameweek_id:latestCompletedId,
+          kickoff:game.date,
+          status:"FT"
+        });
+      }
+    }
+
     let processedFixtures = 0;
     let importedPlayerRows = 0;
     const incompleteFixtures:string[] = [];
     const touchedGameweeks = new Set<number>();
 
-    if((pending || []).length){
+    if(targetById.size){
       const {data:activePlayers,error:activePlayersError} = await db
         .from("players")
         .select("id,name,position")
@@ -855,7 +893,6 @@ Deno.serve(async request => {
       }
 
       const positionByPlayerId = new Map((activePlayers || []).map((p:any)=>[String(p.id),String(p.position)]));
-      const pendingById = new Map((pending || []).map((f:any)=>[String(f.id),f]));
       const statRows:any[] = [];
       const rowCountByFixture = new Map<string,number>();
 
@@ -871,6 +908,11 @@ Deno.serve(async request => {
                 gameStats(last:${PLAYER_STATS_LAST},lowCoverage:true) {
                   id
                   minsPlayed
+                  fieldStatus
+                  formationPlace
+                  gameStarted
+                  onGameSheet
+                  playedInGame
                   saves
                   savedIbox
                   punches
@@ -894,9 +936,14 @@ Deno.serve(async request => {
                   missedPass
                   wonContest
                   ontargetScoringAtt
+                  anyTeam {
+                    __typename
+                    ... on Club { id name slug }
+                  }
                   footballGame {
                     id
                     date
+                    minute
                     statusTyped
                     competition { slug }
                   }
@@ -915,10 +962,13 @@ Deno.serve(async request => {
           for(const raw of player.gameStats || []){
             const sourceGame = raw.footballGame;
             if(sourceGame?.competition?.slug !== COMPETITION_SLUG) continue;
-            if(String(sourceGame?.statusTyped).toLowerCase() !== "played") continue;
 
             const fixtureId = fixtureDbId(String(sourceGame.id));
-            if(!pendingById.has(fixtureId)) continue;
+            const targetFixture = targetById.get(fixtureId);
+            if(!targetFixture) continue;
+
+            const sourceStatus = String(sourceGame?.statusTyped || "").toLowerCase();
+            if(!["played","playing","live"].includes(sourceStatus)) continue;
 
             const stats = mapSorareStats(raw);
             statRows.push({
@@ -929,7 +979,16 @@ Deno.serve(async request => {
                 ...stats,
                 provider:"sorare",
                 sorareStatId:raw.id,
-                sorareGameId:sourceGame.id
+                sorareGameId:sourceGame.id,
+                gameMinute:num(sourceGame.minute),
+                gameStarted:num(raw.gameStarted),
+                formationPlace:raw.formationPlace == null ? null : num(raw.formationPlace),
+                fieldStatus:String(raw.fieldStatus || "UNKNOWN"),
+                onGameSheet:Boolean(raw.onGameSheet),
+                playedInGame:Boolean(raw.playedInGame),
+                teamId:raw.anyTeam?.id || null,
+                teamName:raw.anyTeam?.name || null,
+                teamSlug:raw.anyTeam?.slug || null
               },
               fantasy_points:fantasyScore(position,stats),
               updated_at:new Date().toISOString()
@@ -945,11 +1004,10 @@ Deno.serve(async request => {
       }
       importedPlayerRows = statRows.length;
 
+      // Alleen afgewerkte, nog niet verwerkte fixtures worden definitief afgevinkt.
       for(const fixture of pending || []){
         const id = String(fixture.id);
         const count = rowCountByFixture.get(id) || 0;
-        // Een volledige wedstrijd hoort minstens de 22 starters te bevatten.
-        // We laten een fixture bewust pending bij te weinig Sorare-rijen.
         if(count < 18){
           incompleteFixtures.push(id);
           continue;
@@ -994,6 +1052,8 @@ Deno.serve(async request => {
       playerRefresh:playersNeedRefresh,
       playersImported:importedPlayers,
       pendingFixtures:(pending || []).length,
+      liveFixtures:(liveFixtures || []).length,
+      lineupBackfill:needsLineupBackfill,
       processedFixtures,
       incompleteFixtures,
       importedPlayerRows,
