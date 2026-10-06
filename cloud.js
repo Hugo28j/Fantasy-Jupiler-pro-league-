@@ -9,7 +9,10 @@
     locked: false,
     deadline: null,
     saveTimer: null,
-    loadingTeam: false
+    loadingTeam: false,
+    currentGameweekId: null,
+    currentGameweekNumber: null,
+    liveScoreTimer: null
   };
 
   const original = {
@@ -490,6 +493,8 @@
     if(error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     cloud.locked = Boolean(row && row.locked);
+    cloud.currentGameweekId = row?.gameweek_id ?? null;
+    cloud.currentGameweekNumber = row?.gameweek_number ?? null;
     cloud.deadline = row && row.lock_at ? new Date(row.lock_at) : null;
     const card = document.getElementById("deadlineCard");
     card.classList.toggle("is-locked",cloud.locked);
@@ -502,6 +507,51 @@
       document.getElementById("deadlineText").textContent = "Opstelling sluit op " + formatDateTime(cloud.deadline);
     }
     updateEditability();
+  }
+
+  async function loadCurrentGameweekPlayerScores(){
+    const active = Boolean(cloud.locked && cloud.currentGameweekId);
+
+    window.FANTASY_LIVE_SCORE_MODE = active;
+    if(!active){
+      window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
+      renderTeam();
+      return;
+    }
+
+    const {data,error} = await cloud.client
+      .from("player_match_stats")
+      .select("player_id,fantasy_points,fixtures!inner(gameweek_id,status)")
+      .eq("fixtures.gameweek_id",cloud.currentGameweekId)
+      .in("fixtures.status",["LIVE","FT"])
+      .limit(1000);
+
+    if(error){
+      console.warn("Speeldagscore kon niet worden geladen",error.message);
+      return;
+    }
+
+    const scores = {};
+    for(const row of data || []){
+      const id = String(row.player_id);
+      scores[id] = Number(scores[id] || 0) + Number(row.fantasy_points || 0);
+    }
+
+    window.FANTASY_GAMEWEEK_PLAYER_SCORES = scores;
+    renderTeam();
+  }
+
+  function startLiveScorePolling(){
+    clearInterval(cloud.liveScoreTimer);
+    cloud.liveScoreTimer = setInterval(async () => {
+      if(!cloud.enabled || !cloud.user) return;
+      try{
+        await loadDeadline();
+        await loadCurrentGameweekPlayerScores();
+      }catch(error){
+        console.warn("Live speeldagscore verversen mislukt",error);
+      }
+    },60000);
   }
 
   async function loadTransferStatus(){
@@ -539,8 +589,10 @@
       setStatus("Gegevens laden…","");
       await loadPlayers();
       await Promise.all([loadFixtures(),loadDeadline(),loadTransferStatus(),loadGameweekBalance()]);
+      await loadCurrentGameweekPlayerScores();
       await loadTeam();
       await loadLeaderboard();
+      startLiveScorePolling();
       if(!cloud.locked) setStatus("Online opgeslagen","online");
     }catch(error){
       console.error(error);
@@ -558,6 +610,11 @@
     }else{
       cloud.locked = false;
       cloud.totalPoints = null;
+      cloud.currentGameweekId = null;
+      cloud.currentGameweekNumber = null;
+      clearInterval(cloud.liveScoreTimer);
+      window.FANTASY_LIVE_SCORE_MODE = false;
+      window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
       button.textContent = "Inloggen";
       setStatus("Niet ingelogd","");
       document.getElementById("deadlineText").textContent = "Log in om de actuele deadline te zien";
