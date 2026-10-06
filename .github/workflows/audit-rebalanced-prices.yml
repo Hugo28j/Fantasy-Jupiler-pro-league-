@@ -30,15 +30,11 @@ jobs:
             "order":"name.asc"
           })
 
-          bases=get("market_initial_prices",{
-            "select":"player_id,initial_price,original_initial_price,source"
-          })
-
           rows=[]
           start=0
           while True:
               page=get("player_match_stats",{
-                "select":"player_id,minutes,fantasy_points,fixtures(status)"
+                "select":"player_id,minutes,fantasy_points,stats,fixtures(status,kickoff)"
               },f"{start}-{start+999}")
               rows.extend(page)
               if len(page)<1000: break
@@ -53,7 +49,6 @@ jobs:
               agg[str(r["player_id"])][0]+=float(r.get("minutes") or 0)
               agg[str(r["player_id"])][1]+=float(r.get("fantasy_points") or 0)
 
-          base_by={str(b["player_id"]):b for b in bases}
           hidden=[]
           changed=[]
           projected=[]
@@ -61,11 +56,19 @@ jobs:
               mins,pts=agg[str(p["id"])]
               if p["position"]!="GK" and mins<=0:
                   hidden.append((p["name"],p["club_name"],p["position"]))
-              b=base_by.get(str(p["id"])) or {}
-              orig=b.get("original_initial_price")
-              if orig is None: orig=b.get("initial_price")
-              if orig is None: orig=p.get("price") or 1
-              orig=float(orig)
+              hist=[r for r in rows if str(r["player_id"])==str(p["id"])]
+              hist.sort(key=lambda r: str((r.get("fixtures") or {}).get("kickoff") or ""))
+              orig=None
+              for rr in hist:
+                  raw=(rr.get("stats") or {}).get("marketBasePrice")
+                  if raw is not None:
+                      try:
+                          orig=float(raw)
+                          break
+                      except:
+                          pass
+              if orig is None:
+                  orig=float(p.get("price") or 1)
               if mins<=0:
                   target=orig
                   p90=None
