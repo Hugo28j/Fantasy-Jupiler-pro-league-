@@ -4,33 +4,116 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "supabase/functions/sync-jpl/index.ts"
       - ".github/workflows/test-sorare-api.yml"
 
 jobs:
-  inspect:
+  probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Sorare fixture schema
+      - name: Test round reconstruction
         shell: python
         run: |
-          import urllib.request
-          url="https://api.sorare.com/graphql/schema"
-          req=urllib.request.Request(url,headers={"User-Agent":"Fantasy-JPL/1.0"})
-          with urllib.request.urlopen(req,timeout=60) as r:
-              schema=r.read().decode("utf-8",errors="replace")
-          def block(name):
-              marker=f"type {name} "
-              i=schema.find(marker)
-              if i<0:
-                  marker=f"type {name} {{"
-                  i=schema.find(marker)
-              print(f"\n=== {name} ===")
-              if i<0:
-                  print("NOT_FOUND")
-                  return
-              j=schema.find("\ntype ",i+5)
-              if j<0: j=min(len(schema),i+22000)
-              print(schema[i:j][:22000])
-          for name in ["So5Fixture","GameWeek","Game","PlayerGameStats"]:
-              block(name)
+          import json, urllib.request, datetime
+
+          URL="https://api.sorare.com/graphql"
+          COMP="jupiler-pro-league"
+          START=datetime.datetime(2026,7,1,tzinfo=datetime.timezone.utc)
+          END=datetime.datetime(2027,7,1,tzinfo=datetime.timezone.utc)
+
+          def gql(q,variables=None):
+              req=urllib.request.Request(
+                  URL,
+                  data=json.dumps({"query":q,"variables":variables or {}}).encode(),
+                  headers={"content-type":"application/json","User-Agent":"Fantasy-JPL/1.0"},
+                  method="POST"
+              )
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  body=json.loads(r.read().decode())
+              if body.get("errors"): raise RuntimeError(body["errors"])
+              return body["data"]
+
+          def fetch(field):
+              out=[]; after=None
+              for _ in range(20):
+                  q=f"""
+                  query Games($after:String) {{
+                    football {{
+                      competition(slug:"{COMP}") {{
+                        {field}(first:50,after:$after) {{
+                          nodes {{
+                            id date statusTyped
+                            homeTeam {{ __typename ... on Club {{ id name slug }} }}
+                            awayTeam {{ __typename ... on Club {{ id name slug }} }}
+                          }}
+                          pageInfo {{ hasNextPage endCursor }}
+                        }}
+                      }}
+                    }}
+                  }}
+                  """
+                  d=gql(q,{"after":after})
+                  c=d["football"]["competition"][field]
+                  out.extend(c["nodes"])
+                  if not c["pageInfo"]["hasNextPage"]: break
+                  after=c["pageInfo"]["endCursor"]
+              return out
+
+          games={}
+          for g in fetch("pastGames")+fetch("futureGames"):
+              dt=datetime.datetime.fromisoformat(g["date"].replace("Z","+00:00"))
+              if START <= dt < END:
+                  games[g["id"]]=g
+          games=list(games.values())
+          games.sort(key=lambda g:g["date"])
+          print("GAMES",len(games))
+
+          teams=sorted({g["homeTeam"]["id"] for g in games}|{g["awayTeam"]["id"] for g in games})
+          print("TEAMS",len(teams))
+
+          def tid(g,side): return g[side]["id"]
+          def gdate(g): return datetime.datetime.fromisoformat(g["date"].replace("Z","+00:00"))
+
+          unassigned={g["id"]:g for g in games}
+          rounds=[]
+
+          for round_no in range(1,35):
+              remaining=sorted(unassigned.values(),key=gdate)
+              if not remaining: break
+              seed=gdate(remaining[0])
+              chosen=[]
+              used=set()
+
+              # First take the normal date cluster (Friday-Monday / midweek).
+              for g in remaining:
+                  if (gdate(g)-seed).total_seconds() > 4.5*86400:
+                      break
+                  h,a=tid(g,"homeTeam"),tid(g,"awayTeam")
+                  if h in used or a in used: continue
+                  chosen.append(g); used|={h,a}
+                  if len(chosen)==9: break
+
+              # Backfill postponed games between the teams still missing from this round.
+              while len(chosen)<9:
+                  missing=set(teams)-used
+                  candidates=[]
+                  for g in unassigned.values():
+                      if g["id"] in {x["id"] for x in chosen}: continue
+                      h,a=tid(g,"homeTeam"),tid(g,"awayTeam")
+                      if h in missing and a in missing:
+                          distance=abs((gdate(g)-seed).total_seconds())
+                          candidates.append((distance,gdate(g),g))
+                  if not candidates: break
+                  candidates.sort(key=lambda x:(x[0],x[1]))
+                  g=candidates[0][2]
+                  chosen.append(g)
+                  used|={tid(g,"homeTeam"),tid(g,"awayTeam")}
+
+              print("ROUND",round_no,"N",len(chosen),"UNIQUE",len(used),"SEED",seed.date(),
+                    "DATES",[gdate(g).date().isoformat() for g in chosen])
+              if len(chosen)!=9 or len(used)!=18:
+                  print("FAILED_AT",round_no)
+                  break
+              for g in chosen: unassigned.pop(g["id"],None)
+              rounds.append(chosen)
+
+          print("ROUNDS",len(rounds),"UNASSIGNED",len(unassigned))
