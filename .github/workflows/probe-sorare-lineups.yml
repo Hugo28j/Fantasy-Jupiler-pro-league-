@@ -1,0 +1,32 @@
+name: Probe Sorare lineups
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/probe-sorare-lineups.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect Sorare lineup/substitution schema
+        shell: python
+        run: |
+          import urllib.request
+          url="https://api.sorare.com/graphql/schema"
+          req=urllib.request.Request(url,headers={"User-Agent":"Fantasy-JPL/1.0"})
+          with urllib.request.urlopen(req,timeout=60) as r:
+              schema=r.read().decode("utf-8",errors="replace")
+          def block(name):
+              marker=f"type {name} "
+              i=schema.find(marker)
+              if i<0: i=schema.find(f"type {name} {{")
+              print(f"\n=== {name} ===")
+              if i<0:
+                  print("NOT_FOUND"); return
+              j=schema.find("\ntype ",i+5)
+              if j<0: j=min(len(schema),i+30000)
+              print(schema[i:j][:30000])
+          for name in ["Game","PlayerGameStats","FootballPlayer","Player"]:
+              block(name)
