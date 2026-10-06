@@ -528,3 +528,58 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   color:var(--muted);
   font-size:10px;
 }
+
+/* Captain selector */
+.sorare-player{position:relative}
+.captain-toggle{
+  position:absolute;
+  right:2px;
+  top:2px;
+  z-index:6;
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,.3);
+  background:#6f7d87;
+  color:#fff;
+  font-size:12px;
+  font-weight:950;
+  display:grid;
+  place-items:center;
+  box-shadow:0 3px 10px rgba(0,0,0,.28);
+}
+.captain-toggle:hover{transform:scale(1.06);border-color:#ffe36b}
+.captain-toggle.selected{
+  background:#f3d13f;
+  border-color:#fff0a0;
+  color:#241b00;
+  box-shadow:0 0 0 3px rgba(243,209,63,.2),0 4px 12px rgba(0,0,0,.3);
+}
+.history-captain{
+  display:inline-grid;
+  place-items:center;
+  width:17px;height:17px;
+  border-radius:50%;
+  background:#f3d13f;
+  color:#241b00;
+  font-size:9px;
+  margin-left:4px;
+}
+
+/* Eerste selectie: alleen transfermarkt beschikbaar */
+.tab.setup-locked{opacity:.36}
+.tab.setup-locked::after{content:" 🔒";font-size:10px}
+.onboarding-dialog{
+  width:min(620px,calc(100% - 28px));
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:0;
+  background:#0d1d2b;
+  color:var(--text);
+  box-shadow:var(--shadow);
+}
+.onboarding-dialog::backdrop{background:rgba(0,0,0,.78);backdrop-filter:blur(5px)}
+.onboarding-shell{padding:28px}
+.onboarding-shell h2{font-size:30px;margin:6px 0 15px}
+.onboarding-shell p{color:#c6d5df;line-height:1.6;margin:10px 0}
+.onboarding-shell .primary-btn{width:100%;margin-top:12px;padding:13px}
