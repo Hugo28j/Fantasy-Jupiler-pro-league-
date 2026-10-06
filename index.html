@@ -47,21 +47,30 @@
 
       <div class="squad-requirements" id="requirements"></div>
 
-      <div class="lineup-grid">
-        <section class="lineup-card">
+      <div class="lineup-grid sorare-lineup-layout">
+        <section class="lineup-card pitch-card">
           <div class="card-title-row">
-            <h3>Basis · 6 spelers</h3>
-            <span class="pill">1 GK + 5 veldspelers</span>
+            <div>
+              <p class="eyebrow">OPSTELLING</p>
+              <h3 id="lineupTitle">Basis · 6 spelers</h3>
+            </div>
+            <span id="lineupPill" class="pill">1 GK + 5 veldspelers</span>
           </div>
-          <div id="startingXI" class="pitch-list empty-state">Koop spelers op de transfermarkt om je team te bouwen.</div>
+          <div id="startingXI" class="fantasy-pitch pitch-empty">
+            <div class="pitch-empty-message">Koop spelers op de transfermarkt om je team te bouwen.</div>
+          </div>
         </section>
-        <section class="lineup-card">
+
+        <section class="lineup-card bench-card">
           <div class="card-title-row">
-            <h3>Bank · 2 spelers</h3>
+            <div>
+              <p class="eyebrow">RESERVES</p>
+              <h3>Bank · 2 spelers</h3>
+            </div>
             <span class="pill secondary">1 GK + 1 veldspeler</span>
           </div>
-          <div id="bench" class="bench-list empty-state">Je bank wordt zichtbaar zodra je spelers hebt gekocht.</div>
-          <p class="bench-note"><strong>Automatische wissels:</strong> de reservekeeper vervangt alleen een keeper met 0 speelminuten. De veldreserve vervangt maximaal één veldspeler met 0 minuten. Spelen meerdere veldspelers niet, dan kan er dus maar één vervangen worden.</p>
+          <div id="bench" class="sorare-bench empty-state">Je bank wordt zichtbaar zodra je spelers hebt gekocht.</div>
+          <p class="bench-note"><strong>Automatische wissels:</strong> de reservekeeper vervangt alleen een keeper met 0 speelminuten. De veldreserve vervangt maximaal één veldspeler met 0 minuten.</p>
         </section>
       </div>
 
