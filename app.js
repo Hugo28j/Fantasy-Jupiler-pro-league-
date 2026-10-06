@@ -12,6 +12,13 @@ const state = {
 
 let selectedMatchweek = null;
 
+const marketPriceFilter = {
+  min:null,
+  max:null,
+  boundMin:1,
+  boundMax:50
+};
+
 function loadState(){
   try{
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -240,15 +247,96 @@ function renderClubFilter(){
   select.value = CLUBS.includes(current) ? current : "ALL";
 }
 
+function roundHalf(value){
+  return Math.round(Number(value || 0)*2)/2;
+}
+
+function priceFilterMoney(value){
+  return "€" + Number(value || 0).toFixed(1).replace(".",",") + "M";
+}
+
+function syncPriceFilterBounds(){
+  const minInput = document.getElementById("priceMinFilter");
+  const maxInput = document.getElementById("priceMaxFilter");
+  const label = document.getElementById("priceRangeValue");
+  const fill = document.getElementById("priceRangeFill");
+  if(!minInput || !maxInput) return;
+
+  const prices = PLAYERS.map(p => Number(p.price || 0)).filter(Number.isFinite);
+  const rawMin = prices.length ? Math.min(...prices) : 1;
+  const rawMax = prices.length ? Math.max(...prices) : 50;
+  const boundMin = Math.max(1,Math.floor(rawMin*2)/2);
+  const boundMax = Math.max(boundMin+0.5,Math.ceil(rawMax*2)/2);
+
+  marketPriceFilter.boundMin = boundMin;
+  marketPriceFilter.boundMax = boundMax;
+
+  if(marketPriceFilter.min == null) marketPriceFilter.min = boundMin;
+  if(marketPriceFilter.max == null) marketPriceFilter.max = boundMax;
+
+  marketPriceFilter.min = Math.max(boundMin,Math.min(Number(marketPriceFilter.min),boundMax));
+  marketPriceFilter.max = Math.max(boundMin,Math.min(Number(marketPriceFilter.max),boundMax));
+  if(marketPriceFilter.min > marketPriceFilter.max){
+    marketPriceFilter.min = marketPriceFilter.max;
+  }
+
+  minInput.min = String(boundMin);
+  minInput.max = String(boundMax);
+  minInput.step = "0.5";
+  maxInput.min = String(boundMin);
+  maxInput.max = String(boundMax);
+  maxInput.step = "0.5";
+  minInput.value = String(marketPriceFilter.min);
+  maxInput.value = String(marketPriceFilter.max);
+
+  if(label){
+    label.textContent = priceFilterMoney(marketPriceFilter.min) + " – " + priceFilterMoney(marketPriceFilter.max);
+  }
+
+  if(fill){
+    const span = Math.max(0.5,boundMax-boundMin);
+    const left = ((marketPriceFilter.min-boundMin)/span)*100;
+    const right = 100-((marketPriceFilter.max-boundMin)/span)*100;
+    fill.style.left = left + "%";
+    fill.style.right = right + "%";
+  }
+}
+
+function updatePriceFilter(changed){
+  const minInput = document.getElementById("priceMinFilter");
+  const maxInput = document.getElementById("priceMaxFilter");
+  if(!minInput || !maxInput) return;
+
+  let min = Number(minInput.value);
+  let max = Number(maxInput.value);
+
+  if(changed === "min" && min > max){
+    min = max;
+    minInput.value = String(min);
+  }else if(changed === "max" && max < min){
+    max = min;
+    maxInput.value = String(max);
+  }
+
+  marketPriceFilter.min = roundHalf(min);
+  marketPriceFilter.max = roundHalf(max);
+  syncPriceFilterBounds();
+  renderMarket();
+}
+
 function filteredPlayers(){
   const q = document.getElementById("playerSearch").value.trim().toLowerCase();
   const pos = document.getElementById("positionFilter").value;
   const club = document.getElementById("clubFilter").value;
   const sort = document.getElementById("sortFilter").value;
+  const minPrice = Number(marketPriceFilter.min ?? marketPriceFilter.boundMin);
+  const maxPrice = Number(marketPriceFilter.max ?? marketPriceFilter.boundMax);
   const list = PLAYERS.filter(p =>
     (!q || p.name.toLowerCase().includes(q) || p.club.toLowerCase().includes(q)) &&
     (pos === "ALL" || p.pos === pos) &&
-    (club === "ALL" || p.club === club)
+    (club === "ALL" || p.club === club) &&
+    Number(p.price || 0) >= minPrice &&
+    Number(p.price || 0) <= maxPrice
   );
   list.sort((a,b) => {
     if(sort === "price-asc") return a.price - b.price;
@@ -263,6 +351,7 @@ function filteredPlayers(){
 
 function renderMarket(){
   const grid = document.getElementById("playerGrid");
+  syncPriceFilterBounds();
   const list = filteredPlayers();
   document.getElementById("marketCount").textContent = list.length + " spelers zichtbaar · " + PLAYERS.length + " in huidige 2026/27 seed";
   const missing = Object.entries(REQUIRED_BY_POS).filter(([pos,n]) => countPos(pos) < n).map(([pos,n]) => (n-countPos(pos)) + "× " + pos);
@@ -938,6 +1027,9 @@ document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", (
 ["playerSearch","positionFilter","clubFilter","sortFilter"].forEach(id => {
   document.getElementById(id).addEventListener(id === "playerSearch" ? "input" : "change", renderMarket);
 });
+
+document.getElementById("priceMinFilter")?.addEventListener("input",() => updatePriceFilter("min"));
+document.getElementById("priceMaxFilter")?.addEventListener("input",() => updatePriceFilter("max"));
 
 document.getElementById("teamName").addEventListener("input", e => {
   state.teamName = e.target.value.slice(0,28) || "Mijn Fantasy Team";
