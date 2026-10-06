@@ -589,6 +589,13 @@ function lineY(index,total,side,zone){
     return side === "away" ? 100-base : base;
   }
 
+  // 2 verdedigers: compact centraal rond het strafschopgebied.
+  if(zone === "DEF" && total === 2){
+    const compact = [40,60];
+    const base = compact[index] ?? 50;
+    return side === "away" ? 100-base : base;
+  }
+
   // 3 middenvelders: centrale driehoek/linie, vooral voor 5-3-2 en 4-3-3.
   if(zone === "MID" && total === 3){
     const compact = [34,50,66];
