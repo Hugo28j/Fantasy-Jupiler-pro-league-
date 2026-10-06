@@ -5,6 +5,8 @@ on:
   push:
     paths:
       - "supabase/functions/sync-jpl/index.ts"
+      - "app.js"
+      - "cloud.js"
       - ".github/workflows/test-sorare-api.yml"
 
 jobs:
@@ -17,3 +19,7 @@ jobs:
           deno-version: v2.x
       - name: Type-check Edge Function
         run: deno check supabase/functions/sync-jpl/index.ts
+      - name: Check browser JavaScript syntax
+        run: |
+          node --check app.js
+          node --check cloud.js
