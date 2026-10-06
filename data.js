@@ -404,13 +404,15 @@ const SCORING = {
     ["clearances","Clearances"],["interceptions","Interceptions"],["possessionWon","Possession won"],
     ["possessionLost","Possession lost"],["successfulPass","Successful pass"],
     ["successfulLongPass","Successful Long Passes"],["keyPass","Key passes"],["passMissed","Pass missed"],
-    ["successfulDribble","Successful dribble"],["shotOnTarget","Shots on target"]
+    ["successfulDribble","Successful dribble"],["shotOnTarget","Shots on target"],
+    ["bigChanceCreated","Big chance created"],["successfulFinalThirdPasses","Successful final third passes"],
+    ["bigChanceMissed","Big chance missed"],["penaltyWon","Penalty won"],["totalScoringAtt","Total scoring attempts"]
   ],
   rows: {
-    GK: {minutes:.1,save:2,cleanSheet:15,savesInsideBox:4,punches:2,goalsConceded:-10,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
-    DEF:{minutes:.1,save:null,cleanSheet:5,savesInsideBox:null,punches:null,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.3,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
-    MID:{minutes:.1,save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:.5,interceptions:.5,possessionWon:.4,possessionLost:-.3,successfulPass:.2,successfulLongPass:.5,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2},
-    FWD:{minutes:.1,save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:.5,interceptions:.5,possessionWon:.2,possessionLost:-.1,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4}
+    GK: {minutes:.1,save:2,cleanSheet:15,savesInsideBox:4,punches:2,goalsConceded:-10,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
+    DEF:{minutes:.1,save:null,cleanSheet:5,savesInsideBox:null,punches:null,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:4,duelWon:1,duelLost:-1,clearances:1,interceptions:.5,possessionWon:.2,possessionLost:-.3,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2,bigChanceCreated:2,successfulFinalThirdPasses:.2,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
+    MID:{minutes:.1,save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-3,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:.5,interceptions:.5,possessionWon:.4,possessionLost:-.3,successfulPass:.2,successfulLongPass:.5,keyPass:.6,passMissed:-.3,successfulDribble:.3,shotOnTarget:2,bigChanceCreated:3,successfulFinalThirdPasses:.3,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1},
+    FWD:{minutes:.1,save:null,cleanSheet:null,savesInsideBox:null,punches:null,goalsConceded:-1,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:2,duelWon:1,duelLost:-1,clearances:.5,interceptions:.5,possessionWon:.2,possessionLost:-.1,successfulPass:.1,successfulLongPass:.3,keyPass:.6,passMissed:-.1,successfulDribble:.5,shotOnTarget:4,bigChanceCreated:3,successfulFinalThirdPasses:.3,bigChanceMissed:-2,penaltyWon:3,totalScoringAtt:.1}
   }
 };
 
