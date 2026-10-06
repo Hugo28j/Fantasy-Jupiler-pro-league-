@@ -283,11 +283,33 @@ function renderPlayerProfile(player,matchRows=[]){
   const totalMinutes = rows.length ? rows.reduce((sum,row) => sum + Number(row.minutes || 0),0) : Number(player.minutes || 0);
   const totalPoints = rows.length ? rows.reduce((sum,row) => sum + Number(row.fantasy_points || 0),0) : Number(player.score || 0);
   const metrics = [
-    ["Goals",total("goal")],["Assists",total("assist")],["Tackles",total("successfulTackles")],
-    ["Duels gewonnen",total("duelWon")],["Intercepties",total("interceptions")],
-    ["Bal gewonnen",total("possessionWon")],["Bal verloren",total("possessionLost")],
-    ["Key passes",total("keyPass")],["Dribbels",total("successfulDribble")],
-    ["Schoten op doel",total("shotOnTarget")]
+    ["Goals",total("goal")],
+    ["Assists",total("assist")],
+    ["Schoten op doel",total("shotOnTarget")],
+    ["Geslaagde dribbels",total("successfulDribble")],
+
+    ["Tackles gewonnen",total("successfulTackles")],
+    ["Duels gewonnen",total("duelWon")],
+    ["Duels verloren",total("duelLost")],
+    ["Clearances",total("clearances")],
+    ["Intercepties",total("interceptions")],
+    ["Bal gewonnen",total("possessionWon")],
+    ["Bal verloren",total("possessionLost")],
+
+    ["Geslaagde passes",total("successfulPass")],
+    ["Geslaagde lange passes",total("successfulLongPass")],
+    ["Gemiste passes",total("passMissed")],
+
+    ["Overtredingen gemaakt",total("foulsMade")],
+    ["Overtredingen meegekregen",total("foulsDrawn")],
+    ["Gele kaarten",total("yellow")],
+    ["Rode kaarten",total("red")],
+
+    ["Reddingen",total("save")],
+    ["Reddingen in strafschopgebied",total("savesInsideBox")],
+    ["Punches",total("punches")],
+    ["Clean sheets",total("cleanSheet")],
+    ["Tegendoelpunten",total("goalsConceded")]
   ];
   const matches = rows.slice().sort((a,b) => {
     const ad = a.fixtures?.kickoff || "";
