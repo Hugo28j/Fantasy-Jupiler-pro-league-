@@ -7,7 +7,7 @@ const SEASON_FROM = new Date("2026-07-01T00:00:00Z").getTime();
 const SEASON_TO = new Date("2027-07-01T00:00:00Z").getTime();
 const GAME_PAGE_SIZE = 50;
 const PLAYER_BATCH_SIZE = 8;
-const PLAYER_STATS_LAST = 15;
+const PLAYER_STATS_LAST = 30;
 
 const weights: Record<string,Record<string,number>> = {
   GK:{minutes:.1,save:3,cleanSheet:20,savesInsideBox:5,punches:2,goalsConceded:-5,foulsMade:-1,foulsDrawn:1,yellow:-3,red:-10,goal:10,assist:10,successfulTackles:3,duelWon:.5,duelLost:-.5,clearances:2,interceptions:1,possessionWon:.2,possessionLost:-.2,successfulPass:.1,successfulLongPass:.3,keyPass:.4,passMissed:-.2,successfulDribble:.2,shotOnTarget:2},
@@ -488,12 +488,25 @@ Deno.serve(async request => {
   const started = Date.now();
 
   try{
-    const apiKey = env("SORARE_API_KEY");
     const db = createClient(
       env("SUPABASE_URL"),
       env("SUPABASE_SERVICE_ROLE_KEY"),
       {auth:{persistSession:false}}
     );
+
+    // De Edge Function staat op verify_jwt=false zodat pg_cron hem kan oproepen.
+    // Alleen de random server-side cron secret uit de database krijgt toegang.
+    const providedCronSecret = request.headers.get("x-fantasy-cron-secret") || "";
+    const {data:cronAuth,error:cronAuthError} = await db
+      .from("sync_cron_auth")
+      .select("secret")
+      .eq("id",1)
+      .maybeSingle();
+    if(cronAuthError || !cronAuth?.secret || !providedCronSecret || providedCronSecret !== cronAuth.secret){
+      return Response.json({ok:false,error:"Unauthorized sync request."},{status:401});
+    }
+
+    const apiKey = env("SORARE_API_KEY");
 
     let apiCalls = 0;
     const sorare = async (query:string, variables:Record<string,unknown>={}) => {
@@ -808,10 +821,13 @@ Deno.serve(async request => {
     const latestCompletedId = gameweekIds.get(latestCompleted.number);
     if(!latestCompletedId) throw new Error("Laatste afgewerkte speeldag ontbreekt in de database.");
 
+    // Verwerk iedere afgewerkte wedstrijd die nog ontbreekt, niet alleen de laatste
+    // volledig afgewerkte speeldag. Zo worden ingehaalde of gemiste wedstrijden automatisch
+    // bijgewerkt zodra de cron opnieuw draait.
     const {data:pending,error:pendingError} = await db
       .from("fixtures")
       .select("id,gameweek_id,kickoff")
-      .eq("gameweek_id",latestCompletedId)
+      .in("gameweek_id",seasonGameweekIds)
       .eq("stats_processed",false)
       .eq("status","FT")
       .order("kickoff",{ascending:true});
@@ -974,6 +990,7 @@ Deno.serve(async request => {
       migratedUnsafeFixtureIds,
       fixtures:fixtureRows.length,
       latestCompletedGameweek:latestCompleted.number,
+      pendingGameweeks:[...new Set((pending || []).map((f:any)=>Number(f.gameweek_id)))].length,
       playerRefresh:playersNeedRefresh,
       playersImported:importedPlayers,
       pendingFixtures:(pending || []).length,
