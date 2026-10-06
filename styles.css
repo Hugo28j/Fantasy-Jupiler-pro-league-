@@ -391,3 +391,16 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .match-player-name-row{max-width:90px;gap:2px}
   .match-name-events .match-event-icon{width:12px;height:12px;font-size:8px}
 }
+
+/* Puntentotaal per inklapbare statistiekgroep */
+.stat-group-summary-meta{margin-left:auto;display:flex;align-items:center;gap:12px}
+.stat-group-summary-meta small{margin-left:0!important}
+.stat-group-total{font-size:12px;font-weight:950;white-space:nowrap}
+.stat-group-total.positive{color:#58efa0}
+.stat-group-total.negative{color:#ff6575}
+.stat-group-total.neutral{color:#9fb0bd}
+
+@media(max-width:760px){
+  .stat-group-summary-meta{gap:7px}
+  .stat-group-total{font-size:11px}
+}
