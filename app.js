@@ -37,6 +37,14 @@ function loadState(){
       state.cash = Math.max(0,START_BUDGET-state.squad.map(playerById).filter(Boolean).reduce((sum,p)=>sum+Number(p.price||0),0));
     }
     state.budgetBase = START_BUDGET;
+
+    // Oude/opgeslagen selecties kunnen nog 6 veldspelers zonder bankspeler bevatten.
+    // Zodra alle 6 veldspelers gekozen zijn, gaat de laatst gekozen veldspeler
+    // automatisch naar de bank zodat er altijd maar 5 veldspelers starten.
+    const loadedOutfield = squadPlayers().filter(player => player.pos !== "GK");
+    if(loadedOutfield.length === 6 && !loadedOutfield.some(player => player.id === state.benchOutfield)){
+      state.benchOutfield = loadedOutfield[loadedOutfield.length - 1].id;
+    }
   }catch(e){ console.warn("Could not load saved fantasy team",e); }
 }
 
@@ -111,6 +119,16 @@ function buyPlayer(id){
   // De eerste keeper blijft dus zonder extra klik in de basis staan.
   if(p.pos === "GK" && samePositionBefore === 1 && !state.benchGK){
     state.benchGK = p.id;
+  }
+
+  // De selectie bevat 6 veldspelers (2 DEF, 2 MID, 2 FWD), maar er mogen
+  // er maar 5 tegelijk op het veld staan. Zodra de zesde veldspeler wordt
+  // gekocht, gaat die automatisch naar de bank als er nog geen bankspeler is.
+  if(p.pos !== "GK"){
+    const outfieldAfterBuy = squadPlayers().filter(player => player.pos !== "GK");
+    if(outfieldAfterBuy.length === 6 && !state.benchOutfield){
+      state.benchOutfield = p.id;
+    }
   }
 
   state.cash = Math.round((Number(state.cash || 0)-Number(p.price || 0))*10)/10;
@@ -465,13 +483,18 @@ function renderMarket(){
       ? recentMatches
       : [{points:Number(p.score || 0),gameweek:null,minutes:Number(p.minutes || 0)}];
     const maxChartScore = Math.max(15,...chartMatches.map(item => Math.abs(Number(item.points || 0))));
-    const profileBars = chartMatches.map(item => {
+    const missingRecentMatches = Math.max(0,5-chartMatches.length);
+    const missingBars = Array.from({length:missingRecentMatches},() =>
+      '<i class="score-negative market-form-missing" style="--bar:100%" title="Geen wedstrijd gespeeld"></i>'
+    ).join("");
+    const playedBars = chartMatches.map(item => {
       const score = Number(item.points || 0);
       const height = Math.max(10,Math.round(Math.abs(score) / maxChartScore * 100));
       const title = (item.gameweek ? "Speeldag " + item.gameweek + " · " : "") +
         points(score) + " · " + Number(item.minutes || 0) + " min";
       return '<i class="' + scoreBandClass(score) + '" style="--bar:' + height + '%" title="' + escapeHtml(title) + '"></i>';
     }).join("");
+    const profileBars = missingBars + playedBars;
     return '<article class="player-card market-player-row ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
       '<button class="market-player-avatar role-ring-' + p.pos + ' player-title-link" data-player-id="' + escapeHtml(p.id) + '" type="button" aria-label="Bekijk ' + escapeHtml(p.name) + '">' + initials(p.name) + '</button>' +
       '<div class="market-player-identity"><div><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3></div><span class="club">' + escapeHtml(p.club) + '</span></div>' +
