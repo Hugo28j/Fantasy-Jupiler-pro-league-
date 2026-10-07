@@ -100,7 +100,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56
 .role-badge{font-size:10px;font-weight:900;padding:5px 7px;border-radius:7px;color:#06151e}
 .role-GK{background:#f4cf66}.role-DEF{background:#77c9ff}.role-MID{background:#7be29e}.role-FWD{background:#ff8b96}
 .bench-note{color:var(--muted);font-size:12px;line-height:1.5;margin:13px 2px 0}
-.team-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+.team-actions{display:none!important}
 .btn{border:1px solid transparent;border-radius:11px;padding:10px 14px;font-weight:800}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .primary-btn{background:var(--accent);color:#062217}
@@ -770,8 +770,10 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 /* 017 — ruimere ploeglayout, bank links en instellingen */
 #team{padding-top:0}
 .squad-compact-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;margin-bottom:2px}
-.squad-compact-toolbar .squad-requirements{margin:0;gap:7px}
-.squad-compact-toolbar .requirement{padding:8px 10px;border-radius:10px}
+.squad-compact-toolbar .squad-requirements{margin:0;gap:8px;min-width:0}
+.squad-compact-toolbar .requirement{padding:8px 12px;border-radius:10px;gap:10px;min-width:0}
+.squad-compact-toolbar .requirement strong{min-width:0;font-size:12px;line-height:1.15;white-space:nowrap}
+.squad-compact-toolbar .requirement span{flex:0 0 auto;min-width:38px;text-align:right;white-space:nowrap}
 .compact-market-toggle{white-space:nowrap;padding:9px 12px}
 .lineup-stage{display:grid;grid-template-columns:190px minmax(0,1fr);gap:12px;min-height:0;align-items:stretch}
 .lineup-stage .pitch-card{padding:8px;min-width:0}
@@ -798,7 +800,8 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 
 @media(min-width:1061px){
   .squad-market-workspace{height:calc(100dvh - 155px);min-height:760px}
-  .squad-pane{height:100%;grid-template-rows:auto minmax(0,1fr) auto;overflow-y:auto;overflow-x:hidden;scrollbar-color:#2d6b55 #091a27}
+  .squad-pane{height:100%;grid-template-rows:auto minmax(0,1fr) auto;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:auto;scrollbar-color:#2d6b55 #091a27}
+  .lineup-stage,.lineup-stage .fantasy-pitch,.lineup-stage .side-bench-card,.lineup-stage .sorare-bench{overscroll-behavior-y:auto;touch-action:pan-y}
   .lineup-stage{height:100%;min-height:680px}
   .lineup-stage .pitch-card{height:100%;display:block;min-height:0}
   .lineup-stage .fantasy-pitch{height:100%;min-height:0;padding:26px 20px}
