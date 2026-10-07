@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#071421" />
   <title>Fantasy Jupiler Pro League</title>
-  <link rel="stylesheet" href="styles.css?v=016" />
+  <link rel="stylesheet" href="styles.css?v=017" />
 </head>
 <body>
   <header class="topbar">
@@ -17,7 +17,7 @@
       </div>
     </div>
     <div class="header-stats">
-      <div><span>Budget</span><strong id="budgetDisplay">€100,0M</strong></div>
+      <div><span>Budget</span><strong id="budgetDisplay">€125,0M</strong></div>
       <div><span>Selectie</span><strong id="squadDisplay">0 / 8</strong></div>
       <div><span>Punten</span><strong id="pointsDisplay">0</strong></div>
     </div>
@@ -28,45 +28,34 @@
     <button class="tab" data-tab="leaderboard">Leaderboard</button>
     <button class="tab" data-tab="matches">Wedstrijden</button>
     <button class="tab" data-tab="rules">Regels</button>
+    <button class="tab" data-tab="settings">Instellingen</button>
   </nav>
 
   <main>
     <section id="team" class="panel tab-panel active">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">MIJN PLOEG</p>
-          <h2>Opstelling & transfermarkt</h2>
-        </div>
-        <div class="team-head-actions">
-          <label class="team-name-wrap" for="teamName"><span>Teamnaam</span><input id="teamName" maxlength="28" value="Mijn Fantasy Team" /></label>
-          <button id="marketToggle" class="btn secondary-btn market-toggle" type="button" aria-controls="marketDrawer" aria-expanded="true">Transfermarkt sluiten</button>
-        </div>
-      </div>
-
       <div id="teamWorkspace" class="squad-market-workspace">
         <div class="squad-pane">
-          <div class="squad-requirements" id="requirements"></div>
+          <div class="squad-compact-toolbar">
+            <div class="squad-requirements" id="requirements"></div>
+            <button id="marketToggle" class="btn secondary-btn market-toggle compact-market-toggle" type="button" aria-controls="marketDrawer" aria-expanded="true">Transfermarkt sluiten</button>
+          </div>
 
-          <section class="lineup-card pitch-card">
-            <div class="card-title-row">
-              <div>
-                <p class="eyebrow">OPSTELLING</p>
-                <h3 id="lineupTitle">Basis · 6 spelers</h3>
+          <div class="lineup-stage">
+            <section class="lineup-card bench-card side-bench-card">
+              <div class="side-bench-label">
+                <p class="eyebrow">BANK</p>
+                <strong>2 reserves</strong>
+                <small>1 GK + 1 veldspeler</small>
               </div>
-              <span id="lineupPill" class="pill">1 GK + 5 veldspelers</span>
-            </div>
-            <div id="startingXI" class="fantasy-pitch pitch-empty">
-              <div class="pitch-empty-message">Koop spelers op de transfermarkt om je team te bouwen.</div>
-            </div>
-          </section>
+              <div id="bench" class="sorare-bench empty-state">Je bank wordt zichtbaar zodra je spelers hebt gekocht.</div>
+            </section>
 
-          <section class="lineup-card bench-card">
-            <div class="card-title-row compact-title-row">
-              <div><p class="eyebrow">BANK</p><h3>2 reserves</h3></div>
-              <span class="pill secondary">1 GK + 1 veldspeler</span>
-            </div>
-            <div id="bench" class="sorare-bench empty-state">Je bank wordt zichtbaar zodra je spelers hebt gekocht.</div>
-          </section>
+            <section class="lineup-card pitch-card">
+              <div id="startingXI" class="fantasy-pitch pitch-empty">
+                <div class="pitch-empty-message">Koop spelers op de transfermarkt om je team te bouwen.</div>
+              </div>
+            </section>
+          </div>
 
           <div class="team-actions">
             <button id="autoLineupBtn" class="btn secondary-btn" disabled>Automatische opstelling</button>
@@ -191,6 +180,37 @@
         </table>
       </div>
     </section>
+    <section id="settings" class="panel tab-panel">
+      <div class="section-head settings-head">
+        <div>
+          <p class="eyebrow">INSTELLINGEN</p>
+          <h2>Account & ploeg</h2>
+          <p class="muted">Pas je ploegnaam of wachtwoord aan, of verwijder je account.</p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+        <form id="teamNameSettingsForm" class="settings-card">
+          <div><p class="eyebrow">PLOEG</p><h3>Teamnaam</h3></div>
+          <label><span>Naam van je ploeg</span><input id="settingsTeamName" maxlength="28" autocomplete="off" placeholder="Je gebruikersnaam wordt gebruikt als je dit leeg laat"></label>
+          <button class="btn primary-btn" type="submit">Teamnaam opslaan</button>
+        </form>
+
+        <form id="passwordSettingsForm" class="settings-card">
+          <div><p class="eyebrow">BEVEILIGING</p><h3>Wachtwoord wijzigen</h3></div>
+          <label><span>Nieuw wachtwoord</span><input id="settingsPassword" type="password" minlength="4" autocomplete="new-password"></label>
+          <label><span>Herhaal wachtwoord</span><input id="settingsPasswordRepeat" type="password" minlength="4" autocomplete="new-password"></label>
+          <button class="btn primary-btn" type="submit">Wachtwoord wijzigen</button>
+        </form>
+
+        <section class="settings-card settings-danger">
+          <div><p class="eyebrow">ACCOUNT</p><h3>Account verwijderen</h3></div>
+          <p>Dit verwijdert je ploeg, historiek, competities en login definitief.</p>
+          <button id="deleteAccountBtn" class="btn danger-btn" type="button">Account definitief verwijderen</button>
+        </section>
+      </div>
+    </section>
+
   </main>
 
   <dialog id="playerDialog" class="detail-dialog">
@@ -239,8 +259,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="data.js"></script>
-  <script src="app.js?v=016"></script>
-  <script src="cloud.js?v=016"></script>
+  <script src="app.js?v=017"></script>
+  <script src="cloud.js?v=017"></script>
 </body>
 </html>
 
