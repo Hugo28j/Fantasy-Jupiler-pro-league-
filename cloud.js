@@ -587,6 +587,19 @@
     state.benchGK = state.squad.includes(data.bench_gk_id) ? data.bench_gk_id : null;
     state.benchOutfield = state.squad.includes(data.bench_outfield_id) ? data.bench_outfield_id : null;
     state.captainId = state.squad.includes(data.captain_id) ? data.captain_id : null;
+
+    // Herstel ook oudere online selecties die nog zonder automatische bank zijn opgeslagen.
+    // Bij 2 keepers staat er altijd 1 op de bank; bij alle 6 veldspelers
+    // (2 DEF, 2 MID, 2 FWD) staat er altijd precies 1 veldspeler op de bank.
+    const remoteKeepers = squadPlayers().filter(player => player.pos === "GK");
+    const remoteOutfield = squadPlayers().filter(player => player.pos !== "GK");
+    if(remoteKeepers.length === 2 && !remoteKeepers.some(player => player.id === state.benchGK)){
+      state.benchGK = remoteKeepers[remoteKeepers.length - 1].id;
+    }
+    if(remoteOutfield.length === 6 && !remoteOutfield.some(player => player.id === state.benchOutfield)){
+      state.benchOutfield = remoteOutfield[remoteOutfield.length - 1].id;
+    }
+
     cloud.initialSetupComplete = Boolean(data.initial_setup_complete);
     cloud.onboardingSeen = Boolean(data.onboarding_seen);
     window.FANTASY_INITIAL_SETUP_LOCK = !cloud.initialSetupComplete;
