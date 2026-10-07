@@ -483,8 +483,15 @@
       cloud.client.rpc("my_private_leagues"),
       cloud.client.rpc("my_private_league_invites")
     ]);
-    if(leagueError) throw leagueError;
-    if(inviteError) throw inviteError;
+    if(leagueError || inviteError){
+      console.warn("Privécompetities zijn nog niet geactiveerd. Voer migratie 015 uit.",(leagueError || inviteError).message);
+      cloud.leagues = [];
+      cloud.selectedLeague = "global";
+      select.innerHTML = '<option value="global">Algemeen klassement</option>';
+      document.getElementById("competitionInvites").hidden = true;
+      updateCompetitionActions();
+      return;
+    }
     cloud.leagues = leagues || [];
     if(cloud.selectedLeague !== "global" && !cloud.leagues.some(item => String(item.id) === String(cloud.selectedLeague))){
       cloud.selectedLeague = "global";
