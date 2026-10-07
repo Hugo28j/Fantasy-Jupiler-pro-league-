@@ -620,9 +620,10 @@ function renderPlayerProfile(player,matchRows=[]){
   document.getElementById("playerProfile").innerHTML =
     '<p class="eyebrow">SPELERSFICHE</p><div class="profile-hero"><div><span class="role-badge role-' + player.pos + '">' + player.pos + '</span><h2>' + escapeHtml(player.name) + '</h2><p>' + escapeHtml(player.club) + ' · ' + escapeHtml(POSITION_LABELS[player.pos]) + '</p></div><strong class="profile-price">' + money(Number(player.price)) + '</strong></div>' +
     '<div class="profile-highlights"><article><span>Totale score</span><strong>' + points(totalPoints) + '</strong></article><article><span>Speelminuten</span><strong>' + totalMinutes + '</strong></article><article><span>Wedstrijden</span><strong>' + rows.length + '</strong></article></div>' +
-    '<section class="profile-performance-card"><div class="profile-section-head"><div><h3>Prestaties</h3><small>Klik op een speeldagbalk voor de volledige wedstrijd</small></div></div>' +
-      '<div class="gameweek-chart-scroll"><div class="gameweek-chart">' + (matches || '<div class="empty-state">Nog geen verwerkte wedstrijdstatistieken.</div>') + '</div></div>' +
+    '<section class="profile-performance-card">' +
       '<div class="profile-stat-groups"><h4>Seizoenstatistieken</h4><div class="stat-groups">' + renderSeasonStatGroups(metrics,player.pos) + '</div></div>' +
+      '<div class="profile-chart-section"><div class="profile-section-head"><div><h3>Prestaties per speeldag</h3><small>Klik op een speeldagbalk voor de volledige wedstrijd</small></div></div>' +
+      '<div class="gameweek-chart-scroll"><div class="gameweek-chart">' + (matches || '<div class="empty-state">Nog geen verwerkte wedstrijdstatistieken.</div>') + '</div></div></div>' +
     '</section>';
   document.querySelectorAll("#playerProfile .gameweek-chart-item[data-fixture-id]:not([disabled])").forEach(button => {
     button.addEventListener("click",() => {
@@ -1153,8 +1154,8 @@ function renderScoring(){
 }
 
 function renderTeamName(){
-  const input = document.getElementById("teamName");
-  input.value = state.teamName;
+  const input = document.getElementById("settingsTeamName");
+  if(input) input.value = state.teamName;
 }
 
 function renderAll(){
@@ -1200,15 +1201,20 @@ renderAll();
 window.FANTASY_INITIAL_SETUP_LOCK = false;
 
 function updateInitialSetupTabs(){
+  const locked = Boolean(window.FANTASY_INITIAL_SETUP_LOCK) && !isSquadComplete();
   document.querySelectorAll(".tab").forEach(button => {
-    button.classList.remove("setup-locked");
-    button.removeAttribute("aria-disabled");
+    const blocked = locked && button.dataset.tab !== "team";
+    button.classList.toggle("setup-locked",blocked);
+    button.setAttribute("aria-disabled",blocked ? "true" : "false");
   });
 }
 
 function activateFantasyTab(tabId,force=false){
-  const targetId = tabId === "market" ? "team" : tabId;
-  if(tabId === "market") setMarketOpen(true);
+  const requestedId = tabId === "market" ? "team" : tabId;
+  const locked = Boolean(window.FANTASY_INITIAL_SETUP_LOCK) && !isSquadComplete();
+  const targetId = (!force && locked && requestedId !== "team") ? "team" : requestedId;
+  if(tabId === "market" || (locked && targetId === "team")) setMarketOpen(true);
+  if(!force && locked && requestedId !== "team") toast("Kies eerst je 8 spelers.");
   document.querySelectorAll(".tab").forEach(button => button.classList.toggle("active",button.dataset.tab === targetId));
   document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.toggle("active",panel.id === targetId));
   updateInitialSetupTabs();
@@ -1236,10 +1242,6 @@ document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", (
 document.getElementById("priceMinFilter")?.addEventListener("input",() => updatePriceFilter("min"));
 document.getElementById("priceMaxFilter")?.addEventListener("input",() => updatePriceFilter("max"));
 
-document.getElementById("teamName").addEventListener("input", e => {
-  state.teamName = e.target.value.slice(0,28) || "Mijn Fantasy Team";
-  saveState();
-});
 document.getElementById("marketToggle")?.addEventListener("click",() => {
   const expanded = document.getElementById("marketToggle").getAttribute("aria-expanded") === "true";
   setMarketOpen(!expanded);
