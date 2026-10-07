@@ -489,7 +489,11 @@ function renderMarket(){
     ).join("");
     const playedBars = chartMatches.map(item => {
       const score = Number(item.points || 0);
-      const height = Math.max(10,Math.round(Math.abs(score) / maxChartScore * 100));
+      // 0 en negatieve scores blijven visueel vrijwel plat.
+      // Alleen positieve scores krijgen hoogte volgens hun score.
+      const height = score <= 0
+        ? 4
+        : Math.max(10,Math.round(score / maxChartScore * 100));
       const title = (item.gameweek ? "Speeldag " + item.gameweek + " · " : "") +
         points(score) + " · " + Number(item.minutes || 0) + " min";
       return '<i class="' + scoreBandClass(score) + '" style="--bar:' + height + '%" title="' + escapeHtml(title) + '"></i>';
@@ -630,7 +634,11 @@ function renderPlayerProfile(player,matchRows=[]){
     const gameweek = fixture.gameweeks?.number || "?";
     const score = Number(row.fantasy_points || 0);
     const minutes = Number(row.minutes || 0);
-    const height = Math.max(8,Math.round(Math.abs(score) / maxMatchScore * 100));
+    // Zelfde grafiekregel in het spelersprofiel:
+    // 0 en negatieve scores tonen als een bijna platte balk.
+    const height = score <= 0
+      ? 4
+      : Math.max(8,Math.round(score / maxMatchScore * 100));
     const fixtureId = fixture.id == null ? "" : String(fixture.id);
     const title = "Speeldag " + gameweek + ": " + points(score) + ", " + minutes + " minuten";
     return '<button class="gameweek-chart-item" type="button" data-fixture-id="' + escapeHtml(fixtureId) +
