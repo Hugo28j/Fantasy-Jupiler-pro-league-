@@ -442,15 +442,24 @@ function renderMarket(){
     const owned = state.squad.includes(p.id);
     const check = canBuy(p);
     const disabled = !owned && !check.ok;
-    return '<article class="player-card ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
-      '<div class="player-card-head"><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><span class="price">' + money(p.price) + '</span></div>' +
-      '<h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3><div class="club">' + escapeHtml(p.club) + '</div>' +
-      '<div class="player-meta"><div><span>Laatste prijswijziging</span><strong class="market-price-change ' +
+    const scorePer90 = Number(p.minutes || 0) > 0 ? Number(p.score || 0) / Number(p.minutes) * 90 : 0;
+    const barValues = [
+      Math.min(100,Math.max(8,Number(p.price || 0) / Math.max(1,marketPriceFilter.boundMax) * 100)),
+      Math.min(100,Math.max(8,scorePer90 / 60 * 100)),
+      Math.min(100,Math.max(8,Number(p.minutes || 0) / 900 * 100)),
+      Math.min(100,Math.max(8,Number(p.score || 0) / 400 * 100)),
+      Math.min(100,Math.max(8,50 + Number(p.lastPriceDelta || 0) * 20))
+    ];
+    const profileBars = barValues.map(value => '<i style="--bar:' + Math.round(value) + '%"></i>').join("");
+    return '<article class="player-card market-player-row ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
+      '<button class="market-player-avatar role-ring-' + p.pos + ' player-title-link" data-player-id="' + escapeHtml(p.id) + '" type="button" aria-label="Bekijk ' + escapeHtml(p.name) + '">' + initials(p.name) + '</button>' +
+      '<div class="market-player-identity"><div><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3></div><span class="club">' + escapeHtml(p.club) + '</span></div>' +
+      '<div class="market-form"><span>Profiel</span><div class="market-form-bars" aria-label="Spelersprofiel op basis van prijs, punten per 90, minuten, totaalscore en prijswijziging">' + profileBars + '</div><small>' + scorePer90.toFixed(1).replace(".",",") + ' pts/90</small></div>' +
+      '<div class="market-player-numbers"><strong class="market-total-points">' + points(p.score).replace(" pts","") + '</strong><small>' + Number(p.minutes || 0) + ' min</small></div>' +
+      '<div class="market-player-price"><strong>' + money(p.price) + '</strong><small class="market-price-change ' +
         (Number(p.lastPriceDelta || 0) > 0 ? "positive" : Number(p.lastPriceDelta || 0) < 0 ? "negative" : "neutral") + '">' +
-        (p.lastPriceDelta == null ? "—" : (Number(p.lastPriceDelta) > 0 ? "+" : Number(p.lastPriceDelta) < 0 ? "−" : "±") +
-        "€" + Math.abs(Number(p.lastPriceDelta || 0)).toFixed(1).replace(".",",") + "M") +
-      '</strong></div><div><span>Fantasy score</span><strong>' + points(p.score).replace(" pts","") + '</strong></div></div>' +
-      '<div class="player-actions"><button class="details-btn" data-player-id="' + escapeHtml(p.id) + '">Statistieken</button>' +
+        (p.lastPriceDelta == null ? "—" : (Number(p.lastPriceDelta) > 0 ? "+" : Number(p.lastPriceDelta) < 0 ? "−" : "±") + "€" + Math.abs(Number(p.lastPriceDelta || 0)).toFixed(1).replace(".",",") + "M") + '</small></div>' +
+      '<div class="player-actions"><button class="details-btn" data-player-id="' + escapeHtml(p.id) + '">Info</button>' +
       '<button class="buy-btn ' + (owned ? "remove":"") + '" data-action="' + (owned ? "sell":"buy") + '" data-id="' + escapeHtml(p.id) + '" ' + (disabled ? "disabled":"") + '>' +
         (owned ? "Verkopen" : (disabled ? "Niet beschikbaar" : "Kopen")) + '</button></div>' +
     '</article>';
@@ -517,7 +526,7 @@ function renderSeasonStatGroups(metrics,position){
       metric.value + ' <small class="stat-contribution ' + scoreContributionClass(metric.contribution) + '">(' +
       scoreLabel(metric.contribution) + ' pts)</small></strong></div>'
     ).join("");
-    return '<details class="stat-group" open><summary><span>' + escapeHtml(group.label) +
+    return '<details class="stat-group"><summary><span>' + escapeHtml(group.label) +
       '</span><span class="stat-group-summary-meta"><strong class="stat-group-total ' + scoreContributionClass(groupPoints) + '">' +
       scoreLabel(groupPoints) + ' pts</strong><small>' + group.keys.length + ' stats</small></span></summary><div class="profile-stats stat-group-grid">' +
       cards + '</div></details>';
@@ -534,7 +543,7 @@ function renderMatchStatGroups(breakdown,position){
       ' <small>(' + item.amount + ')</small></span><strong class="' +
       scoreContributionClass(item.contribution) + '">' + scoreLabel(item.contribution) + ' pts</strong></div>'
     ).join("");
-    return '<details class="stat-group match-stat-group" open><summary><span>' + escapeHtml(group.label) +
+    return '<details class="stat-group match-stat-group"><summary><span>' + escapeHtml(group.label) +
       '</span><span class="stat-group-summary-meta"><strong class="stat-group-total ' + scoreContributionClass(groupPoints) + '">' +
       scoreLabel(groupPoints) + ' pts</strong><small>' + group.keys.length + ' stats</small></span></summary><div class="match-stat-breakdown">' +
       rows + '</div></details>';
@@ -862,6 +871,39 @@ function renderMatchTeamPlayers(rows,match,side){
   }).join("");
 }
 
+function matchMobilePlayerButton(row,match,index,total,zone){
+  const player = row.player || {};
+  const pos = player.position || zone || "MID";
+  const score = Number(row.fantasy_points || 0);
+  const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+  const x = lineY(index,total,"home",zone || pos);
+  const yByPosition = {GK:88,DEF:68,MID:45,FWD:21};
+  let y = yByPosition[zone || pos] || 45;
+  if(zone === "DEF" && total === 5 && (index === 0 || index === total-1)) y -= 6;
+
+  return '<button class="match-pitch-player mobile-pitch-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '" style="--mx:' + x + '%;--my:' + y + '%">' +
+    '<span class="match-card-strip">' + matchCardBadges(row) + '</span>' +
+    '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
+    '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
+    '<span class="match-score-chip ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
+    '<span class="match-player-name-row"><span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span><span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
+  '</button>';
+}
+
+function renderMatchMobileTeam(rows,match){
+  const starters = inferredMatchStarters(rows);
+  const groups = {GK:[],DEF:[],MID:[],FWD:[]};
+  starters.forEach(row => {
+    const pos = row.player?.position || "MID";
+    (groups[pos] || groups.MID).push(row);
+  });
+  return ["GK","DEF","MID","FWD"].flatMap(zone => {
+    const group = groups[zone];
+    group.sort((a,b) => formationSideRank(a,zone,group.length)-formationSideRank(b,zone,group.length));
+    return group.map((row,index) => matchMobilePlayerButton(row,match,index,group.length,zone));
+  }).join("");
+}
+
 function renderMatchBench(rows,match,side){
   const hasLineupMetadata = rows.some(row => {
     const stats = row.stats || {};
@@ -919,12 +961,30 @@ function renderMatchDetail(match,rows=[]){
 
   document.getElementById("matchDetail").innerHTML =
     '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p><h2>' + escapeHtml(match.home) + ' <span>' + escapeHtml(String(match.homeScore)) + " – " + escapeHtml(String(match.awayScore)) + '</span> ' + escapeHtml(match.away) + '</h2><p>' + escapeHtml(match.date || "") + (match.status === "LIVE" ? ' · <strong class="live-text">LIVE</strong>' : "") + '</p></div></div>' +
-    '<div class="real-match-pitch"><div class="real-pitch-lines"><span class="real-half"></span><span class="real-circle"></span><span class="real-box left"></span><span class="real-box right"></span></div>' +
-      '<span class="team-pitch-label home">' + escapeHtml(match.home) + '<small>' + escapeHtml(inferredFormation(homeRows)) + '</small></span><span class="team-pitch-label away">' + escapeHtml(match.away) + '<small>' + escapeHtml(inferredFormation(awayRows)) + '</small></span>' +
-      renderMatchTeamPlayers(homeRows,match,"home") + renderMatchTeamPlayers(awayRows,match,"away") +
-      ((!homeRows.length || !awayRows.length) ? '<div class="match-data-hint">Opstellingsmetadata wordt nog aangevuld door de Sorare-sync.</div>' : '') +
-    '</div>' +
-    '<section class="match-bench-section"><h3>Bank</h3><div class="match-benches"><div><h4>' + escapeHtml(match.home) + '</h4>' + renderMatchBench(homeRows,match,"home") + '</div><div><h4>' + escapeHtml(match.away) + '</h4>' + renderMatchBench(awayRows,match,"away") + '</div></div></section>';
+    '<div class="match-desktop-layout"><div class="real-match-pitch"><div class="real-pitch-lines"><span class="real-half"></span><span class="real-circle"></span><span class="real-box left"></span><span class="real-box right"></span></div>' +
+        '<span class="team-pitch-label home">' + escapeHtml(match.home) + '<small>' + escapeHtml(inferredFormation(homeRows)) + '</small></span><span class="team-pitch-label away">' + escapeHtml(match.away) + '<small>' + escapeHtml(inferredFormation(awayRows)) + '</small></span>' +
+        renderMatchTeamPlayers(homeRows,match,"home") + renderMatchTeamPlayers(awayRows,match,"away") +
+      '</div><section class="match-bench-section"><h3>Bank</h3><div class="match-benches"><div><h4>' + escapeHtml(match.home) + '</h4>' + renderMatchBench(homeRows,match,"home") + '</div><div><h4>' + escapeHtml(match.away) + '</h4>' + renderMatchBench(awayRows,match,"away") + '</div></div></section></div>' +
+    '<div class="match-mobile-layout"><div class="match-team-tabs" role="tablist" aria-label="Kies een ploeg">' +
+      '<button class="match-team-tab active" type="button" role="tab" aria-selected="true" data-match-side="home">' + escapeHtml(match.home) + '</button>' +
+      '<button class="match-team-tab" type="button" role="tab" aria-selected="false" data-match-side="away">' + escapeHtml(match.away) + '</button></div>' +
+      '<section class="match-mobile-team active" data-match-panel="home"><div class="mobile-team-heading"><strong>' + escapeHtml(match.home) + '</strong><span>' + escapeHtml(inferredFormation(homeRows)) + '</span></div><div class="real-match-pitch mobile-team-pitch"><div class="real-pitch-lines mobile-pitch-lines"><span class="mobile-half"></span><span class="mobile-circle"></span><span class="mobile-box top"></span><span class="mobile-box bottom"></span></div>' + renderMatchMobileTeam(homeRows,match) + '</div><div class="mobile-team-bench"><h3>Bank</h3>' + renderMatchBench(homeRows,match,"home") + '</div></section>' +
+      '<section class="match-mobile-team" data-match-panel="away" hidden><div class="mobile-team-heading"><strong>' + escapeHtml(match.away) + '</strong><span>' + escapeHtml(inferredFormation(awayRows)) + '</span></div><div class="real-match-pitch mobile-team-pitch"><div class="real-pitch-lines mobile-pitch-lines"><span class="mobile-half"></span><span class="mobile-circle"></span><span class="mobile-box top"></span><span class="mobile-box bottom"></span></div>' + renderMatchMobileTeam(awayRows,match) + '</div><div class="mobile-team-bench"><h3>Bank</h3>' + renderMatchBench(awayRows,match,"away") + '</div></section>' +
+    '</div>';
+
+  document.querySelectorAll("#matchDetail .match-team-tab").forEach(tab => tab.addEventListener("click",() => {
+    const side = tab.dataset.matchSide;
+    document.querySelectorAll("#matchDetail .match-team-tab").forEach(item => {
+      const selected = item === tab;
+      item.classList.toggle("active",selected);
+      item.setAttribute("aria-selected",selected ? "true" : "false");
+    });
+    document.querySelectorAll("#matchDetail .match-mobile-team").forEach(panel => {
+      const selected = panel.dataset.matchPanel === side;
+      panel.hidden = !selected;
+      panel.classList.toggle("active",selected);
+    });
+  }));
 
   const rowByPlayer = new Map(allRows.map(row => [String(row.player_id),row]));
   document.querySelectorAll("#matchDetail [data-match-player]").forEach(button => button.addEventListener("click",() => {
@@ -1058,7 +1118,6 @@ function renderScoring(){
 function renderTeamName(){
   const input = document.getElementById("teamName");
   input.value = state.teamName;
-  document.getElementById("leaderTeamName").textContent = state.teamName;
 }
 
 function renderAll(){
@@ -1101,26 +1160,32 @@ renderGameweekBalance();
 renderScoring();
 renderAll();
 
-window.FANTASY_INITIAL_SETUP_LOCK = Boolean(window.FANTASY_INITIAL_SETUP_LOCK);
+window.FANTASY_INITIAL_SETUP_LOCK = false;
 
 function updateInitialSetupTabs(){
-  const locked = Boolean(window.FANTASY_INITIAL_SETUP_LOCK) && !isSquadComplete();
   document.querySelectorAll(".tab").forEach(button => {
-    const blocked = locked && button.dataset.tab !== "market";
-    button.classList.toggle("setup-locked",blocked);
-    button.setAttribute("aria-disabled",blocked ? "true" : "false");
+    button.classList.remove("setup-locked");
+    button.removeAttribute("aria-disabled");
   });
 }
 
 function activateFantasyTab(tabId,force=false){
-  const locked = Boolean(window.FANTASY_INITIAL_SETUP_LOCK) && !isSquadComplete();
-  const targetId = locked && tabId !== "market" && !force ? "market" : tabId;
-  if(locked && targetId !== tabId){
-    toast("Kies eerst je 8 spelers op de transfermarkt.");
-  }
+  const targetId = tabId === "market" ? "team" : tabId;
+  if(tabId === "market") setMarketOpen(true);
   document.querySelectorAll(".tab").forEach(button => button.classList.toggle("active",button.dataset.tab === targetId));
   document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.toggle("active",panel.id === targetId));
   updateInitialSetupTabs();
+}
+
+function setMarketOpen(open){
+  const workspace = document.getElementById("teamWorkspace");
+  const drawer = document.getElementById("marketDrawer");
+  const toggle = document.getElementById("marketToggle");
+  if(!workspace || !drawer || !toggle) return;
+  workspace.classList.toggle("market-collapsed",!open);
+  drawer.hidden = !open;
+  toggle.setAttribute("aria-expanded",open ? "true" : "false");
+  toggle.textContent = open ? "Transfermarkt sluiten" : "Transfermarkt openen";
 }
 
 window.activateFantasyTab = activateFantasyTab;
@@ -1136,9 +1201,13 @@ document.getElementById("priceMaxFilter")?.addEventListener("input",() => update
 
 document.getElementById("teamName").addEventListener("input", e => {
   state.teamName = e.target.value.slice(0,28) || "Mijn Fantasy Team";
-  document.getElementById("leaderTeamName").textContent = state.teamName;
   saveState();
 });
+document.getElementById("marketToggle")?.addEventListener("click",() => {
+  const expanded = document.getElementById("marketToggle").getAttribute("aria-expanded") === "true";
+  setMarketOpen(!expanded);
+});
+document.getElementById("marketClose")?.addEventListener("click",() => setMarketOpen(false));
 document.getElementById("autoLineupBtn").addEventListener("click",autoLineup);
 document.getElementById("resetBtn").addEventListener("click",resetSquad);
 document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click",() => {
@@ -1151,3 +1220,4 @@ document.querySelector("[data-demo-history]")?.addEventListener("click",() => {
   document.getElementById("managerHistory").innerHTML = '<p class="eyebrow">TEAMHISTORIEK</p><h2>' + escapeHtml(state.teamName) + '</h2><div class="empty-state">Log in en speel een speeldag om hier je vastgezette teams en scores te zien.</div>';
   document.getElementById("managerDialog").showModal();
 });
+

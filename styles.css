@@ -583,3 +583,124 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .onboarding-shell h2{font-size:30px;margin:6px 0 15px}
 .onboarding-shell p{color:#c6d5df;line-height:1.6;margin:10px 0}
 .onboarding-shell .primary-btn{width:100%;margin-top:12px;padding:13px}
+
+/* Gecombineerde ploeg- en transferwerkruimte */
+.team-head-actions{display:flex;align-items:flex-end;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.squad-market-workspace{display:grid;grid-template-columns:minmax(0,3fr) minmax(380px,2fr);gap:18px;align-items:start}
+.squad-pane{min-width:0;display:grid;gap:12px}
+.market-pane{min-width:0;background:linear-gradient(180deg,rgba(16,39,57,.98),rgba(7,23,35,.98));border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:16px}
+.market-pane-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.market-pane-head h2{margin:2px 0 0}
+.market-close{position:static;flex:0 0 auto}
+.market-collapsed{grid-template-columns:1fr}
+.market-collapsed .squad-pane{max-width:1120px;margin-inline:auto;width:100%}
+.market-pane .filters{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.market-pane .price-range-filter{margin-top:10px}
+.market-pane .player-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.market-player-row{display:grid;grid-template-columns:48px minmax(108px,1fr) minmax(82px,.8fr) auto auto;align-items:center;gap:10px;padding:10px;min-height:0;border-radius:12px;background:#0b1d2b;border:1px solid rgba(255,255,255,.075)}
+.market-player-row:hover{border-color:rgba(56,210,122,.45);background:#10283a}
+.market-player-row.owned{border-color:rgba(56,210,122,.55);box-shadow:inset 3px 0 var(--accent)}
+.market-player-row .market-player-avatar{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#244b64,#102537);color:#fff;font-size:13px;font-weight:950;border:1px solid rgba(255,255,255,.14)}
+.market-player-identity{min-width:0}
+.market-player-identity>div{display:flex;align-items:center;gap:6px;min-width:0}
+.market-player-row .market-player-identity h3{min-width:0;margin:0;font-size:13px}
+.market-player-identity strong,.market-player-identity small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.market-player-row .market-player-identity .club{display:block;margin-top:3px;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.market-form{min-width:0}
+.market-form>span,.market-form>small{display:block;color:var(--muted);font-size:9px}
+.market-form>small{margin-top:3px}
+.market-form-bars{height:25px;display:flex;align-items:flex-end;gap:3px;margin-top:3px}
+.market-form-bars i{display:block;flex:1;min-width:5px;height:var(--bar);min-height:3px;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#55e99a,#1b9f63)}
+.market-player-numbers{text-align:right;white-space:nowrap}
+.market-player-numbers strong,.market-player-numbers small{display:block}
+.market-player-numbers small{margin-top:3px;color:var(--muted);font-size:9px}
+.market-player-price{text-align:right;white-space:nowrap}
+.market-player-price strong,.market-player-price small{display:block}
+.market-player-price small{margin-top:3px;font-size:9px}
+.market-player-row .player-actions{display:flex;gap:5px;grid-column:1/-1;justify-content:flex-end;border-top:1px solid rgba(255,255,255,.06);padding-top:8px;margin-top:0}
+.market-player-row .player-actions button{padding:6px 10px;font-size:10px}
+
+/* Klassement en privécompetities */
+.competition-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.competition-actions select{min-width:210px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1d2c;color:var(--text);font-weight:850}
+.leader-row.current-user{background:linear-gradient(90deg,rgba(56,210,122,.12),rgba(56,210,122,.03));box-shadow:inset 3px 0 var(--accent)}
+.leader-row.current-user .leader-manager-name{color:#58efa0}
+.leader-manager-name{color:#f2f7fa}
+.competition-invites{display:grid;gap:8px;margin-bottom:14px}
+.competition-invite{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid rgba(97,215,255,.3);background:rgba(97,215,255,.07);border-radius:12px}
+.competition-invite strong,.competition-invite small{display:block}
+.competition-invite small{margin-top:3px;color:var(--muted)}
+.competition-invite>div:last-child{display:flex;gap:7px}
+.competition-dialog{width:min(520px,calc(100% - 24px))}
+.competition-dialog label{display:grid;gap:6px;margin:16px 0}
+.competition-dialog label span{font-size:11px;color:var(--muted);font-weight:800}
+.competition-dialog input{padding:12px;border:1px solid var(--border);border-radius:10px;background:#071724;color:var(--text)}
+.history-player{border:1px solid transparent;color:var(--text);text-align:left;cursor:pointer;width:100%}
+.history-player strong,.history-player small{display:block}
+.history-player small{color:var(--muted);margin-top:3px}
+.history-player:hover{border-color:rgba(56,210,122,.45);background:#163044}
+
+/* Eén team per tab op een klein scherm */
+.match-mobile-layout{display:none}
+.match-team-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;padding:5px;background:#071724;border:1px solid var(--border);border-radius:13px}
+.match-team-tab{border:0;border-radius:9px;padding:11px 7px;background:transparent;color:var(--muted);font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.match-team-tab.active{background:#15354a;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.mobile-team-heading{display:flex;align-items:center;justify-content:space-between;margin:10px 2px}
+.mobile-team-heading span{font-size:11px;color:var(--accent);font-weight:900}
+.mobile-team-pitch{height:650px;background:linear-gradient(180deg,#174f34 0 49.8%,#174f34 50.2% 100%)}
+.mobile-pitch-lines .mobile-half{position:absolute;left:0;right:0;top:50%;height:2px;background:rgba(255,255,255,.2)}
+.mobile-pitch-lines .mobile-circle{position:absolute;left:50%;top:50%;width:115px;height:115px;border:2px solid rgba(255,255,255,.2);border-radius:50%;transform:translate(-50%,-50%)}
+.mobile-pitch-lines .mobile-box{position:absolute;left:50%;width:46%;height:12%;border:2px solid rgba(255,255,255,.2);transform:translateX(-50%)}
+.mobile-pitch-lines .mobile-box.top{top:-2px;border-top:0}.mobile-pitch-lines .mobile-box.bottom{bottom:-2px;border-bottom:0}
+.mobile-team-bench{margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:13px;background:rgba(0,0,0,.13)}
+.mobile-team-bench h3{margin:0 0 8px}
+
+@media(min-width:1061px){
+  .squad-market-workspace{height:calc(100dvh - 172px);min-height:690px}
+  .squad-pane{height:100%;grid-template-rows:auto minmax(0,1fr) auto auto;overflow:hidden}
+  .squad-pane .pitch-card{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr)}
+  .squad-pane .fantasy-pitch{min-height:0;height:100%}
+  .squad-pane .pitch-formation{min-height:430px;height:100%}
+  .squad-pane .bench-card{padding:12px 16px}
+  .squad-pane .bench-card .card-title-row{margin-bottom:7px}
+  .squad-pane .sorare-bench{padding:8px}
+  .market-pane{height:100%;overflow-y:auto;overscroll-behavior:contain;scrollbar-color:#2d6b55 #091a27}
+}
+
+@media(max-width:1060px){
+  .squad-market-workspace{grid-template-columns:1fr}
+  .market-pane{height:auto;overflow:visible}
+  .market-player-row{grid-template-columns:48px minmax(120px,1fr) minmax(90px,.7fr) auto auto}
+}
+
+@media(max-width:760px){
+  .team-head-actions{width:100%;justify-content:stretch}
+  .team-head-actions .team-name-wrap{flex:1 1 100%}
+  .team-head-actions .market-toggle{flex:1}
+  .squad-market-workspace{display:block;height:auto}
+  .market-pane{margin-top:14px;padding:12px}
+  .market-pane .filters{grid-template-columns:1fr 1fr}
+  .market-player-row{grid-template-columns:42px minmax(100px,1fr) minmax(74px,.7fr) auto;padding:9px;gap:8px}
+  .market-player-row .market-player-avatar{width:40px;height:40px}
+  .market-player-price{grid-column:4}
+  .market-form{display:none}
+  .market-player-row .player-actions{grid-column:1/-1}
+  .competition-actions{width:100%;justify-content:stretch}
+  .competition-actions select{flex:1;min-width:0}
+  .competition-actions .btn{flex:1;padding-inline:8px}
+  .competition-invite{align-items:stretch;flex-direction:column}
+  .competition-invite>div:last-child .btn{flex:1}
+  .match-desktop-layout{display:none}
+  .match-mobile-layout{display:block}
+  .match-detail-dialog{max-height:calc(100dvh - 8px)}
+  .mobile-team-pitch .match-pitch-player{width:86px}
+}
+
+@media(max-width:500px){
+  .market-pane .filters{grid-template-columns:1fr}
+  .market-player-row{grid-template-columns:40px minmax(105px,1fr) auto}
+  .market-player-numbers{display:none}
+  .market-player-price{grid-column:3}
+  .mobile-team-pitch{height:590px}
+}
+

@@ -24,8 +24,7 @@
   </header>
 
   <nav class="tabs" aria-label="Hoofdnavigatie">
-    <button class="tab active" data-tab="team">Mijn team</button>
-    <button class="tab" data-tab="market">Transfermarkt</button>
+    <button class="tab active" data-tab="team">Mijn ploeg</button>
     <button class="tab" data-tab="leaderboard">Leaderboard</button>
     <button class="tab" data-tab="matches">Wedstrijden</button>
     <button class="tab" data-tab="rules">Regels</button>
@@ -35,131 +34,86 @@
     <section id="team" class="panel tab-panel active">
       <div class="section-head">
         <div>
-          <p class="eyebrow">TEAMBUILDER</p>
-          <h2>Mijn selectie</h2>
-          <p class="muted">Koop exact 2 keepers, 2 verdedigers, 2 middenvelders en 2 aanvallers. Kies daarna 6 basisspelers en 2 bankspelers.</p>
+          <p class="eyebrow">MIJN PLOEG</p>
+          <h2>Opstelling & transfermarkt</h2>
         </div>
-        <div class="team-name-wrap">
-          <label for="teamName">Teamnaam</label>
-          <input id="teamName" maxlength="28" value="Mijn Fantasy Team" />
+        <div class="team-head-actions">
+          <label class="team-name-wrap" for="teamName"><span>Teamnaam</span><input id="teamName" maxlength="28" value="Mijn Fantasy Team" /></label>
+          <button id="marketToggle" class="btn secondary-btn market-toggle" type="button" aria-controls="marketDrawer" aria-expanded="true">Transfermarkt sluiten</button>
         </div>
       </div>
 
-      <div class="squad-requirements" id="requirements"></div>
+      <div id="teamWorkspace" class="squad-market-workspace">
+        <div class="squad-pane">
+          <div class="squad-requirements" id="requirements"></div>
 
-      <div class="lineup-grid sorare-lineup-layout">
-        <section class="lineup-card pitch-card">
-          <div class="card-title-row">
-            <div>
-              <p class="eyebrow">OPSTELLING</p>
-              <h3 id="lineupTitle">Basis · 6 spelers</h3>
+          <section class="lineup-card pitch-card">
+            <div class="card-title-row">
+              <div>
+                <p class="eyebrow">OPSTELLING</p>
+                <h3 id="lineupTitle">Basis · 6 spelers</h3>
+              </div>
+              <span id="lineupPill" class="pill">1 GK + 5 veldspelers</span>
             </div>
-            <span id="lineupPill" class="pill">1 GK + 5 veldspelers</span>
-          </div>
-          <div id="startingXI" class="fantasy-pitch pitch-empty">
-            <div class="pitch-empty-message">Koop spelers op de transfermarkt om je team te bouwen.</div>
-          </div>
-        </section>
-
-        <section class="lineup-card bench-card">
-          <div class="card-title-row">
-            <div>
-              <p class="eyebrow">RESERVES</p>
-              <h3>Bank · 2 spelers</h3>
+            <div id="startingXI" class="fantasy-pitch pitch-empty">
+              <div class="pitch-empty-message">Koop spelers op de transfermarkt om je team te bouwen.</div>
             </div>
-            <span class="pill secondary">1 GK + 1 veldspeler</span>
+          </section>
+
+          <section class="lineup-card bench-card">
+            <div class="card-title-row compact-title-row">
+              <div><p class="eyebrow">BANK</p><h3>2 reserves</h3></div>
+              <span class="pill secondary">1 GK + 1 veldspeler</span>
+            </div>
+            <div id="bench" class="sorare-bench empty-state">Je bank wordt zichtbaar zodra je spelers hebt gekocht.</div>
+          </section>
+
+          <div class="team-actions">
+            <button id="autoLineupBtn" class="btn secondary-btn" disabled>Automatische opstelling</button>
+            <button id="resetBtn" class="btn danger-btn">Selectie wissen</button>
           </div>
-          <div id="bench" class="sorare-bench empty-state">Je bank wordt zichtbaar zodra je spelers hebt gekocht.</div>
-          <p class="bench-note"><strong>Automatische wissels:</strong> de reservekeeper vervangt alleen een keeper met 0 speelminuten. De veldreserve vervangt maximaal één veldspeler met 0 minuten.</p>
-        </section>
-      </div>
-
-      <div class="team-actions">
-        <button id="autoLineupBtn" class="btn secondary-btn" disabled>Automatische opstelling</button>
-        <button id="resetBtn" class="btn danger-btn">Selectie wissen</button>
-      </div>
-    </section>
-
-    <section id="market" class="panel tab-panel">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">TRANSFERMARKT</p>
-          <h2>Koop en wissel spelers</h2>
-          <p class="muted">Startbudget €125M. Je start met €125M cash. Spelers zonder speelminuten verdwijnen uit de markt, behalve keepers; zwakkere spelers hebben een lagere basisprijs.</p>
         </div>
-      </div>
 
-      <div class="filters">
-        <label class="search-box">
-          <span>Zoeken</span>
-          <input id="playerSearch" type="search" placeholder="Naam of club..." />
-        </label>
-        <label>
-          <span>Positie</span>
-          <select id="positionFilter">
-            <option value="ALL">Alle posities</option>
-            <option value="GK">Keeper</option>
-            <option value="DEF">Verdediger</option>
-            <option value="MID">Middenvelder</option>
-            <option value="FWD">Aanvaller</option>
-          </select>
-        </label>
-        <label>
-          <span>Club</span>
-          <select id="clubFilter"><option value="ALL">Alle clubs</option></select>
-        </label>
-        <label>
-          <span>Sorteren</span>
-          <select id="sortFilter">
-            <option value="price-desc">Prijs hoog → laag</option>
-            <option value="price-asc">Prijs laag → hoog</option>
-            <option value="minutes-desc">Minuten hoog → laag</option>
-            <option value="points-desc">Fantasy punten hoog → laag</option>
-            <option value="points-asc">Fantasy punten laag → hoog</option>
-            <option value="name">Naam A → Z</option>
-          </select>
-        </label>
-      </div>
+        <aside id="marketDrawer" class="market-pane" aria-label="Transfermarkt">
+          <div class="market-pane-head">
+            <div><p class="eyebrow">TRANSFERMARKT</p><h2>Spelers</h2></div>
+            <button id="marketClose" class="dialog-close market-close" type="button" aria-label="Transfermarkt sluiten">×</button>
+          </div>
 
-      <div class="price-range-filter">
-        <div class="price-range-head">
-          <span>Prijsrange</span>
-          <strong id="priceRangeValue">€1,0M – €50,0M</strong>
-        </div>
-        <div class="dual-range" aria-label="Prijsrange">
-          <div class="dual-range-track"></div>
-          <div id="priceRangeFill" class="dual-range-fill"></div>
-          <input id="priceMinFilter" class="dual-range-input" type="range" min="1" max="50" step="0.5" value="1" aria-label="Minimumprijs">
-          <input id="priceMaxFilter" class="dual-range-input" type="range" min="1" max="50" step="0.5" value="50" aria-label="Maximumprijs">
-        </div>
-        <div class="price-range-scale">
-          <span>Goedkoop</span>
-          <span>Duur</span>
-        </div>
-      </div>
+          <div class="filters">
+            <label class="search-box"><span>Zoeken</span><input id="playerSearch" type="search" placeholder="Naam of club..." /></label>
+            <label><span>Positie</span><select id="positionFilter"><option value="ALL">Alle posities</option><option value="GK">Keeper</option><option value="DEF">Verdediger</option><option value="MID">Middenvelder</option><option value="FWD">Aanvaller</option></select></label>
+            <label><span>Club</span><select id="clubFilter"><option value="ALL">Alle clubs</option></select></label>
+            <label><span>Sorteren</span><select id="sortFilter"><option value="price-desc">Prijs hoog → laag</option><option value="price-asc">Prijs laag → hoog</option><option value="minutes-desc">Minuten hoog → laag</option><option value="points-desc">Punten hoog → laag</option><option value="points-asc">Punten laag → hoog</option><option value="name">Naam A → Z</option></select></label>
+          </div>
 
-      <div class="market-summary">
-        <span id="marketCount"></span>
-        <span id="selectionWarning" class="warning-text"></span>
+          <div class="price-range-filter">
+            <div class="price-range-head"><span>Prijs</span><strong id="priceRangeValue">€1,0M – €50,0M</strong></div>
+            <div class="dual-range" aria-label="Prijsrange"><div class="dual-range-track"></div><div id="priceRangeFill" class="dual-range-fill"></div><input id="priceMinFilter" class="dual-range-input" type="range" min="1" max="50" step="0.5" value="1" aria-label="Minimumprijs"><input id="priceMaxFilter" class="dual-range-input" type="range" min="1" max="50" step="0.5" value="50" aria-label="Maximumprijs"></div>
+          </div>
+
+          <div class="market-summary"><span id="marketCount"></span><span id="selectionWarning" class="warning-text"></span></div>
+          <div id="playerGrid" class="player-grid"></div>
+        </aside>
       </div>
-      <div id="playerGrid" class="player-grid"></div>
     </section>
 
     <section id="leaderboard" class="panel tab-panel">
       <div class="section-head">
         <div>
-          <p class="eyebrow">VRIENDEN</p>
-          <h2>Leaderboard</h2>
-          <p class="muted">Vergelijk de totaalscore en de laatste speeldag. Klik op een team om de scores en vastgezette opstellingen van eerdere speeldagen te bekijken.</p>
+          <p class="eyebrow">COMPETITIES</p>
+          <h2 id="leaderboardTitle">Algemeen klassement</h2>
         </div>
+        <div class="competition-actions"><select id="competitionSelect" aria-label="Competitie kiezen"><option value="global">Algemeen klassement</option></select><button id="createCompetitionBtn" class="btn primary-btn" type="button">Nieuwe competitie</button><button id="inviteCompetitionBtn" class="btn secondary-btn" type="button" hidden>Uitnodigen</button><button id="deleteCompetitionBtn" class="btn danger-btn" type="button" hidden>Verwijderen</button></div>
       </div>
+      <div id="competitionInvites" class="competition-invites" hidden></div>
       <div class="leaderboard-card">
         <div class="leader-head">
-          <span>#</span><span>Team</span><span>Speeldag</span><span>Totaal</span>
+          <span>#</span><span>Manager</span><span>Speeldag</span><span>Totaal</span>
         </div>
         <button class="leader-row current-user" type="button" data-demo-history>
           <span class="rank">1</span>
-          <div><strong id="leaderTeamName">Mijn Fantasy Team</strong><small>Jij · klik voor historiek</small></div>
+          <div><strong id="leaderTeamName" class="leader-manager-name">Jij</strong><small>Klik voor ploeg</small></div>
           <strong class="gameweek-points">0 pts</strong>
           <strong id="leaderPoints">0 pts</strong>
         </button>
@@ -171,8 +125,7 @@
       <div class="section-head">
         <div>
           <p class="eyebrow">JUPILER PRO LEAGUE</p>
-          <h2>Wedstrijden & live scores</h2>
-          <p class="muted">Klik op een gespeelde of live wedstrijd voor de volledige opstelling, bank, wissels en fantasy-punten per speler.</p>
+          <h2>Wedstrijden</h2>
         </div>
       </div>
       <div class="matchweek-toolbar">
@@ -268,6 +221,19 @@
     </div>
   </dialog>
 
+  <dialog id="competitionDialog" class="detail-dialog competition-dialog">
+    <form id="competitionForm" class="dialog-shell">
+      <button class="dialog-close" type="button" data-close-dialog="competitionDialog" aria-label="Sluiten">×</button>
+      <p id="competitionDialogEyebrow" class="eyebrow">PRIVÉCOMPETITIE</p>
+      <h2 id="competitionDialogTitle">Nieuwe competitie</h2>
+      <p id="competitionDialogText" class="muted">Maak een privéklassement voor je vrienden.</p>
+      <label id="competitionNameLabel"><span>Naam</span><input id="competitionNameInput" maxlength="40" autocomplete="off" /></label>
+      <label id="competitionInviteLabel" hidden><span>Gebruikersnaam</span><input id="competitionInviteInput" maxlength="28" autocomplete="off" /></label>
+      <div id="competitionError" class="auth-error" role="alert"></div>
+      <button id="competitionSubmit" class="btn primary-btn" type="submit">Aanmaken</button>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -277,3 +243,4 @@
   <script src="cloud.js"></script>
 </body>
 </html>
+

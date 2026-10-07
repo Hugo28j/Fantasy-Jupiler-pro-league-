@@ -14,7 +14,9 @@
     currentGameweekNumber: null,
     liveScoreTimer: null,
     initialSetupComplete: false,
-    onboardingSeen: false
+    onboardingSeen: false,
+    leagues: [],
+    selectedLeague: "global"
   };
 
   const original = {
@@ -68,7 +70,7 @@
         '<p>Je kiest <strong>8 spelers</strong>: 2 keepers, 2 verdedigers, 2 middenvelders en 2 aanvallers. Je start met <strong>€125M</strong>.</p>' +
         '<p>Daarvan staan <strong>6 spelers in de basis</strong> en <strong>2 op de bank</strong>: precies 1 reservekeeper en 1 veldspeler. Er kan maximaal 1 keeper in de basis staan. De reservekeeper kan alleen de keeper vervangen wanneer die niet speelt; de veldreserve kan maximaal één niet-spelende veldspeler vervangen.</p>' +
         '<p>Voor je eerste speeldag mag je onbeperkt je selectie aanpassen. Daarna krijg je <strong>2 gratis transfers per speeldag</strong>; extra transfers kosten punten.</p>' +
-        '<button id="onboardingOk" class="btn primary-btn" type="button">Oké, naar de transfermarkt</button>' +
+        '<button id="onboardingOk" class="btn primary-btn" type="button">Oké, bouw mijn ploeg</button>' +
       '</div>';
     document.body.appendChild(onboarding);
 
@@ -267,7 +269,7 @@
       document.querySelectorAll(".player-card").forEach(card => {
         const id = card.querySelector(".buy-btn")?.dataset.id;
         const player = id ? playerById(id) : null;
-        const score = card.querySelector(".player-meta div:nth-child(2) strong");
+        const score = card.querySelector(".market-total-points");
         if(score && player) score.textContent = Number(player.score || 0).toFixed(1).replace(".0","");
       });
     };
@@ -448,11 +450,7 @@
     state.captainId = state.squad.includes(data.captain_id) ? data.captain_id : null;
     cloud.initialSetupComplete = Boolean(data.initial_setup_complete);
     cloud.onboardingSeen = Boolean(data.onboarding_seen);
-    window.FANTASY_INITIAL_SETUP_LOCK = !cloud.initialSetupComplete;
-
-    if(!cloud.initialSetupComplete && window.activateFantasyTab){
-      window.activateFantasyTab("market",true);
-    }
+    window.FANTASY_INITIAL_SETUP_LOCK = false;
     if(!cloud.initialSetupComplete && !cloud.onboardingSeen){
       const onboarding = document.getElementById("onboardingDialog");
       if(onboarding && !onboarding.open) onboarding.showModal();
@@ -466,27 +464,80 @@
     renderHeader();
   }
 
+  function selectedLeague(){
+    return cloud.leagues.find(league => String(league.id) === String(cloud.selectedLeague)) || null;
+  }
+
+  function updateCompetitionActions(){
+    const league = selectedLeague();
+    const inviteButton = document.getElementById("inviteCompetitionBtn");
+    const deleteButton = document.getElementById("deleteCompetitionBtn");
+    inviteButton.hidden = !league?.is_owner;
+    deleteButton.hidden = !league?.is_owner;
+    document.getElementById("leaderboardTitle").textContent = league?.name || "Algemeen klassement";
+  }
+
+  async function loadCompetitions(){
+    const select = document.getElementById("competitionSelect");
+    const [{data:leagues,error:leagueError},{data:invites,error:inviteError}] = await Promise.all([
+      cloud.client.rpc("my_private_leagues"),
+      cloud.client.rpc("my_private_league_invites")
+    ]);
+    if(leagueError) throw leagueError;
+    if(inviteError) throw inviteError;
+    cloud.leagues = leagues || [];
+    if(cloud.selectedLeague !== "global" && !cloud.leagues.some(item => String(item.id) === String(cloud.selectedLeague))){
+      cloud.selectedLeague = "global";
+    }
+    select.innerHTML = '<option value="global">Algemeen klassement</option>' + cloud.leagues.map(league =>
+      '<option value="' + escapeHtml(String(league.id)) + '">' + escapeHtml(league.name) + ' · ' + Number(league.member_count || 1) + '</option>'
+    ).join("");
+    select.value = cloud.selectedLeague;
+    updateCompetitionActions();
+
+    const target = document.getElementById("competitionInvites");
+    target.hidden = !(invites || []).length;
+    target.innerHTML = (invites || []).map(invite =>
+      '<article class="competition-invite"><div><strong>' + escapeHtml(invite.league_name) + '</strong><small>Uitnodiging van ' + escapeHtml(invite.owner_name) + '</small></div>' +
+      '<div><button class="btn primary-btn" type="button" data-invite-action="accept" data-invite-id="' + escapeHtml(String(invite.invite_id)) + '">Accepteren</button>' +
+      '<button class="btn secondary-btn" type="button" data-invite-action="decline" data-invite-id="' + escapeHtml(String(invite.invite_id)) + '">Weigeren</button></div></article>'
+    ).join("");
+    target.querySelectorAll("[data-invite-action]").forEach(button => button.addEventListener("click",async () => {
+      button.disabled = true;
+      const {error} = await cloud.client.rpc("respond_private_league_invite",{
+        p_invite:button.dataset.inviteId,
+        p_accept:button.dataset.inviteAction === "accept"
+      });
+      if(error){ toast(error.message); button.disabled = false; return; }
+      toast(button.dataset.inviteAction === "accept" ? "Je bent toegetreden tot de competitie." : "Uitnodiging geweigerd.");
+      await loadCompetitions();
+      await loadLeaderboard();
+    }));
+  }
+
   async function loadLeaderboard(){
-    const {data,error} = await cloud.client.rpc("public_leaderboard");
+    const rpc = cloud.selectedLeague === "global" ? "public_leaderboard" : "private_league_leaderboard";
+    const params = cloud.selectedLeague === "global" ? undefined : {p_league:cloud.selectedLeague};
+    const {data,error} = await cloud.client.rpc(rpc,params);
     if(error) throw error;
     const card = document.querySelector(".leaderboard-card");
-    card.innerHTML = '<div class="leader-head"><span>#</span><span>Team</span><span>Speeldag</span><span>Totaal</span></div>';
+    card.innerHTML = '<div class="leader-head"><span>#</span><span>Manager</span><span>Speeldag</span><span>Totaal</span></div>';
     (data || []).forEach((row,index) => {
       const mine = cloud.user && row.manager_id === cloud.user.id;
       const line = make("button","leader-row" + (mine ? " current-user" : ""));
       line.type = "button";
-      const rank = make("span","rank",String(index + 1));
+      const rank = make("span","rank",String(row.rank || index + 1));
       const info = make("div");
-      info.appendChild(make("strong","",row.team_name));
+      info.appendChild(make("strong","leader-manager-name",row.manager_name || row.team_name || "Manager"));
       if(mine) info.querySelector("strong").id = "leaderTeamName";
-      info.appendChild(make("small","",mine ? "Jij · klik voor historiek" : "Klik voor historiek"));
+      info.appendChild(make("small","",(mine ? "Jij · " : "") + (row.team_name || "Ploeg") + " · bekijk ploeg"));
       const latest = make("strong","gameweek-points",row.latest_gameweek_number
         ? "S" + row.latest_gameweek_number + " · " + Number(row.latest_gameweek_points || 0).toFixed(1).replace(".0","")
         : "—");
       const points = make("strong","",Number(row.total_points || 0).toFixed(1).replace(".0","") + " pts");
       if(mine) points.id = "leaderPoints";
       line.append(rank,info,latest,points);
-      line.addEventListener("click",() => loadManagerHistory(row.manager_id,row.team_name));
+      line.addEventListener("click",() => loadManagerHistory(row.manager_id,row.manager_name || row.team_name));
       card.appendChild(line);
     });
     if(!data || !data.length){
@@ -494,28 +545,29 @@
     }
   }
 
-  async function loadManagerHistory(managerId,teamName){
+  async function loadManagerHistory(managerId,managerName){
     const dialog = document.getElementById("managerDialog");
     const target = document.getElementById("managerHistory");
-    target.innerHTML = '<p class="eyebrow">TEAMHISTORIEK</p><h2>' + escapeHtml(teamName) + '</h2><div class="empty-state">Speeldagen laden…</div>';
+    target.innerHTML = '<p class="eyebrow">PLOEG VAN MANAGER</p><h2>' + escapeHtml(managerName) + '</h2><div class="empty-state">Speeldagen laden…</div>';
     if(!dialog.open) dialog.showModal();
     const {data,error} = await cloud.client.rpc("public_manager_history",{p_manager:managerId});
     if(error){
-      target.innerHTML = '<p class="eyebrow">TEAMHISTORIEK</p><h2>' + escapeHtml(teamName) + '</h2><div class="empty-state">De historiek kon niet worden geladen.</div>';
+      target.innerHTML = '<p class="eyebrow">PLOEG VAN MANAGER</p><h2>' + escapeHtml(managerName) + '</h2><div class="empty-state">Deze ploeg wordt zichtbaar zodra de deadline verstreken is.</div>';
       return;
     }
     const history = (data || []).map(row => {
       const starters = (row.starter_ids || []).map(id => playerById(id) || {id,name:id,pos:""});
       const benchIds = [row.bench_gk_id,row.bench_outfield_id].filter(Boolean);
       const bench = benchIds.map(id => playerById(id) || {id,name:"Onbekende speler",pos:""});
-      const lineup = starters.map(player => '<div class="history-player"><strong>' + escapeHtml(player.name) +
+      const lineup = starters.map(player => '<button type="button" class="history-player" data-history-player="' + escapeHtml(String(player.id)) + '"><strong>' + escapeHtml(player.name) +
         (String(row.captain_id || "") === String(player.id) ? ' <span class="history-captain">C</span>' : '') +
-        '</strong><small>' + escapeHtml(player.pos) + ' · basis</small></div>').join("") +
-        bench.map(player => '<div class="history-player bench"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(player.pos) + ' · bank</small></div>').join("");
+        '</strong><small>' + escapeHtml(player.pos) + ' · basis</small></button>').join("") +
+        bench.map(player => '<button type="button" class="history-player bench" data-history-player="' + escapeHtml(String(player.id)) + '"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(player.pos) + ' · bank</small></button>').join("");
       const transferCost = Number(row.breakdown?.transfer_cost || 0);
       return '<article class="history-card"><div class="history-card-head"><div><strong>Speeldag ' + row.gameweek_number + '</strong><small>' + (transferCost ? " · −" + transferCost + " transferpunten" : "") + '</small></div><strong>' + points(row.points) + '</strong></div><div class="history-lineup">' + (lineup || '<span class="muted">Geen vastgezette spelers.</span>') + '</div></article>';
     }).join("");
-    target.innerHTML = '<p class="eyebrow">TEAMHISTORIEK</p><h2>' + escapeHtml(teamName) + '</h2><p class="muted">Vastgezette opstellingen en behaalde score per speeldag.</p><div class="history-list">' + (history || '<div class="empty-state">Nog geen afgewerkte speeldagen.</div>') + '</div>';
+    target.innerHTML = '<p class="eyebrow">PLOEG VAN MANAGER</p><h2>' + escapeHtml(managerName) + '</h2><p class="muted">Vastgezette opstellingen na de deadline.</p><div class="history-list">' + (history || '<div class="empty-state">Deze ploeg wordt zichtbaar zodra de deadline verstreken is.</div>') + '</div>';
+    target.querySelectorAll("[data-history-player]").forEach(button => button.addEventListener("click",() => openPlayerProfile(button.dataset.historyPlayer)));
   }
 
   async function loadPlayerStats(playerId){
@@ -615,6 +667,77 @@
       : "2 gratis per speeldag · daarna −4 punten per extra transfer";
   }
 
+  function openCompetitionDialog(mode){
+    if(!cloud.user){
+      document.getElementById("authDialog").showModal();
+      toast("Log eerst in om een privécompetitie te gebruiken.");
+      return;
+    }
+    const inviteMode = mode === "invite";
+    const league = selectedLeague();
+    if(inviteMode && !league?.is_owner) return;
+    const form = document.getElementById("competitionForm");
+    form.dataset.mode = mode;
+    document.getElementById("competitionDialogTitle").textContent = inviteMode ? "Manager uitnodigen" : "Nieuwe competitie";
+    document.getElementById("competitionDialogText").textContent = inviteMode
+      ? "Nodig iemand uit met zijn exacte gebruikersnaam. Alleen genodigden kunnen toetreden."
+      : "Maak een privéklassement voor je vrienden.";
+    document.getElementById("competitionNameLabel").hidden = inviteMode;
+    document.getElementById("competitionInviteLabel").hidden = !inviteMode;
+    document.getElementById("competitionSubmit").textContent = inviteMode ? "Uitnodiging sturen" : "Aanmaken";
+    document.getElementById("competitionError").textContent = "";
+    document.getElementById("competitionNameInput").value = "";
+    document.getElementById("competitionInviteInput").value = "";
+    document.getElementById("competitionDialog").showModal();
+    setTimeout(() => document.getElementById(inviteMode ? "competitionInviteInput" : "competitionNameInput").focus(),0);
+  }
+
+  function bindCompetitionUi(){
+    document.getElementById("competitionSelect").addEventListener("change",async event => {
+      cloud.selectedLeague = event.target.value;
+      updateCompetitionActions();
+      try{ await loadLeaderboard(); }catch(error){ toast(error.message); }
+    });
+    document.getElementById("createCompetitionBtn").addEventListener("click",() => openCompetitionDialog("create"));
+    document.getElementById("inviteCompetitionBtn").addEventListener("click",() => openCompetitionDialog("invite"));
+    document.getElementById("deleteCompetitionBtn").addEventListener("click",async () => {
+      const league = selectedLeague();
+      if(!league?.is_owner || !confirm('Privécompetitie "' + league.name + '" verwijderen?')) return;
+      const {error} = await cloud.client.rpc("delete_private_league",{p_league:league.id});
+      if(error){ toast(error.message); return; }
+      cloud.selectedLeague = "global";
+      toast("Privécompetitie verwijderd.");
+      await loadCompetitions();
+      await loadLeaderboard();
+    });
+    document.getElementById("competitionForm").addEventListener("submit",async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const inviteMode = form.dataset.mode === "invite";
+      const errorTarget = document.getElementById("competitionError");
+      const submit = document.getElementById("competitionSubmit");
+      errorTarget.textContent = "";
+      submit.disabled = true;
+      try{
+        const result = inviteMode
+          ? await cloud.client.rpc("invite_to_private_league",{p_league:cloud.selectedLeague,p_manager_name:document.getElementById("competitionInviteInput").value.trim()})
+          : await cloud.client.rpc("create_private_league",{p_name:document.getElementById("competitionNameInput").value.trim()});
+        if(result.error) throw result.error;
+        document.getElementById("competitionDialog").close();
+        if(!inviteMode){
+          cloud.selectedLeague = String(result.data);
+          toast("Privécompetitie aangemaakt.");
+        }else toast("Uitnodiging verstuurd.");
+        await loadCompetitions();
+        await loadLeaderboard();
+      }catch(error){
+        errorTarget.textContent = error.message || "Actie mislukt.";
+      }finally{
+        submit.disabled = false;
+      }
+    });
+  }
+
   function formatDateTime(value){
     if(!value) return "onbekend";
     return new Intl.DateTimeFormat("nl-BE",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(value);
@@ -636,6 +759,7 @@
       await Promise.all([loadFixtures(),loadDeadline(),loadTransferStatus(),loadGameweekBalance()]);
       await loadCurrentGameweekPlayerScores();
       await loadTeam();
+      await loadCompetitions();
       await loadLeaderboard();
       startLiveScorePolling();
       if(!cloud.locked) setStatus("Online opgeslagen","online");
@@ -673,11 +797,16 @@
       state.teamName = "Mijn Fantasy Team";
       cloud.initialSetupComplete = false;
       cloud.onboardingSeen = false;
+      cloud.leagues = [];
+      cloud.selectedLeague = "global";
       window.FANTASY_INITIAL_SETUP_LOCK = false;
       state.cash = START_BUDGET;
       original.saveState();
       renderAll();
       updateEditability();
+      document.getElementById("competitionSelect").innerHTML = '<option value="global">Algemeen klassement</option>';
+      document.getElementById("competitionInvites").hidden = true;
+      updateCompetitionActions();
       try{
         await Promise.all([loadPlayers(),loadFixtures(),loadGameweekBalance()]);
         renderAll();
@@ -689,6 +818,7 @@
 
   injectUi();
   wrapMutations();
+  bindCompetitionUi();
   window.addEventListener("fantasy:player-profile",event => {
     if(cloud.enabled && cloud.client && event.detail?.playerId) loadPlayerStats(event.detail.playerId);
   });
@@ -707,3 +837,4 @@
   cloud.client.auth.getSession().then(({data}) => handleSession(data.session));
   cloud.client.auth.onAuthStateChange((_event,session) => handleSession(session));
 })();
+
