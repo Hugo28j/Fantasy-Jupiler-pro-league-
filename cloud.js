@@ -15,6 +15,11 @@
     liveScoreTimer: null,
     initialSetupComplete: false,
     onboardingSeen: false,
+    transfersUsed: 0,
+    freeTransfers: 2,
+    transferCost: 0,
+    unlimitedTransfers: true,
+    baselineSquad: null,
     leagues: [],
     selectedLeague: "global"
   };
@@ -38,19 +43,60 @@
     return el;
   }
 
+  function accountDefaultTeamName(){
+    const meta = cloud.user?.user_metadata || {};
+    return String(meta.display_name || meta.name || meta.full_name || "Mijn Fantasy Team").trim().slice(0,28) || "Mijn Fantasy Team";
+  }
+
+  function incomingTransfersForSquad(squad){
+    if(cloud.unlimitedTransfers || !Array.isArray(cloud.baselineSquad)) return 0;
+    const baseline = new Set(cloud.baselineSquad.map(String));
+    return (Array.isArray(squad) ? squad : []).filter(id => !baseline.has(String(id))).length;
+  }
+
+  function extraTransferCostForPurchase(id){
+    if(cloud.unlimitedTransfers || !Array.isArray(cloud.baselineSquad)) return 0;
+    const current = incomingTransfersForSquad(state.squad);
+    const next = incomingTransfersForSquad([...state.squad,String(id)]);
+    const currentCost = Math.max(0,current-cloud.freeTransfers)*4;
+    const nextCost = Math.max(0,next-cloud.freeTransfers)*4;
+    return Math.max(0,nextCost-currentCost);
+  }
+
+  function confirmExtraTransfer(cost){
+    return new Promise(resolve => {
+      const dialog = document.getElementById("transferConfirmDialog");
+      const textTarget = document.getElementById("transferConfirmText");
+      const ok = document.getElementById("transferConfirmOk");
+      const cancel = document.getElementById("transferConfirmCancel");
+      textTarget.textContent = "Je gratis transfers zijn opgebruikt. Als je deze speler koopt, kost dit −" + cost + " punten.";
+      const finish = value => {
+        ok.onclick = null;
+        cancel.onclick = null;
+        if(dialog.open) dialog.close();
+        resolve(value);
+      };
+      ok.onclick = () => finish(true);
+      cancel.onclick = () => finish(false);
+      dialog.oncancel = event => { event.preventDefault(); finish(false); };
+      dialog.showModal();
+    });
+  }
+
   function injectUi(){
-    document.head.insertAdjacentHTML("beforeend", '<link rel="stylesheet" href="cloud.css?v=016">');
+    document.head.insertAdjacentHTML("beforeend", '<link rel="stylesheet" href="cloud.css?v=017">');
     const bar = make("div","cloud-bar");
     bar.innerHTML = '<span id="cloudStatus" class="cloud-status">Demo op dit toestel</span><button id="authButton" class="btn secondary-btn" type="button">Inloggen</button>';
     document.querySelector(".topbar").appendChild(bar);
 
-    const gameweekStatus = make("section","gameweek-status-card");
-    gameweekStatus.id = "gameweekStatusCard";
-    gameweekStatus.innerHTML =
-      '<div id="deadlineCard" class="gameweek-status-part deadline-card"><span id="syncDot" class="sync-dot"></span><div><strong id="deadlineTitle">Speeldagdeadline</strong><small id="deadlineText">Nog niet gekoppeld</small></div></div>' +
-      '<div id="transferCard" class="gameweek-status-part transfer-card"><div><strong id="transferTitle">Transfers</strong><small id="transferText">2 gratis per speeldag · daarna −4 punten per extra transfer</small></div><span id="transferCounter" class="transfer-counter">0 / 2</span></div>' +
-      '<button id="resetTransfersBtn" class="btn secondary-btn reset-transfers-btn" type="button" disabled>Reset transfers</button>';
-    document.querySelector("main").prepend(gameweekStatus);
+    const headerStats = document.querySelector(".header-stats");
+    const deadlineStat = make("div","header-live-stat deadline-card");
+    deadlineStat.id = "deadlineCard";
+    deadlineStat.innerHTML = '<span id="deadlineTitle">Deadline</span><strong id="deadlineText">—</strong><i id="syncDot" class="sync-dot" aria-hidden="true"></i>';
+    const transferStat = make("div","header-live-stat transfer-card");
+    transferStat.id = "transferCard";
+    transferStat.innerHTML = '<span id="transferTitle">Transfers</span><strong id="transferCounter" class="transfer-counter">∞</strong><small id="transferText" hidden></small><button id="resetTransfersBtn" class="header-reset-transfer" type="button" title="Transfers resetten" aria-label="Transfers resetten" disabled>↶</button>';
+    headerStats.append(deadlineStat,transferStat);
 
     const dialog = document.createElement("dialog");
     dialog.id = "authDialog";
@@ -68,20 +114,35 @@
         '<p>Je kiest <strong>8 spelers</strong>: 2 keepers, 2 verdedigers, 2 middenvelders en 2 aanvallers. Je start met <strong>€125M</strong>.</p>' +
         '<p>Daarvan staan <strong>6 spelers in de basis</strong> en <strong>2 op de bank</strong>: precies 1 reservekeeper en 1 veldspeler. Er kan maximaal 1 keeper in de basis staan. De reservekeeper kan alleen de keeper vervangen wanneer die niet speelt; de veldreserve kan maximaal één niet-spelende veldspeler vervangen.</p>' +
         '<p>Voor je eerste speeldag mag je onbeperkt je selectie aanpassen. Daarna krijg je <strong>2 gratis transfers per speeldag</strong>; extra transfers kosten punten.</p>' +
+        '<label class="onboarding-team-name"><span>Teamnaam (optioneel)</span><input id="onboardingTeamName" maxlength="28" autocomplete="off" placeholder="Leeg = je gebruikersnaam"></label>' +
         '<button id="onboardingOk" class="btn primary-btn" type="button">Oké, bouw mijn ploeg</button>' +
       '</div>';
     document.body.appendChild(onboarding);
 
     document.getElementById("onboardingOk").addEventListener("click",async () => {
-      onboarding.close();
-      cloud.onboardingSeen = true;
-      if(window.activateFantasyTab) window.activateFantasyTab("market",true);
+      const chosenName = document.getElementById("onboardingTeamName").value.trim();
       try{
+        const {data:nameResult,error:nameError} = await cloud.client.rpc("update_my_team_name",{p_name:chosenName || null});
+        if(nameError) throw nameError;
+        state.teamName = String(nameResult || chosenName || accountDefaultTeamName()).slice(0,28);
+        original.saveState();
+        renderAll();
         await cloud.client.rpc("mark_onboarding_seen");
+        cloud.onboardingSeen = true;
+        onboarding.close();
+        if(window.activateFantasyTab) window.activateFantasyTab("market",true);
       }catch(error){
-        console.warn("Onboardingstatus kon niet worden opgeslagen",error);
+        toast(error.message || "Teamnaam kon niet worden opgeslagen.");
       }
     });
+
+    const transferConfirm = document.createElement("dialog");
+    transferConfirm.id = "transferConfirmDialog";
+    transferConfirm.className = "transfer-confirm-dialog";
+    transferConfirm.innerHTML = '<div class="transfer-confirm-shell"><p class="eyebrow">EXTRA TRANSFER</p><h2>Deze transfer kost punten</h2><p id="transferConfirmText"></p><div class="transfer-confirm-actions"><button id="transferConfirmCancel" class="btn secondary-btn" type="button">Annuleren</button><button id="transferConfirmOk" class="btn danger-btn" type="button">Oké, uitvoeren</button></div></div>';
+    document.body.appendChild(transferConfirm);
+
+    bindSettingsUi();
 
     document.getElementById("authButton").addEventListener("click", onAuthButton);
     document.getElementById("closeAuth").addEventListener("click", () => dialog.close());
@@ -91,12 +152,73 @@
     document.getElementById("resetTransfersBtn").addEventListener("click", resetTransfers);
   }
 
+
+  function bindSettingsUi(){
+    document.getElementById("teamNameSettingsForm")?.addEventListener("submit",async event => {
+      event.preventDefault();
+      if(!cloud.user){ toast("Log eerst in."); return; }
+      const input = document.getElementById("settingsTeamName");
+      const button = event.submitter;
+      if(button) button.disabled = true;
+      try{
+        const {data,error} = await cloud.client.rpc("update_my_team_name",{p_name:input.value.trim() || null});
+        if(error) throw error;
+        state.teamName = String(data || accountDefaultTeamName()).slice(0,28);
+        original.saveState();
+        renderAll();
+        await loadLeaderboard().catch(() => {});
+        toast("Teamnaam opgeslagen.");
+      }catch(error){
+        toast(error.message || "Teamnaam kon niet worden opgeslagen.");
+      }finally{
+        if(button) button.disabled = false;
+      }
+    });
+
+    document.getElementById("passwordSettingsForm")?.addEventListener("submit",async event => {
+      event.preventDefault();
+      if(!cloud.user){ toast("Log eerst in."); return; }
+      const password = document.getElementById("settingsPassword").value;
+      const repeat = document.getElementById("settingsPasswordRepeat").value;
+      if(password.length < 4){ toast("Gebruik minstens 4 tekens."); return; }
+      if(password !== repeat){ toast("De twee wachtwoorden zijn niet hetzelfde."); return; }
+      const button = event.submitter;
+      if(button) button.disabled = true;
+      const {error} = await cloud.client.auth.updateUser({password});
+      if(button) button.disabled = false;
+      if(error){ toast(error.message); return; }
+      document.getElementById("settingsPassword").value = "";
+      document.getElementById("settingsPasswordRepeat").value = "";
+      toast("Wachtwoord gewijzigd.");
+    });
+
+    document.getElementById("deleteAccountBtn")?.addEventListener("click",async () => {
+      if(!cloud.user){ toast("Log eerst in."); return; }
+      if(!confirm("Je account, ploeg, scores en competities worden definitief verwijderd. Doorgaan?")) return;
+      if(!confirm("Dit kan niet ongedaan gemaakt worden. Account echt verwijderen?")) return;
+      const button = document.getElementById("deleteAccountBtn");
+      button.disabled = true;
+      button.textContent = "Verwijderen…";
+      try{
+        const {error} = await cloud.client.rpc("delete_my_account");
+        if(error) throw error;
+        try{ await cloud.client.auth.signOut({scope:"local"}); }catch(_error){}
+        localStorage.removeItem("fantasy-jpl-2026-v1");
+        location.reload();
+      }catch(error){
+        button.disabled = false;
+        button.textContent = "Account definitief verwijderen";
+        toast(error.message || "Account kon niet worden verwijderd.");
+      }
+    });
+  }
+
   function showSetupBanner(){
     const banner = make("div","backend-banner","De site draait nog in demomodus op dit toestel. Vul config.js in en voer de Supabase-migratie uit om accounts, live data, scores en deadlines te activeren.");
     document.querySelector("main").prepend(banner);
     document.getElementById("authButton").textContent = "Backend instellen";
     document.getElementById("deadlineText").textContent = "Demomodus — wijzigingen worden alleen lokaal bewaard";
-    document.getElementById("transferText").textContent = "Wordt actief zodra de backend gekoppeld is";
+    document.getElementById("transferCounter").textContent = "—";
   }
 
   function setStatus(text,kind){
@@ -257,7 +379,12 @@
       original.saveState();
       queueRemoteSave();
     };
-    buyPlayer = function(id){ if(requireEditable()) return original.buyPlayer(id); };
+    buyPlayer = async function(id){
+      if(!requireEditable()) return;
+      const extraCost = extraTransferCostForPurchase(id);
+      if(extraCost > 0 && !(await confirmExtraTransfer(extraCost))) return;
+      return original.buyPlayer(id);
+    };
     sellPlayer = function(id){ if(requireEditable()) return original.sellPlayer(id); };
     setBench = function(id){ if(requireEditable()) return original.setBench(id); };
     setCaptain = function(id){ if(requireEditable()) return original.setCaptain(id); };
@@ -282,9 +409,6 @@
       }
     };
 
-    document.getElementById("teamName").addEventListener("change", () => {
-      if(requireEditable()) queueRemoteSave(0);
-    });
   }
 
   function queueRemoteSave(delay){
@@ -465,8 +589,13 @@
     state.captainId = state.squad.includes(data.captain_id) ? data.captain_id : null;
     cloud.initialSetupComplete = Boolean(data.initial_setup_complete);
     cloud.onboardingSeen = Boolean(data.onboarding_seen);
-    window.FANTASY_INITIAL_SETUP_LOCK = false;
+    window.FANTASY_INITIAL_SETUP_LOCK = !cloud.initialSetupComplete;
+    if(!cloud.initialSetupComplete && window.activateFantasyTab){
+      window.activateFantasyTab("market",true);
+    }
     if(!cloud.initialSetupComplete && !cloud.onboardingSeen){
+      const onboardingInput = document.getElementById("onboardingTeamName");
+      if(onboardingInput && !onboardingInput.value) onboardingInput.placeholder = "Leeg = " + accountDefaultTeamName();
       const onboarding = document.getElementById("onboardingDialog");
       if(onboarding && !onboarding.open) onboarding.showModal();
     }
@@ -617,13 +746,16 @@
     cloud.deadline = row && row.lock_at ? new Date(row.lock_at) : null;
     const card = document.getElementById("deadlineCard");
     card.classList.toggle("is-locked",cloud.locked);
-    document.getElementById("deadlineTitle").textContent = row && row.gameweek_number ? "Speeldag " + row.gameweek_number : "Speeldagdeadline";
+    document.getElementById("deadlineTitle").textContent = row && row.gameweek_number ? "Deadline · SD " + row.gameweek_number : "Deadline";
     if(!row){
-      document.getElementById("deadlineText").textContent = "Nog geen speeldag uit de datafeed ontvangen";
+      document.getElementById("deadlineText").textContent = "—";
+      card.title = "Nog geen speeldag uit de datafeed ontvangen";
     }else if(cloud.locked){
-      document.getElementById("deadlineText").textContent = "Vergrendeld sinds " + formatDateTime(cloud.deadline);
+      document.getElementById("deadlineText").textContent = "Gesloten";
+      card.title = "Vergrendeld sinds " + formatDateTime(cloud.deadline);
     }else{
-      document.getElementById("deadlineText").textContent = "Opstelling sluit op " + formatDateTime(cloud.deadline);
+      document.getElementById("deadlineText").textContent = formatDateTime(cloud.deadline);
+      card.title = "Opstelling sluit op " + formatDateTime(cloud.deadline);
     }
     updateEditability();
   }
@@ -703,17 +835,32 @@
     const used = Number(row?.transfers_used || 0);
     const free = Number(row?.free_transfers || 2);
     const cost = Number(row?.point_cost || 0);
-    document.getElementById("transferTitle").textContent = row?.gameweek_number ? "Transfers voor speeldag " + row.gameweek_number : "Transfers";
-    document.getElementById("transferCounter").textContent = used + " / " + free + " gratis";
-    document.getElementById("transferCounter").classList.toggle("has-cost",cost > 0);
-    document.getElementById("transferText").textContent = cost > 0
-      ? "Huidige puntenkost: −" + cost + " punten"
-      : "2 gratis per speeldag · daarna −4 punten per extra transfer";
+    const unlimited = Boolean(row?.unlimited);
+    const baseline = Array.isArray(row?.baseline_squad_ids) ? row.baseline_squad_ids.map(String) : null;
+
+    cloud.transfersUsed = used;
+    cloud.freeTransfers = free;
+    cloud.transferCost = cost;
+    cloud.unlimitedTransfers = unlimited;
+    cloud.baselineSquad = baseline;
+
+    const counter = document.getElementById("transferCounter");
+    document.getElementById("transferTitle").textContent = "Transfers";
+    counter.textContent = unlimited ? "∞" : String(Math.max(0,free-used));
+    counter.classList.toggle("has-cost",cost > 0);
+    counter.title = unlimited
+      ? "Je eerste gespeelde fantasyweek: onbeperkt wisselen"
+      : (cost > 0 ? "Huidige transferkost: −" + cost + " punten" : Math.max(0,free-used) + " gratis transfer(s) over");
+    document.getElementById("transferText").textContent = cost > 0 ? "−" + cost + " punten" : "";
+
     const resetButton = document.getElementById("resetTransfersBtn");
-    resetButton.disabled = cloud.locked || used === 0;
+    resetButton.hidden = unlimited;
+    resetButton.disabled = unlimited || cloud.locked || used === 0;
     resetButton.title = cloud.locked
       ? "Transfers zijn vergrendeld"
-      : used === 0 ? "Je ploeg is al gelijk aan het begin van deze transferperiode" : "Herstel je vorige vastgezette selectie";
+      : unlimited ? "Je hebt nog onbeperkte transfers" : used === 0
+        ? "Je ploeg is al gelijk aan het begin van deze transferperiode"
+        : "Herstel je vorige vastgezette selectie";
   }
 
   function openCompetitionDialog(mode){
@@ -794,7 +941,8 @@
 
   function updateEditability(){
     const disabled = cloud.enabled && (!cloud.user || cloud.locked);
-    document.getElementById("teamName").disabled = disabled;
+    const nameInput = document.getElementById("settingsTeamName");
+    if(nameInput) nameInput.disabled = !cloud.user;
     document.getElementById("autoLineupBtn").disabled = disabled || !isSquadComplete();
     document.getElementById("resetBtn").disabled = disabled;
     if(cloud.locked) setStatus("Speeldag vergrendeld","locked");
@@ -837,9 +985,15 @@
       setStatus("Niet ingelogd","");
       document.getElementById("deadlineText").textContent = "Log in om de actuele deadline te zien";
       document.getElementById("transferTitle").textContent = "Transfers";
-      document.getElementById("transferCounter").textContent = "0 / 2";
-      document.getElementById("transferText").textContent = "Log in om je transfers voor de volgende speeldag te zien";
+      document.getElementById("transferCounter").textContent = "—";
+      document.getElementById("transferText").textContent = "";
       document.getElementById("resetTransfersBtn").disabled = true;
+      document.getElementById("resetTransfersBtn").hidden = true;
+      cloud.transfersUsed = 0;
+      cloud.freeTransfers = 2;
+      cloud.transferCost = 0;
+      cloud.unlimitedTransfers = true;
+      cloud.baselineSquad = null;
       state.squad = [];
       state.benchGK = null;
       state.benchOutfield = null;
