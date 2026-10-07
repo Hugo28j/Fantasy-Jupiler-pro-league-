@@ -18,7 +18,8 @@ const marketPriceFilter = {
   min:null,
   max:null,
   boundMin:1,
-  boundMax:50
+  boundMax:50,
+  touched:false
 };
 
 function loadState(){
@@ -71,6 +72,16 @@ function escapeHtml(value){
 function points(value){
   return Number(value || 0).toFixed(1).replace(".0","").replace(".",",") + " pts";
 }
+
+function scoreBandClass(value){
+  const score = Number(value || 0);
+  if(score < 0) return "score-negative";
+  if(score < 15) return "score-orange";
+  if(score < 30) return "score-yellow";
+  if(score < 50) return "score-green";
+  return "score-blue";
+}
+
 function toast(message){
   const el = document.getElementById("toast");
   el.textContent = message;
@@ -227,7 +238,7 @@ function lineupPlayerHtml(p,isBench){
   const score = liveScoreMode
     ? Number(liveScores[p.id] || 0)
     : Number(p.score || 0);
-  const scoreClass = score >= 60 ? "hot" : score >= 30 ? "warm" : "cool";
+  const scoreClass = scoreBandClass(score);
   const isCaptain = state.captainId === p.id;
   return '<article class="sorare-player ' + (isBench ? "is-bench":"") + (isCaptain ? " is-captain":"") + '">' +
     '<button class="captain-toggle ' + (isCaptain ? "selected":"") + '" data-id="' + escapeHtml(p.id) + '" type="button" aria-label="' +
@@ -242,6 +253,7 @@ function lineupPlayerHtml(p,isBench){
       '<span class="role-badge role-' + p.pos + '">' + p.pos + '</span>' +
       '<span class="sorare-price">' + money(p.price) + '</span>' +
       '<button class="bench-toggle mini-action" data-id="' + escapeHtml(p.id) + '" type="button">' + buttonText + '</button>' +
+      '<button class="sell-direct mini-action danger-mini-action" data-id="' + escapeHtml(p.id) + '" type="button">Verkopen</button>' +
     '</div>' +
   '</article>';
 }
@@ -317,6 +329,7 @@ function renderTeam(){
 
   document.querySelectorAll("#team .bench-toggle").forEach(btn => btn.addEventListener("click", () => setBench(btn.dataset.id)));
   document.querySelectorAll("#team .captain-toggle").forEach(btn => btn.addEventListener("click", () => setCaptain(btn.dataset.id)));
+  document.querySelectorAll("#team .sell-direct").forEach(btn => btn.addEventListener("click", () => sellPlayer(btn.dataset.id)));
   document.querySelectorAll("#team .player-name-link").forEach(btn => btn.addEventListener("click", () => openPlayerProfile(btn.dataset.playerId)));
 }
 
@@ -400,6 +413,7 @@ function updatePriceFilter(changed){
 
   marketPriceFilter.min = roundHalf(min);
   marketPriceFilter.max = roundHalf(max);
+  marketPriceFilter.touched = true;
   syncPriceFilterBounds();
   renderMarket();
 }
@@ -443,18 +457,25 @@ function renderMarket(){
     const check = canBuy(p);
     const disabled = !owned && !check.ok;
     const scorePer90 = Number(p.minutes || 0) > 0 ? Number(p.score || 0) / Number(p.minutes) * 90 : 0;
-    const barValues = [
-      Math.min(100,Math.max(8,Number(p.price || 0) / Math.max(1,marketPriceFilter.boundMax) * 100)),
-      Math.min(100,Math.max(8,scorePer90 / 60 * 100)),
-      Math.min(100,Math.max(8,Number(p.minutes || 0) / 900 * 100)),
-      Math.min(100,Math.max(8,Number(p.score || 0) / 400 * 100)),
-      Math.min(100,Math.max(8,50 + Number(p.lastPriceDelta || 0) * 20))
-    ];
-    const profileBars = barValues.map(value => '<i style="--bar:' + Math.round(value) + '%"></i>').join("");
+    const recentMatches = (Array.isArray(p.matchHistory) ? p.matchHistory : [])
+      .slice()
+      .sort((a,b) => String(a.kickoff || "").localeCompare(String(b.kickoff || "")))
+      .slice(-5);
+    const chartMatches = recentMatches.length
+      ? recentMatches
+      : [{points:Number(p.score || 0),gameweek:null,minutes:Number(p.minutes || 0)}];
+    const maxChartScore = Math.max(15,...chartMatches.map(item => Math.abs(Number(item.points || 0))));
+    const profileBars = chartMatches.map(item => {
+      const score = Number(item.points || 0);
+      const height = Math.max(10,Math.round(Math.abs(score) / maxChartScore * 100));
+      const title = (item.gameweek ? "Speeldag " + item.gameweek + " · " : "") +
+        points(score) + " · " + Number(item.minutes || 0) + " min";
+      return '<i class="' + scoreBandClass(score) + '" style="--bar:' + height + '%" title="' + escapeHtml(title) + '"></i>';
+    }).join("");
     return '<article class="player-card market-player-row ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
       '<button class="market-player-avatar role-ring-' + p.pos + ' player-title-link" data-player-id="' + escapeHtml(p.id) + '" type="button" aria-label="Bekijk ' + escapeHtml(p.name) + '">' + initials(p.name) + '</button>' +
       '<div class="market-player-identity"><div><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3></div><span class="club">' + escapeHtml(p.club) + '</span></div>' +
-      '<div class="market-form"><span>Profiel</span><div class="market-form-bars" aria-label="Spelersprofiel op basis van prijs, punten per 90, minuten, totaalscore en prijswijziging">' + profileBars + '</div><small>' + scorePer90.toFixed(1).replace(".",",") + ' pts/90</small></div>' +
+      '<div class="market-form"><span>Laatste speeldagen</span><div class="market-form-bars" aria-label="Recente wedstrijdscores met scorekleuren">' + profileBars + '</div><small>' + scorePer90.toFixed(1).replace(".",",") + ' pts/90</small></div>' +
       '<div class="market-player-numbers"><strong class="market-total-points">' + points(p.score).replace(" pts","") + '</strong><small>' + Number(p.minutes || 0) + ' min</small></div>' +
       '<div class="market-player-price"><strong>' + money(p.price) + '</strong><small class="market-price-change ' +
         (Number(p.lastPriceDelta || 0) > 0 ? "positive" : Number(p.lastPriceDelta || 0) < 0 ? "negative" : "neutral") + '">' +
@@ -573,32 +594,43 @@ function renderPlayerProfile(player,matchRows=[]){
     const contribution = weight == null ? 0 : Math.round(value * Number(weight) * 100) / 100;
     return {label,key,value,contribution,weight};
   }).filter(metric => metric.weight != null && Number(metric.weight) !== 0);
-  const matches = rows.slice().sort((a,b) => {
-    const ad = a.fixtures?.kickoff || "";
-    const bd = b.fixtures?.kickoff || "";
-    return bd.localeCompare(ad);
-  }).map(row => {
-    const fixture = row.fixtures || {};
-    const stats = row.stats || {};
+  const chartRows = rows.slice().sort((a,b) => {
+    const af = Array.isArray(a.fixtures) ? a.fixtures[0] : (a.fixtures || {});
+    const bf = Array.isArray(b.fixtures) ? b.fixtures[0] : (b.fixtures || {});
+    const agw = Number(af.gameweeks?.number || 0);
+    const bgw = Number(bf.gameweeks?.number || 0);
+    return agw === bgw ? String(af.kickoff || "").localeCompare(String(bf.kickoff || "")) : agw-bgw;
+  });
+  const maxMatchScore = Math.max(15,...chartRows.map(row => Math.abs(Number(row.fantasy_points || 0))));
+  const matches = chartRows.map(row => {
+    const fixture = Array.isArray(row.fixtures) ? row.fixtures[0] : (row.fixtures || {});
     const gameweek = fixture.gameweeks?.number || "?";
-    const date = fixture.kickoff ? new Intl.DateTimeFormat("nl-BE",{day:"numeric",month:"short"}).format(new Date(fixture.kickoff)) : "";
-    const delta = Number(stats.priceDelta);
-    const hasPriceMove = Number.isFinite(delta);
-    const priceMoveClass = delta > 0 ? "positive" : delta < 0 ? "negative" : "neutral";
-    const priceMove = hasPriceMove
-      ? '<span class="profile-price-move ' + priceMoveClass + '">' + (delta > 0 ? "+" : delta < 0 ? "−" : "±") +
-        '€' + Math.abs(delta).toFixed(1).replace(".",",") + 'M</span>'
-      : '<span class="profile-price-move neutral">—</span>';
-    return '<div class="profile-match"><div><strong>Speeldag ' + gameweek + '</strong><small>' +
-      escapeHtml(date + " · " + (fixture.home_team || "") + " – " + (fixture.away_team || "")) +
-      '</small></div><span>' + Number(row.minutes || 0) + ' min</span><strong>' + points(row.fantasy_points) +
-      '</strong>' + priceMove + '</div>';
+    const score = Number(row.fantasy_points || 0);
+    const minutes = Number(row.minutes || 0);
+    const height = Math.max(8,Math.round(Math.abs(score) / maxMatchScore * 100));
+    const fixtureId = fixture.id == null ? "" : String(fixture.id);
+    const title = "Speeldag " + gameweek + ": " + points(score) + ", " + minutes + " minuten";
+    return '<button class="gameweek-chart-item" type="button" data-fixture-id="' + escapeHtml(fixtureId) +
+      '" title="' + escapeHtml(title) + '" ' + (fixtureId ? "" : "disabled") + '>' +
+      '<strong class="gameweek-chart-points">' + points(score).replace(" pts","") + '</strong>' +
+      '<span class="gameweek-chart-track"><i class="' + scoreBandClass(score) + '" style="--bar-height:' + height + '%"></i></span>' +
+      '<span class="gameweek-chart-label">SD ' + escapeHtml(String(gameweek)) + '<small>' + minutes + ' min</small></span>' +
+    '</button>';
   }).join("");
   document.getElementById("playerProfile").innerHTML =
     '<p class="eyebrow">SPELERSFICHE</p><div class="profile-hero"><div><span class="role-badge role-' + player.pos + '">' + player.pos + '</span><h2>' + escapeHtml(player.name) + '</h2><p>' + escapeHtml(player.club) + ' · ' + escapeHtml(POSITION_LABELS[player.pos]) + '</p></div><strong class="profile-price">' + money(Number(player.price)) + '</strong></div>' +
     '<div class="profile-highlights"><article><span>Totale score</span><strong>' + points(totalPoints) + '</strong></article><article><span>Speelminuten</span><strong>' + totalMinutes + '</strong></article><article><span>Wedstrijden</span><strong>' + rows.length + '</strong></article></div>' +
-    '<h3>Seizoenstatistieken</h3><div class="stat-groups">' + renderSeasonStatGroups(metrics,player.pos) + '</div>' +
-    '<div class="profile-section-head"><h3>Score per wedstrijd</h3><small>Inclusief +0,1 punt per minuut</small></div><div class="profile-matches">' + (matches || '<div class="empty-state">Nog geen verwerkte wedstrijdstatistieken.</div>') + '</div>';
+    '<section class="profile-performance-card"><div class="profile-section-head"><div><h3>Prestaties</h3><small>Klik op een speeldagbalk voor de volledige wedstrijd</small></div></div>' +
+      '<div class="gameweek-chart-scroll"><div class="gameweek-chart">' + (matches || '<div class="empty-state">Nog geen verwerkte wedstrijdstatistieken.</div>') + '</div></div>' +
+      '<div class="profile-stat-groups"><h4>Seizoenstatistieken</h4><div class="stat-groups">' + renderSeasonStatGroups(metrics,player.pos) + '</div></div>' +
+    '</section>';
+  document.querySelectorAll("#playerProfile .gameweek-chart-item[data-fixture-id]:not([disabled])").forEach(button => {
+    button.addEventListener("click",() => {
+      const playerDialog = document.getElementById("playerDialog");
+      if(playerDialog.open) playerDialog.close();
+      openFixtureDetail(button.dataset.fixtureId);
+    });
+  });
 }
 
 function openPlayerProfile(id){
@@ -615,6 +647,16 @@ function matchweekNumber(match){
   if(Number.isFinite(direct) && direct > 0) return direct;
   const parsed = String(match?.week || "").match(/\d+/);
   return parsed ? Number(parsed[0]) : null;
+}
+
+function openFixtureDetail(fixtureId,fallbackMatch){
+  const id = String(fixtureId || "");
+  if(!id) return;
+  const match = fallbackMatch || MATCHES.find(item => String(item.id) === id);
+  const dialog = document.getElementById("matchDialog");
+  document.getElementById("matchDetail").innerHTML = '<div class="empty-state match-loading">Wedstrijdopstelling laden…</div>';
+  if(!dialog.open) dialog.showModal();
+  window.dispatchEvent(new CustomEvent("fantasy:match-detail",{detail:{fixtureId:id,match}}));
 }
 
 function renderMatches(){
@@ -665,12 +707,7 @@ function renderMatches(){
   }).join("") || '<div class="empty-state">Geen wedstrijden gevonden voor deze speeldag.</div>';
 
   target.querySelectorAll(".match-row-button").forEach(button => button.addEventListener("click",() => {
-    const id = button.dataset.fixtureId;
-    const match = MATCHES.find(m => String(m.id) === String(id));
-    const dialog = document.getElementById("matchDialog");
-    document.getElementById("matchDetail").innerHTML = '<div class="empty-state match-loading">Wedstrijdopstelling laden…</div>';
-    if(!dialog.open) dialog.showModal();
-    window.dispatchEvent(new CustomEvent("fantasy:match-detail",{detail:{fixtureId:id,match}}));
+    openFixtureDetail(button.dataset.fixtureId);
   }));
 }
 

@@ -18,12 +18,22 @@
 .auth-divider span{white-space:nowrap}
 .auth-error{min-height:18px;color:#ff9eaa;font-size:13px}
 .backend-banner{margin:0 auto 18px;padding:12px 14px;border:1px solid rgba(246,196,83,.35);border-radius:12px;background:rgba(246,196,83,.08);color:#f7d985;font-size:13px;line-height:1.45}
-.deadline-card{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:0 0 16px;padding:12px 14px;border:1px solid var(--border);border-radius:13px;background:var(--panel)}
-.deadline-card strong{display:block}.deadline-card small{display:block;color:var(--muted);margin-top:3px}
-.deadline-card.is-locked{border-color:rgba(246,196,83,.45);background:rgba(246,196,83,.07)}
-.transfer-card{display:flex;gap:12px;align-items:center;justify-content:space-between;margin:-7px 0 16px;padding:11px 14px;border:1px solid var(--border);border-radius:13px;background:rgba(13,29,43,.72)}
-.transfer-card strong{display:block}.transfer-card small{display:block;color:var(--muted);margin-top:3px}
+.gameweek-status-card{display:grid;grid-template-columns:minmax(220px,1fr) minmax(290px,1.25fr) auto;gap:0;align-items:stretch;margin:0 0 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden}
+.gameweek-status-part{display:flex;gap:10px;align-items:center;justify-content:space-between;min-width:0;padding:12px 14px}
+.gameweek-status-part+ .gameweek-status-part{border-left:1px solid var(--border)}
+.deadline-card strong,.transfer-card strong{display:block}
+.deadline-card small,.transfer-card small{display:block;color:var(--muted);margin-top:3px}
+.deadline-card.is-locked{background:rgba(246,196,83,.07)}
 .transfer-counter{white-space:nowrap;font-weight:900;color:#8df0b5;background:rgba(56,210,122,.1);border-radius:999px;padding:7px 10px}
 .transfer-counter.has-cost{color:#f7d985;background:rgba(246,196,83,.1)}
+.reset-transfers-btn{align-self:center;margin:10px 12px;white-space:nowrap}
 .sync-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:0 0 auto}.sync-dot.online{background:var(--accent)}.sync-dot.locked{background:var(--warning)}
-@media(max-width:760px){.cloud-bar{width:100%;justify-content:space-between}.cloud-status{text-align:left;max-width:none}.deadline-card,.transfer-card{align-items:flex-start}.transfer-card{margin-top:-7px}.topbar .cloud-bar .btn{padding:8px 10px}}
+@media(max-width:760px){
+  .cloud-bar{width:100%;justify-content:space-between}
+  .cloud-status{text-align:left;max-width:none}
+  .gameweek-status-card{grid-template-columns:1fr}
+  .gameweek-status-part{align-items:flex-start}
+  .gameweek-status-part+ .gameweek-status-part{border-left:0;border-top:1px solid var(--border)}
+  .reset-transfers-btn{width:calc(100% - 24px)}
+  .topbar .cloud-bar .btn{padding:8px 10px}
+}

@@ -704,3 +704,63 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .mobile-team-pitch{height:590px}
 }
 
+
+
+/* Compacte desktopopstelling, scorekleuren en speeldaggrafieken */
+.danger-mini-action{color:#ffadb6;border-color:rgba(255,101,119,.34)}
+.danger-mini-action:hover{color:#fff;background:rgba(255,77,95,.22);border-color:#ff6575}
+.sorare-score.score-negative{background:#ff4d5f;color:#fff}
+.sorare-score.score-orange{background:#ff844a}
+.sorare-score.score-yellow{background:#f1d43b}
+.sorare-score.score-green{background:#35e38a}
+.sorare-score.score-blue{background:#61d7ff}
+.market-form-bars i{background:var(--bar-color,#35e38a)}
+.market-form-bars i.score-negative{--bar-color:#ff4d5f}
+.market-form-bars i.score-orange{--bar-color:#ff844a}
+.market-form-bars i.score-yellow{--bar-color:#f1d43b}
+.market-form-bars i.score-green{--bar-color:#35e38a}
+.market-form-bars i.score-blue{--bar-color:#61d7ff}
+
+.profile-performance-card{margin-top:18px;padding:16px;border:1px solid var(--border);border-radius:16px;background:rgba(4,18,27,.34)}
+.profile-performance-card .profile-section-head{margin:0 0 12px}
+.profile-performance-card .profile-section-head h3{margin:0}
+.profile-performance-card .profile-section-head small{display:block;margin-top:4px;color:var(--muted)}
+.profile-stat-groups{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.profile-stat-groups h4{margin:0 0 10px}
+.gameweek-chart-scroll{overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;padding:6px 3px 12px;scrollbar-color:#2d6b55 #091a27}
+.gameweek-chart{display:flex;align-items:stretch;gap:8px;min-width:max-content;min-height:245px;padding:6px 2px}
+.gameweek-chart-item{width:76px;display:grid;grid-template-rows:28px 160px auto;gap:5px;align-items:end;border:0;border-radius:11px;background:transparent;color:var(--text);padding:4px;cursor:pointer}
+.gameweek-chart-item:hover{background:rgba(97,215,255,.07)}
+.gameweek-chart-item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gameweek-chart-item:disabled{cursor:default;opacity:.72}
+.gameweek-chart-points{text-align:center;font-size:12px}
+.gameweek-chart-track{position:relative;height:160px;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,transparent,rgba(255,255,255,.025));border-radius:7px 7px 2px 2px}
+.gameweek-chart-track i{display:block;width:34px;height:var(--bar-height);min-height:5px;border-radius:7px 7px 2px 2px;box-shadow:0 5px 12px rgba(0,0,0,.2)}
+.gameweek-chart-track i.score-negative{background:#ff4d5f}
+.gameweek-chart-track i.score-orange{background:#ff844a}
+.gameweek-chart-track i.score-yellow{background:#f1d43b}
+.gameweek-chart-track i.score-green{background:#35e38a}
+.gameweek-chart-track i.score-blue{background:#61d7ff}
+.gameweek-chart-label{text-align:center;font-size:11px;font-weight:900;line-height:1.2}
+.gameweek-chart-label small{display:block;margin-top:3px;color:var(--muted);font-size:9px;font-weight:700}
+
+@media(min-width:1061px){
+  .squad-pane{overflow-y:auto;overscroll-behavior:contain;padding-right:3px;scrollbar-color:#2d6b55 #091a27}
+  .squad-pane .pitch-card{min-height:455px}
+  .squad-pane .fantasy-pitch{padding:24px 18px}
+  .squad-pane .pitch-markings{inset:14px}
+  .squad-pane .pitch-formation{min-height:365px}
+  .squad-pane .pitch-row{min-height:82px;gap:clamp(12px,3vw,46px)}
+  .squad-pane .pitch-player-wrap{width:min(150px,28vw)}
+  .squad-pane .sorare-avatar{width:48px;height:48px;font-size:13px;border-width:2px}
+  .squad-pane .sorare-score{margin-top:-9px;min-width:29px;padding:2px 6px;font-size:10px}
+  .squad-pane .sorare-player-name{margin-top:3px;max-width:125px;padding:3px 6px;font-size:10px}
+  .squad-pane .sorare-player-meta{display:none}
+  .squad-pane .sorare-player-footer{margin-top:3px;gap:3px}
+  .squad-pane .role-badge,.squad-pane .sorare-price{padding:3px 5px;font-size:8px}
+  .squad-pane .mini-action{padding:3px 5px;font-size:8px}
+  .squad-pane .captain-toggle{width:23px;height:23px;font-size:10px}
+  .squad-pane .sorare-bench{min-height:120px;grid-template-columns:repeat(2,minmax(150px,210px));gap:8px}
+  .squad-pane .sorare-bench .sorare-player{padding:6px}
+  .squad-pane .sorare-bench .sorare-avatar{width:42px;height:42px}
+}

@@ -39,20 +39,18 @@
   }
 
   function injectUi(){
-    document.head.insertAdjacentHTML("beforeend", '<link rel="stylesheet" href="cloud.css">');
+    document.head.insertAdjacentHTML("beforeend", '<link rel="stylesheet" href="cloud.css?v=016">');
     const bar = make("div","cloud-bar");
     bar.innerHTML = '<span id="cloudStatus" class="cloud-status">Demo op dit toestel</span><button id="authButton" class="btn secondary-btn" type="button">Inloggen</button>';
     document.querySelector(".topbar").appendChild(bar);
 
-    const deadline = make("div","deadline-card");
-    deadline.id = "deadlineCard";
-    deadline.innerHTML = '<span id="syncDot" class="sync-dot"></span><div><strong id="deadlineTitle">Speeldagdeadline</strong><small id="deadlineText">Nog niet gekoppeld</small></div>';
-    document.querySelector("main").prepend(deadline);
-
-    const transfers = make("div","transfer-card");
-    transfers.id = "transferCard";
-    transfers.innerHTML = '<div><strong id="transferTitle">Transfers</strong><small id="transferText">2 gratis per speeldag · daarna −4 punten per extra transfer</small></div><span id="transferCounter" class="transfer-counter">0 / 2</span>';
-    deadline.insertAdjacentElement("afterend",transfers);
+    const gameweekStatus = make("section","gameweek-status-card");
+    gameweekStatus.id = "gameweekStatusCard";
+    gameweekStatus.innerHTML =
+      '<div id="deadlineCard" class="gameweek-status-part deadline-card"><span id="syncDot" class="sync-dot"></span><div><strong id="deadlineTitle">Speeldagdeadline</strong><small id="deadlineText">Nog niet gekoppeld</small></div></div>' +
+      '<div id="transferCard" class="gameweek-status-part transfer-card"><div><strong id="transferTitle">Transfers</strong><small id="transferText">2 gratis per speeldag · daarna −4 punten per extra transfer</small></div><span id="transferCounter" class="transfer-counter">0 / 2</span></div>' +
+      '<button id="resetTransfersBtn" class="btn secondary-btn reset-transfers-btn" type="button" disabled>Reset transfers</button>';
+    document.querySelector("main").prepend(gameweekStatus);
 
     const dialog = document.createElement("dialog");
     dialog.id = "authDialog";
@@ -90,6 +88,7 @@
     document.getElementById("googleAuthButton").addEventListener("click", signInWithGoogle);
     document.getElementById("authForm").addEventListener("submit", event => { event.preventDefault(); signIn(); });
     document.getElementById("signupButton").addEventListener("click", signUp);
+    document.getElementById("resetTransfersBtn").addEventListener("click", resetTransfers);
   }
 
   function showSetupBanner(){
@@ -326,7 +325,7 @@
     for(let from=0; from<10000; from+=pageSize){
       const {data,error} = await cloud.client
         .from("player_match_stats")
-        .select("player_id,minutes,stats,fixtures(kickoff,status)")
+        .select("player_id,minutes,fantasy_points,stats,fixtures(id,kickoff,status,gameweeks(number))")
         .range(from,from+pageSize-1);
       if(error) throw error;
       rows.push(...(data || []));
@@ -351,10 +350,21 @@
     if(!data || !data.length) return;
 
     const latestPriceChange = new Map();
+    const playerMatchHistory = new Map();
     for(const row of priceRows){
       const fixture = Array.isArray(row.fixtures) ? row.fixtures[0] : row.fixtures;
       if(!fixture || fixture.status !== "FT") continue;
       if(Number(row.minutes || 0) <= 0) continue;
+      const playerId = String(row.player_id);
+      const history = playerMatchHistory.get(playerId) || [];
+      history.push({
+        fixtureId:fixture.id == null ? null : String(fixture.id),
+        gameweek:Number(fixture.gameweeks?.number || 0) || null,
+        kickoff:String(fixture.kickoff || ""),
+        points:Number(row.fantasy_points || 0),
+        minutes:Number(row.minutes || 0)
+      });
+      playerMatchHistory.set(playerId,history);
       const deltaRaw = row.stats?.priceDelta;
       if(deltaRaw == null || !Number.isFinite(Number(deltaRaw))) continue;
       const kickoff = String(fixture.kickoff || "");
@@ -370,8 +380,13 @@
     PLAYERS.splice(0,PLAYERS.length,...data.map(p => ({
       id:p.id,name:p.name,club:p.club_name,pos:p.position,minutes:p.minutes,
       price:Number(p.price),score:Number(p.total_points || 0),
-      lastPriceDelta:latestPriceChange.get(String(p.id))?.delta ?? 0
+      lastPriceDelta:latestPriceChange.get(String(p.id))?.delta ?? 0,
+      matchHistory:(playerMatchHistory.get(String(p.id)) || []).sort((a,b) => a.kickoff.localeCompare(b.kickoff))
     })));
+    if(!marketPriceFilter.touched){
+      marketPriceFilter.min = null;
+      marketPriceFilter.max = null;
+    }
     const clubs = [...new Set(PLAYERS.map(p => p.club))].sort((a,b) => a.localeCompare(b,"nl"));
     CLUBS.splice(0,CLUBS.length,...clubs);
     state.squad = state.squad.filter(id => PLAYERS.some(p => p.id === id));
@@ -582,7 +597,7 @@
     if(!player) return;
     const {data,error} = await cloud.client
       .from("player_match_stats")
-      .select("minutes,stats,fantasy_points,fixtures(kickoff,home_team,away_team,gameweeks(number))")
+      .select("minutes,stats,fantasy_points,fixtures(id,kickoff,status,home_team,away_team,home_score,away_score,gameweeks(number))")
       .eq("player_id",playerId)
       .limit(100);
     if(error){
@@ -658,6 +673,28 @@
     },60000);
   }
 
+  async function resetTransfers(){
+    if(!cloud.user || cloud.locked) return;
+    if(!confirm("Wil je alle transfers van deze transferperiode ongedaan maken en je vorige vastgezette selectie herstellen?")) return;
+    const button = document.getElementById("resetTransfersBtn");
+    button.disabled = true;
+    button.textContent = "Herstellen…";
+    try{
+      const {error} = await cloud.client.rpc("reset_my_transfers");
+      if(error) throw error;
+      await loadTeam();
+      await loadTransferStatus();
+      toast("Transfers gereset naar je vorige vastgezette selectie.");
+    }catch(error){
+      console.error(error);
+      const missingMigration = /reset_my_transfers|schema cache|function/i.test(error.message || "");
+      toast(missingMigration ? "Voer eerst migratie 016 uit in Supabase." : error.message);
+      await loadTransferStatus().catch(() => {});
+    }finally{
+      button.textContent = "Reset transfers";
+    }
+  }
+
   async function loadTransferStatus(){
     if(!cloud.user) return;
     const {data,error} = await cloud.client.rpc("my_transfer_status");
@@ -672,6 +709,11 @@
     document.getElementById("transferText").textContent = cost > 0
       ? "Huidige puntenkost: −" + cost + " punten"
       : "2 gratis per speeldag · daarna −4 punten per extra transfer";
+    const resetButton = document.getElementById("resetTransfersBtn");
+    resetButton.disabled = cloud.locked || used === 0;
+    resetButton.title = cloud.locked
+      ? "Transfers zijn vergrendeld"
+      : used === 0 ? "Je ploeg is al gelijk aan het begin van deze transferperiode" : "Herstel je vorige vastgezette selectie";
   }
 
   function openCompetitionDialog(mode){
@@ -797,6 +839,7 @@
       document.getElementById("transferTitle").textContent = "Transfers";
       document.getElementById("transferCounter").textContent = "0 / 2";
       document.getElementById("transferText").textContent = "Log in om je transfers voor de volgende speeldag te zien";
+      document.getElementById("resetTransfersBtn").disabled = true;
       state.squad = [];
       state.benchGK = null;
       state.benchOutfield = null;
