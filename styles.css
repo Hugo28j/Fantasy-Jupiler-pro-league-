@@ -840,19 +840,20 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .settings-danger .eyebrow{color:#ff8997}
 
 @media(min-width:1061px){
-  .squad-market-workspace{height:calc(100dvh - 155px);min-height:760px}
+  /* Laat de volledige basisopstelling ook op een ~800px hoog laptopscherm passen. */
+  .squad-market-workspace{height:calc(100dvh - 155px);min-height:610px}
   .squad-pane{height:100%;grid-template-rows:auto minmax(0,1fr) auto;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:auto;scrollbar-color:#2d6b55 #091a27}
   .lineup-stage,.lineup-stage .fantasy-pitch,.lineup-stage .side-bench-card,.lineup-stage .sorare-bench{overscroll-behavior-y:auto;touch-action:pan-y}
-  .lineup-stage{height:100%;min-height:680px}
+  .lineup-stage{height:100%;min-height:0}
   .lineup-stage .pitch-card{height:100%;display:block;min-height:0}
-  .lineup-stage .fantasy-pitch{height:100%;min-height:0;padding:26px 20px}
-  .lineup-stage .pitch-formation{height:100%;min-height:630px}
-  .lineup-stage .pitch-row{min-height:120px;gap:clamp(14px,3.5vw,58px)}
-  .lineup-stage .pitch-player-wrap{width:min(155px,28vw)}
-  .lineup-stage .sorare-avatar{width:52px;height:52px;font-size:14px}
-  .lineup-stage .sorare-player-name{max-width:132px}
+  .lineup-stage .fantasy-pitch{height:100%;min-height:0;padding:16px 18px}
+  .lineup-stage .pitch-formation{height:100%;min-height:510px}
+  .lineup-stage .pitch-row{min-height:96px;gap:clamp(14px,3.5vw,58px)}
+  .lineup-stage .pitch-player-wrap{width:min(150px,28vw)}
+  .lineup-stage .sorare-avatar{width:48px;height:48px;font-size:13px}
+  .lineup-stage .sorare-player-name{max-width:128px}
   .market-collapsed .squad-pane{max-width:1320px}
-  .squad-pane .captain-toggle{left:calc(50% + 13px);right:auto;top:0}
+  .squad-pane .captain-toggle{left:calc(50% + 12px);right:auto;top:0}
 }
 
 @media(max-width:1060px){
