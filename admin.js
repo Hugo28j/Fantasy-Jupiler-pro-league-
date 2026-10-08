@@ -248,8 +248,29 @@
     }).join("");
   }
 
+  function closestStandardFormation(currentFormation){
+    if(FORMATIONS.includes(currentFormation)) return currentFormation;
+
+    const current = String(currentFormation || "").split("-").map(Number);
+    if(current.length !== 3 || current.some(value => !Number.isFinite(value))){
+      return "4-3-3";
+    }
+
+    return FORMATIONS
+      .map(formation => {
+        const parts = formation.split("-").map(Number);
+        const distance =
+          Math.abs(parts[0]-current[0]) +
+          Math.abs(parts[1]-current[1]) +
+          Math.abs(parts[2]-current[2]);
+        return {formation,distance};
+      })
+      .sort((a,b) => a.distance-b.distance)[0].formation;
+  }
+
   function buildTeamEditor(match,rows,side,label){
-    const currentFormation = effectiveFormation(rows,match,side);
+    const rawFormation = effectiveFormation(rows,match,side);
+    const currentFormation = closestStandardFormation(rawFormation);
     const wrapper = document.createElement("article");
     wrapper.className = "admin-team-editor";
     wrapper.dataset.side = side;
@@ -268,6 +289,9 @@
 
   function collectEditor(editor){
     const formation = editor.querySelector(".admin-formation-select").value;
+    if(!FORMATIONS.includes(formation)){
+      throw new Error("Kies een geldige formatie.");
+    }
     const slots = [...editor.querySelectorAll(".admin-slot")].map((slot,index) => ({
       player_id:slot.querySelector("select").value,
       zone:slot.dataset.zone,
