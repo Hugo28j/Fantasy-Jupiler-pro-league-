@@ -1008,3 +1008,11 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .player-ranking-row .player-ranking-club{display:none}
   .player-ranking-title{align-items:flex-start}
 }
+
+.admin-editor-context{
+  margin:5px 0 0;
+  max-width:620px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.45;
+}
