@@ -998,16 +998,58 @@ function matchPlayerButton(row,match,side,index,total,zone){
 function inferredMatchStarters(rows){
   const predicted = rows.filter(row => predictionPercent(row) != null);
   if(predicted.length){
-    const sorted = predicted
-      .slice()
-      .sort((a,b) => {
-        const pctDiff = predictionPercent(b)-predictionPercent(a);
-        if(pctDiff) return pctDiff;
-        const posOrder = {GK:0,DEF:1,MID:2,FWD:3};
-        const posDiff = (posOrder[a.player?.position] ?? 9)-(posOrder[b.player?.position] ?? 9);
-        if(posDiff) return posDiff;
-        return String(a.player?.name || "").localeCompare(String(b.player?.name || ""),"nl");
-      });
+    const byPosition = {GK:[],DEF:[],MID:[],FWD:[]};
+    predicted.forEach(row => {
+      const pos = row.player?.position || "MID";
+      if(byPosition[pos]) byPosition[pos].push(row);
+    });
+    Object.values(byPosition).forEach(group => group.sort((a,b) => {
+      const pctDiff = predictionPercent(b)-predictionPercent(a);
+      if(pctDiff) return pctDiff;
+      return String(a.player?.name || "").localeCompare(String(b.player?.name || ""),"nl");
+    }));
+
+    // Kies de sterkste verwachte XI binnen een geldige standaardformatie.
+    // Dit voorkomt automatische vormen zoals 6-2-2 of 2-4-4 die de admin-RPC
+    // terecht niet accepteerde.
+    const standardFormations = [
+      [4,3,3],[4,4,2],[3,4,3],[3,5,2],[5,3,2],[4,5,1],[5,4,1]
+    ];
+    let best = null;
+
+    for(const [defCount,midCount,fwdCount] of standardFormations){
+      if(
+        byPosition.GK.length < 1 ||
+        byPosition.DEF.length < defCount ||
+        byPosition.MID.length < midCount ||
+        byPosition.FWD.length < fwdCount
+      ) continue;
+
+      const selected = [
+        byPosition.GK[0],
+        ...byPosition.DEF.slice(0,defCount),
+        ...byPosition.MID.slice(0,midCount),
+        ...byPosition.FWD.slice(0,fwdCount)
+      ];
+      const totalProbability = selected.reduce((sum,row) => sum + predictionPercent(row),0);
+
+      if(!best || totalProbability > best.totalProbability){
+        best = {selected,totalProbability};
+      }
+    }
+
+    if(best) return best.selected;
+
+    // Alleen als de beschikbare prediction-data geen enkele standaardformatie
+    // kan vormen, vallen we terug op de 11 hoogste kansen.
+    const sorted = predicted.slice().sort((a,b) => {
+      const pctDiff = predictionPercent(b)-predictionPercent(a);
+      if(pctDiff) return pctDiff;
+      const posOrder = {GK:0,DEF:1,MID:2,FWD:3};
+      const posDiff = (posOrder[a.player?.position] ?? 9)-(posOrder[b.player?.position] ?? 9);
+      if(posDiff) return posDiff;
+      return String(a.player?.name || "").localeCompare(String(b.player?.name || ""),"nl");
+    });
     const keeper = sorted.find(row => row.player?.position === "GK");
     if(!keeper) return sorted.slice(0,11);
     return [keeper,...sorted.filter(row => row !== keeper && row.player?.position !== "GK").slice(0,10)];
