@@ -23,7 +23,10 @@
     leagues: [],
     selectedLeague: "global",
     leaderboardRows: [],
-    selectedLeaderboardManager: null
+    selectedLeaderboardManager: null,
+    selectedLeaderboardLineup: null,
+    selectedLeaderboardTeamName: "",
+    selectedLeaderboardManagerName: ""
   };
 
   const original = {
@@ -950,17 +953,82 @@
     return window.matchMedia("(max-width: 1060px)").matches;
   }
 
-  function visibleLineupPlayerHtml(player,captainId){
+  function visibleLineupFixture(player,lineup){
+    const gameweek = Number(lineup?.gameweek_number || cloud.currentGameweekNumber || 0);
+    const matches = MATCHES.filter(match =>
+      (!gameweek || Number(match.gameweek) === gameweek) &&
+      (sameClubName(player.club,match.home) || sameClubName(player.club,match.away))
+    );
+    if(matches.length) return matches[0];
+
+    const next = playerStartPrediction(player.id);
+    if(next?.fixtureId){
+      return MATCHES.find(match => String(match.id) === String(next.fixtureId)) || null;
+    }
+    return null;
+  }
+
+  function visibleLineupMetric(player,lineup){
+    const fixture = visibleLineupFixture(player,lineup);
+    const kickoffMs = fixture?.kickoff ? new Date(fixture.kickoff).getTime() : NaN;
+    const fixtureStatus = String(fixture?.status || "");
+    const started = ["LIVE","FT"].includes(fixtureStatus) || (Number.isFinite(kickoffMs) && Date.now() >= kickoffMs);
+
+    if(!started){
+      const fixtureRows = fixture ? (window.FANTASY_FIXTURE_START_PREDICTIONS?.[String(fixture.id)] || []) : [];
+      const fixturePrediction = fixtureRows.find(row => String(row.player_id) === String(player.id));
+      const fallbackPrediction = playerStartPrediction(player.id);
+      const percent = fixturePrediction?.start_probability ?? fallbackPrediction?.percent;
+      if(Number.isFinite(Number(percent))){
+        const value = Math.max(0,Math.min(100,Number(percent)));
+        return {
+          text:Math.round(value) + "%",
+          className:"prediction-score " + predictionBandClass(value),
+          title:"Kans op basis: " + Math.round(value) + "%"
+        };
+      }
+      return null;
+    }
+
+    const gameweek = Number(lineup?.gameweek_number || 0);
+    let score = null;
+    if(gameweek && Number(cloud.currentGameweekNumber) === gameweek){
+      const liveScores = window.FANTASY_GAMEWEEK_PLAYER_SCORES || {};
+      score = Number(liveScores[String(player.id)] ?? 0);
+    }else if(gameweek){
+      const history = Array.isArray(player.matchHistory) ? player.matchHistory : [];
+      const exact = fixture
+        ? history.find(item => Number(item.gameweek) === gameweek && String(item.fixtureId) === String(fixture.id))
+        : null;
+      const fallback = exact || history.find(item => Number(item.gameweek) === gameweek);
+      score = Number(fallback?.points ?? 0);
+    }else{
+      score = 0;
+    }
+
+    return {
+      text:Number(score).toFixed(Number(score) % 1 ? 1 : 0).replace(".",","),
+      className:scoreBandClass(score),
+      title:"Fantasy-punten in deze speeldag: " + Number(score).toFixed(1).replace(".",",")
+    };
+  }
+
+  function visibleLineupPlayerHtml(player,captainId,lineup){
     const isCaptain = String(captainId || "") === String(player.id || "");
+    const metric = visibleLineupMetric(player,lineup);
+    const metricHtml = metric
+      ? '<span class="leaderboard-preview-metric ' + escapeHtml(metric.className) + '" title="' + escapeHtml(metric.title) + '">' + escapeHtml(metric.text) + '</span>'
+      : "";
     return '<button type="button" class="leaderboard-preview-player" data-preview-player="' + escapeHtml(String(player.id || "")) + '">' +
       '<span class="leaderboard-preview-avatar role-ring-' + escapeHtml(player.pos || "MID") + '">' + escapeHtml(initials(player.name || "?")) + '</span>' +
       (isCaptain ? '<span class="leaderboard-preview-captain">C</span>' : '') +
+      metricHtml +
       '<strong>' + escapeHtml(player.name || "Onbekend") + '</strong>' +
       '<small>' + escapeHtml(POSITION_LABELS[player.pos] || player.pos || "") + '</small>' +
     '</button>';
   }
 
-  function visibleLineupPitchHtml(starters,captainId){
+  function visibleLineupPitchHtml(starters,captainId,lineup){
     const groups = {GK:[],DEF:[],MID:[],FWD:[]};
     starters.forEach(player => {
       const pos = groups[player.pos] ? player.pos : "MID";
@@ -968,7 +1036,7 @@
     });
     const row = (pos,players) =>
       '<div class="leaderboard-preview-line ' + (players.length >= 5 ? "five-line" : "") + '">' +
-        players.map(player => visibleLineupPlayerHtml(player,captainId)).join("") +
+        players.map(player => visibleLineupPlayerHtml(player,captainId,lineup)).join("") +
       '</div>';
 
     return '<div class="leaderboard-preview-markings" aria-hidden="true"><span class="leaderboard-preview-half"></span><span class="leaderboard-preview-circle"></span><span class="leaderboard-preview-box top"></span><span class="leaderboard-preview-box bottom"></span></div>' +
@@ -1006,7 +1074,7 @@
     const captainId = lineup.captain_id || "";
 
     const benchHtml = bench.length
-      ? bench.map(player => visibleLineupPlayerHtml(player,captainId)).join("")
+      ? bench.map(player => visibleLineupPlayerHtml(player,captainId,lineup)).join("")
       : '<div class="leaderboard-preview-no-bench">Geen bankdata</div>';
 
     target.innerHTML =
@@ -1016,7 +1084,7 @@
       '</div>' +
       '<div class="leaderboard-preview-stage">' +
         '<aside class="leaderboard-preview-bench"><span class="eyebrow">BANK</span><div>' + benchHtml + '</div></aside>' +
-        '<div class="leaderboard-preview-pitch">' + visibleLineupPitchHtml(starters,captainId) + '</div>' +
+        '<div class="leaderboard-preview-pitch">' + visibleLineupPitchHtml(starters,captainId,lineup) + '</div>' +
       '</div>';
 
     target.querySelectorAll("[data-preview-player]").forEach(button => button.addEventListener("click",() => {
@@ -1057,6 +1125,9 @@
 
     try{
       const lineup = await fetchVisibleManagerLineup(managerId);
+      cloud.selectedLeaderboardLineup = lineup;
+      cloud.selectedLeaderboardTeamName = teamName || "";
+      cloud.selectedLeaderboardManagerName = managerName || "";
       if(target) renderVisibleManagerLineup(target,lineup,managerName,teamName,false);
     }catch(error){
       console.warn("Zichtbare klassement-opstelling kon niet worden geladen",error?.message || error);
@@ -1211,6 +1282,21 @@
 
     window.FANTASY_GAMEWEEK_PLAYER_SCORES = scores;
     renderTeam();
+
+    // Op desktop toont het klassement dezelfde live punten. De browser controleert
+    // dit elke minuut; vóór de aftrap blijft de basisprognose zichtbaar.
+    if(!leaderboardUsesDialog() && cloud.selectedLeaderboardLineup){
+      const preview = document.getElementById("leaderboardLineupPreview");
+      if(preview){
+        renderVisibleManagerLineup(
+          preview,
+          cloud.selectedLeaderboardLineup,
+          cloud.selectedLeaderboardManagerName,
+          cloud.selectedLeaderboardTeamName,
+          false
+        );
+      }
+    }
   }
 
   function startLiveScorePolling(){
