@@ -562,6 +562,7 @@
 
     renderMatches();
     renderMarket();
+    if(typeof window.renderAdminMatches === "function") window.renderAdminMatches();
   }
 
   async function loadMatchDetail(fixtureId,fallbackMatch){
