@@ -69,3 +69,38 @@
   .header-stats .deadline-card{min-width:150px}
   .cloud-bar{gap:7px}
 }
+
+
+/* 018 — cloud/account controls zitten nu in dezelfde balk als de tabs */
+.nav-header-tools .cloud-bar{
+  width:auto;
+  flex-wrap:nowrap;
+  justify-content:flex-end;
+  gap:7px;
+}
+.nav-header-tools .cloud-status{
+  max-width:150px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  text-align:right;
+}
+.nav-header-tools .header-stats{
+  flex-wrap:nowrap;
+  gap:6px;
+}
+.nav-header-tools .header-stats>div{
+  min-width:84px;
+  padding:7px 9px;
+}
+.nav-header-tools .header-stats .deadline-card{min-width:142px}
+.nav-header-tools .header-stats .transfer-card{min-width:82px}
+
+@media(max-width:760px){
+  .nav-header-tools .cloud-bar{
+    width:auto;
+    justify-content:flex-end;
+  }
+  .nav-header-tools .cloud-status{display:none}
+  .nav-header-tools .cloud-bar .btn{padding:8px 10px}
+}
