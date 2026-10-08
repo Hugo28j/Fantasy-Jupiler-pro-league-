@@ -1354,3 +1354,98 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   #managerDialog .leaderboard-preview-avatar{width:43px;height:43px;font-size:12px}
   #managerDialog .leaderboard-preview-player>strong{max-width:90px;font-size:9px}
 }
+
+
+/* 032 — desktop leaderboard compacter, zonder onnodige headertekst */
+@media(min-width:1061px){
+  #leaderboard .section-head{
+    align-items:center;
+    margin-bottom:10px;
+  }
+  #leaderboard .competition-actions{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    flex-wrap:nowrap;
+    gap:8px;
+    width:auto;
+  }
+  #leaderboard .competition-actions select{
+    width:280px;
+    min-width:240px;
+    flex:0 0 auto;
+  }
+  #leaderboard .competition-actions .btn{
+    width:auto;
+    flex:0 0 auto;
+    white-space:nowrap;
+  }
+
+  .leaderboard-lineup-preview{
+    min-height:0;
+    max-height:none;
+    overflow:hidden;
+    padding:9px 10px 10px;
+  }
+  .leaderboard-preview-head{
+    min-height:31px;
+    align-items:center;
+    margin-bottom:5px;
+  }
+  .leaderboard-preview-head .eyebrow,
+  .leaderboard-preview-head small,
+  .leaderboard-preview-head .leaderboard-visibility-pill{
+    display:none;
+  }
+  .leaderboard-preview-head h3{
+    margin:0;
+    font-size:22px;
+    line-height:1.15;
+  }
+  .leaderboard-preview-stage{
+    height:clamp(410px,calc(100dvh - 240px),575px);
+    min-height:0;
+  }
+  .leaderboard-preview-pitch{
+    min-height:0;
+    height:100%;
+    padding:12px 10px;
+  }
+  .leaderboard-preview-formation{
+    min-height:0;
+    height:100%;
+  }
+  .leaderboard-preview-line{
+    min-height:0;
+  }
+  .leaderboard-preview-bench{
+    min-height:0;
+    padding-top:10px;
+    padding-bottom:10px;
+  }
+}
+
+.leaderboard-preview-metric{
+  position:relative;
+  z-index:2;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:34px;
+  margin-top:-8px;
+  padding:2px 6px;
+  border:2px solid rgba(7,20,33,.9);
+  border-radius:999px;
+  font-size:10px;
+  font-weight:950;
+  line-height:1.15;
+  color:#09202e;
+}
+.leaderboard-preview-metric.score-negative{background:#ff4d5f;color:#fff}
+.leaderboard-preview-metric.score-orange{background:#ff844a}
+.leaderboard-preview-metric.score-yellow{background:#f1d43b}
+.leaderboard-preview-metric.score-green{background:#35e38a}
+.leaderboard-preview-metric.score-blue{background:#61d7ff}
+.leaderboard-preview-metric.prediction-red{background:#ff4d5f!important;color:#fff!important}
+.leaderboard-preview-metric.prediction-yellow{background:#f1d43b!important;color:#171400!important}
+.leaderboard-preview-metric.prediction-green{background:#35e38a!important;color:#062014!important}
