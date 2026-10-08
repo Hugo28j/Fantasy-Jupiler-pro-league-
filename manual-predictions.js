@@ -193,5 +193,5 @@ window.FANTASY_MANUAL_START_PREDICTIONS = [
         ["Kaïs Barry",10]
       ]
     }
-
+  }
 ];
