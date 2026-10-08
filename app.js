@@ -260,6 +260,24 @@ function renderRequirements(){
   }).join("");
 }
 
+function playerStartPrediction(id){
+  const item = window.FANTASY_PLAYER_NEXT_START_ODDS?.[String(id)] || null;
+  if(!item || !Number.isFinite(Number(item.percent))) return null;
+  return {...item,percent:Math.max(0,Math.min(100,Number(item.percent)))};
+}
+
+function predictionBandClass(percent){
+  const value = Number(percent);
+  if(value < 40) return "prediction-red";
+  if(value <= 70) return "prediction-yellow";
+  return "prediction-green";
+}
+
+function predictionPercent(row){
+  const value = Number(row?.start_probability);
+  return Number.isFinite(value) ? Math.max(0,Math.min(100,value)) : null;
+}
+
 function lineupPlayerHtml(p,isBench){
   const benchLabel = p.pos === "GK" ? "Reservekeeper" : "Reserve veldspeler";
   const buttonText = isBench ? "Naar basis" : "Op bank";
@@ -268,7 +286,14 @@ function lineupPlayerHtml(p,isBench){
   const score = liveScoreMode
     ? Number(liveScores[p.id] || 0)
     : Number(p.score || 0);
-  const scoreClass = scoreBandClass(score);
+  const nextPrediction = liveScoreMode ? null : playerStartPrediction(p.id);
+  const scoreClass = nextPrediction
+    ? "prediction-score " + predictionBandClass(nextPrediction.percent)
+    : scoreBandClass(score);
+  const scoreText = nextPrediction ? Math.round(nextPrediction.percent) + "%" : score.toFixed(0);
+  const scoreTitle = nextPrediction
+    ? ' title="Kans op basis volgende wedstrijd: ' + Math.round(nextPrediction.percent) + '%"'
+    : "";
   const isCaptain = !isBench && state.captainId === p.id;
   const captainControl = isBench ? "" :
     '<button class="captain-toggle ' + (isCaptain ? "selected":"") + '" data-id="' + escapeHtml(p.id) + '" type="button" aria-label="' +
@@ -278,7 +303,7 @@ function lineupPlayerHtml(p,isBench){
     captainControl +
     '<button class="sorare-player-main player-name-link" data-player-id="' + escapeHtml(p.id) + '" type="button">' +
       '<span class="sorare-avatar role-ring-' + p.pos + '">' + initials(p.name) + '</span>' +
-      '<span class="sorare-score ' + scoreClass + '">' + score.toFixed(0) + '</span>' +
+      '<span class="sorare-score ' + scoreClass + '"' + scoreTitle + '>' + scoreText + '</span>' +
       '<span class="sorare-player-name">' + escapeHtml(p.name) + '</span>' +
       '<span class="sorare-player-meta">' + escapeHtml(p.club) + ' · ' + (isBench ? benchLabel : POSITION_LABELS[p.pos]) + '</span>' +
     '</button>' +
@@ -510,6 +535,10 @@ function renderMarket(){
     const owned = state.squad.includes(p.id);
     const check = canBuy(p);
     const disabled = !owned && !check.ok;
+    const nextPrediction = playerStartPrediction(p.id);
+    const predictionBadge = nextPrediction
+      ? '<span class="market-start-odds ' + predictionBandClass(nextPrediction.percent) + '" title="Kans op basis in de volgende wedstrijd">Basis ' + Math.round(nextPrediction.percent) + '%</span>'
+      : "";
     const scorePer90 = Number(p.minutes || 0) > 0 ? Number(p.score || 0) / Number(p.minutes) * 90 : 0;
 
     // Vijf vaste chronologische speeldagslots:
@@ -550,7 +579,7 @@ function renderMarket(){
     }).join("");
     return '<article class="player-card market-player-row ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
       '<button class="market-player-avatar role-ring-' + p.pos + ' player-title-link" data-player-id="' + escapeHtml(p.id) + '" type="button" aria-label="Bekijk ' + escapeHtml(p.name) + '">' + initials(p.name) + '</button>' +
-      '<div class="market-player-identity"><div><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3></div><span class="club">' + escapeHtml(p.club) + '</span></div>' +
+      '<div class="market-player-identity"><div><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3></div><span class="club">' + escapeHtml(p.club) + predictionBadge + '</span></div>' +
       '<div class="market-form"><span>Laatste speeldagen</span><div class="market-form-bars" aria-label="Recente wedstrijdscores met scorekleuren">' + profileBars + '</div><small>' + scorePer90.toFixed(1).replace(".",",") + ' pts/90</small></div>' +
       '<div class="market-player-numbers"><strong class="market-total-points">' + points(p.score).replace(" pts","") + '</strong><small>' + Number(p.minutes || 0) + ' min</small></div>' +
       '<div class="market-player-price"><strong>' + money(p.price) + '</strong><small class="market-price-change ' +
@@ -771,7 +800,7 @@ function renderMatches(){
 
   target.innerHTML = visible.map(m => {
     const status = String(m.status || "");
-    const clickable = Boolean(m.id) && ["FT","LIVE"].includes(status);
+    const clickable = Boolean(m.id) && status !== "CANC";
     const tag = status === "LIVE"
       ? '<span class="match-live-badge">LIVE</span>'
       : !["FT","CANC"].includes(status) ? '<span class="match-upcoming-badge">KOMEND</span>' : "";
@@ -817,6 +846,7 @@ function matchEventBadges(row){
 }
 
 function matchSubstitutionLabel(row,match){
+  if(predictionPercent(row) != null) return "";
   const stats = row.stats || {};
   const minutes = Number(row.minutes || stats.minutes || 0);
   const started = Number(stats.gameStarted || 0) > 0;
@@ -928,7 +958,13 @@ function matchPlayerButton(row,match,side,index,total,zone){
   const stats = row.stats || {};
   const pos = player.position || zone || "MID";
   const score = Number(row.fantasy_points || 0);
-  const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+  const startPct = predictionPercent(row);
+  const scoreClass = startPct != null
+    ? "prediction-chip " + predictionBandClass(startPct)
+    : score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+  const scoreText = startPct != null
+    ? Math.round(startPct) + "%"
+    : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
 
   const xByPosition = side === "home"
     ? {GK:7,DEF:20,MID:33,FWD:45}
@@ -948,13 +984,28 @@ function matchPlayerButton(row,match,side,index,total,zone){
     '<span class="match-card-strip">' + matchCardBadges(row) + '</span>' +
     '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
-    '<span class="match-score-chip ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
+    '<span class="match-score-chip ' + scoreClass + '">' + scoreText + '</span>' +
     '<span class="match-player-name-row"><span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span>' +
       '<span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
   '</button>';
 }
 
 function inferredMatchStarters(rows){
+  const predicted = rows.filter(row => predictionPercent(row) != null);
+  if(predicted.length){
+    return predicted
+      .slice()
+      .sort((a,b) => {
+        const pctDiff = predictionPercent(b)-predictionPercent(a);
+        if(pctDiff) return pctDiff;
+        const posOrder = {GK:0,DEF:1,MID:2,FWD:3};
+        const posDiff = (posOrder[a.player?.position] ?? 9)-(posOrder[b.player?.position] ?? 9);
+        if(posDiff) return posDiff;
+        return String(a.player?.name || "").localeCompare(String(b.player?.name || ""),"nl");
+      })
+      .slice(0,11);
+  }
+
   const explicit = rows.filter(row => Number((row.stats || {}).gameStarted || 0) > 0);
   if(explicit.length >= 7) return explicit;
 
@@ -993,7 +1044,13 @@ function matchMobilePlayerButton(row,match,index,total,zone){
   const player = row.player || {};
   const pos = player.position || zone || "MID";
   const score = Number(row.fantasy_points || 0);
-  const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+  const startPct = predictionPercent(row);
+  const scoreClass = startPct != null
+    ? "prediction-chip " + predictionBandClass(startPct)
+    : score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+  const scoreText = startPct != null
+    ? Math.round(startPct) + "%"
+    : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
   const x = lineY(index,total,"home",zone || pos);
   const yByPosition = {GK:88,DEF:68,MID:45,FWD:21};
   let y = yByPosition[zone || pos] || 45;
@@ -1003,7 +1060,7 @@ function matchMobilePlayerButton(row,match,index,total,zone){
     '<span class="match-card-strip">' + matchCardBadges(row) + '</span>' +
     '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
-    '<span class="match-score-chip ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
+    '<span class="match-score-chip ' + scoreClass + '">' + scoreText + '</span>' +
     '<span class="match-player-name-row"><span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span><span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
   '</button>';
 }
@@ -1023,30 +1080,50 @@ function renderMatchMobileTeam(rows,match){
 }
 
 function renderMatchBench(rows,match,side){
-  const hasLineupMetadata = rows.some(row => {
-    const stats = row.stats || {};
-    return stats.gameStarted != null || stats.onGameSheet != null;
-  });
+  const predictedRows = rows.filter(row => predictionPercent(row) != null);
   const starterIds = new Set(inferredMatchStarters(rows).map(row => String(row.player_id)));
-  const bench = hasLineupMetadata
-    ? rows.filter(row => {
-        const stats = row.stats || {};
-        return Boolean(stats.onGameSheet) && Number(stats.gameStarted || 0) === 0;
-      })
-    : rows.filter(row => !starterIds.has(String(row.player_id)) && Number(row.minutes || 0) > 0);
-  bench.sort((a,b) => Number(b.minutes || 0)-Number(a.minutes || 0));
+
+  let bench;
+  if(predictedRows.length){
+    bench = predictedRows
+      .filter(row => !starterIds.has(String(row.player_id)))
+      .slice()
+      .sort((a,b) => predictionPercent(b)-predictionPercent(a));
+  }else{
+    const hasLineupMetadata = rows.some(row => {
+      const stats = row.stats || {};
+      return stats.gameStarted != null || stats.onGameSheet != null;
+    });
+    bench = hasLineupMetadata
+      ? rows.filter(row => {
+          const stats = row.stats || {};
+          return Boolean(stats.onGameSheet) && Number(stats.gameStarted || 0) === 0;
+        })
+      : rows.filter(row => !starterIds.has(String(row.player_id)) && Number(row.minutes || 0) > 0);
+    bench.sort((a,b) => Number(b.minutes || 0)-Number(a.minutes || 0));
+  }
+
   return bench.map(row => {
     const player = row.player || {};
     const score = Number(row.fantasy_points || 0);
+    const startPct = predictionPercent(row);
     const played = Number(row.minutes || 0) > 0;
-    const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+    const scoreClass = startPct != null
+      ? "prediction-chip " + predictionBandClass(startPct)
+      : score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+    const scoreText = startPct != null
+      ? Math.round(startPct) + "%"
+      : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
+    const meta = startPct != null
+      ? '<span class="prediction-bench-label">Kans op basis</span>'
+      : (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>');
+
     return '<button class="match-bench-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '">' +
       '<span class="match-bench-avatar">' + initials(player.name || "?") + '</span>' +
       '<span><strong class="match-bench-name-row">' + escapeHtml(player.name || "Onbekend") +
-        '<span class="match-name-events bench-name-events">' + matchNameBadges(row) + matchCardBadges(row) + '</span></strong>' +
-        '<small class="match-bench-meta">' + (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>') +
-      '</small></span>' +
-      '<span class="match-bench-score ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
+        '<span class="match-name-events bench-name-events">' + (startPct != null ? "" : matchNameBadges(row) + matchCardBadges(row)) + '</span></strong>' +
+        '<small class="match-bench-meta">' + meta + '</small></span>' +
+      '<span class="match-bench-score ' + scoreClass + '">' + scoreText + '</span>' +
     '</button>';
   }).join("") || '<div class="empty-state">Geen bankdata beschikbaar.</div>';
 }
@@ -1076,9 +1153,16 @@ function renderMatchDetail(match,rows=[]){
   const allRows = Array.isArray(rows) ? rows : [];
   const homeRows = allRows.filter(row => sameClubName((row.stats || {}).teamName,match.home) || sameClubName(row.player?.club_name,match.home));
   const awayRows = allRows.filter(row => sameClubName((row.stats || {}).teamName,match.away) || sameClubName(row.player?.club_name,match.away));
+  const predictionMode = allRows.some(row => predictionPercent(row) != null);
+  const middle = predictionMode
+    ? "vs"
+    : escapeHtml(String(match.homeScore)) + " – " + escapeHtml(String(match.awayScore));
+  const detailStatus = predictionMode
+    ? ' · <strong class="prediction-detail-label">Opstellingsvoorspelling</strong>'
+    : (match.status === "LIVE" ? ' · <strong class="live-text">LIVE</strong>' : "");
 
   document.getElementById("matchDetail").innerHTML =
-    '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p><h2>' + escapeHtml(match.home) + ' <span>' + escapeHtml(String(match.homeScore)) + " – " + escapeHtml(String(match.awayScore)) + '</span> ' + escapeHtml(match.away) + '</h2><p>' + escapeHtml(match.date || "") + (match.status === "LIVE" ? ' · <strong class="live-text">LIVE</strong>' : "") + '</p></div></div>' +
+    '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p><h2>' + escapeHtml(match.home) + ' <span>' + middle + '</span> ' + escapeHtml(match.away) + '</h2><p>' + escapeHtml(match.date || "") + detailStatus + '</p></div></div>' +
     '<div class="match-desktop-layout"><div class="real-match-pitch"><div class="real-pitch-lines"><span class="real-half"></span><span class="real-circle"></span><span class="real-box left"></span><span class="real-box right"></span></div>' +
         '<span class="team-pitch-label home">' + escapeHtml(match.home) + '<small>' + escapeHtml(inferredFormation(homeRows)) + '</small></span><span class="team-pitch-label away">' + escapeHtml(match.away) + '<small>' + escapeHtml(inferredFormation(awayRows)) + '</small></span>' +
         renderMatchTeamPlayers(homeRows,match,"home") + renderMatchTeamPlayers(awayRows,match,"away") +
@@ -1107,7 +1191,12 @@ function renderMatchDetail(match,rows=[]){
   const rowByPlayer = new Map(allRows.map(row => [String(row.player_id),row]));
   document.querySelectorAll("#matchDetail [data-match-player]").forEach(button => button.addEventListener("click",() => {
     const row = rowByPlayer.get(String(button.dataset.matchPlayer));
-    if(row) renderMatchPlayerDetail(match,row);
+    if(!row) return;
+    if(predictionPercent(row) != null){
+      toast("Kans op basis: " + Math.round(predictionPercent(row)) + "%");
+      return;
+    }
+    renderMatchPlayerDetail(match,row);
   }));
 }
 
