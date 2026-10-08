@@ -1089,6 +1089,28 @@ function renderMatchTeamPlayers(rows,match,side){
   }).join("");
 }
 
+function mobileMatchSurname(name){
+  const fullName = String(name || "").trim();
+  if(!fullName) return "Onbekend";
+
+  const parts = fullName.split(/\s+/).filter(Boolean);
+  if(parts.length <= 1) return fullName;
+
+  // Houd gangbare tussenvoegsels bij de achternaam, bv.
+  // "Siebe Van der Heyden" -> "Van der Heyden".
+  const particles = new Set([
+    "van","von","de","den","der","del","della","di","da","do","dos","das",
+    "le","la","du","des","ten","ter","te","mac","mc","st.","st"
+  ]);
+
+  let start = parts.length - 1;
+  while(start > 0 && particles.has(parts[start - 1].toLowerCase())){
+    start -= 1;
+  }
+
+  return parts.slice(start).join(" ");
+}
+
 function matchMobilePlayerButton(row,match,index,total,zone){
   const player = row.player || {};
   const pos = player.position || zone || "MID";
@@ -1110,7 +1132,7 @@ function matchMobilePlayerButton(row,match,index,total,zone){
     '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
     '<span class="match-score-chip ' + scoreClass + '">' + scoreText + '</span>' +
-    '<span class="match-player-name-row"><span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span><span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
+    '<span class="match-player-name-row"><span class="match-player-name" title="' + escapeHtml(player.name || "Onbekend") + '">' + escapeHtml(mobileMatchSurname(player.name)) + '</span><span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
   '</button>';
 }
 
