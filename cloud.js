@@ -21,7 +21,9 @@
     unlimitedTransfers: true,
     baselineSquad: null,
     leagues: [],
-    selectedLeague: "global"
+    selectedLeague: "global",
+    leaderboardRows: [],
+    selectedLeaderboardManager: null
   };
 
   const original = {
@@ -944,17 +946,137 @@
     }));
   }
 
+  function leaderboardUsesDialog(){
+    return window.matchMedia("(max-width: 1060px)").matches;
+  }
+
+  function visibleLineupPlayerHtml(player,captainId){
+    const isCaptain = String(captainId || "") === String(player.id || "");
+    return '<button type="button" class="leaderboard-preview-player" data-preview-player="' + escapeHtml(String(player.id || "")) + '">' +
+      '<span class="leaderboard-preview-avatar role-ring-' + escapeHtml(player.pos || "MID") + '">' + escapeHtml(initials(player.name || "?")) + '</span>' +
+      (isCaptain ? '<span class="leaderboard-preview-captain">C</span>' : '') +
+      '<strong>' + escapeHtml(player.name || "Onbekend") + '</strong>' +
+      '<small>' + escapeHtml(POSITION_LABELS[player.pos] || player.pos || "") + '</small>' +
+    '</button>';
+  }
+
+  function visibleLineupPitchHtml(starters,captainId){
+    const groups = {GK:[],DEF:[],MID:[],FWD:[]};
+    starters.forEach(player => {
+      const pos = groups[player.pos] ? player.pos : "MID";
+      groups[pos].push(player);
+    });
+    const row = (pos,players) =>
+      '<div class="leaderboard-preview-line ' + (players.length >= 5 ? "five-line" : "") + '">' +
+        players.map(player => visibleLineupPlayerHtml(player,captainId)).join("") +
+      '</div>';
+
+    return '<div class="leaderboard-preview-markings" aria-hidden="true"><span class="leaderboard-preview-half"></span><span class="leaderboard-preview-circle"></span><span class="leaderboard-preview-box top"></span><span class="leaderboard-preview-box bottom"></span></div>' +
+      '<div class="leaderboard-preview-formation">' +
+        row("FWD",groups.FWD) + row("MID",groups.MID) + row("DEF",groups.DEF) + row("GK",groups.GK) +
+      '</div>';
+  }
+
+  function lineupVisibilityText(lineup){
+    const source = String(lineup?.lineup_source || "");
+    const number = Number(lineup?.gameweek_number || 0);
+    if(source === "own-current") return number ? "Jouw huidige opstelling voor speeldag " + number : "Jouw huidige opstelling";
+    if(source === "first-week-current") return "Eerste fantasyweek · huidige ploeg zichtbaar";
+    if(source === "locked"){
+      if(number && cloud.currentGameweekNumber && number < Number(cloud.currentGameweekNumber)){
+        return "Vorige vastgezette opstelling · speeldag " + number + " · nieuwe ploeg zichtbaar na de deadline";
+      }
+      return number ? "Vastgezette opstelling · speeldag " + number : "Vastgezette opstelling";
+    }
+    return "Zichtbare opstelling";
+  }
+
+  function renderVisibleManagerLineup(target,lineup,managerName,teamName,forDialog=false){
+    if(!lineup){
+      target.innerHTML =
+        '<div class="leaderboard-preview-empty"><strong>' + escapeHtml(teamName || managerName || "Ploeg") + '</strong>' +
+        '<span>Deze ploeg is nog niet zichtbaar. Vanaf de deadline verschijnt de nieuwe opstelling.</span></div>';
+      return;
+    }
+
+    const starters = (lineup.starter_ids || []).map(id => playerById(String(id))).filter(Boolean);
+    const bench = [lineup.bench_gk_id,lineup.bench_outfield_id].filter(Boolean).map(id => playerById(String(id))).filter(Boolean);
+    const displayTeam = lineup.team_name || teamName || "Ploeg";
+    const displayManager = lineup.manager_name || managerName || "Manager";
+    const captainId = lineup.captain_id || "";
+
+    const benchHtml = bench.length
+      ? bench.map(player => visibleLineupPlayerHtml(player,captainId)).join("")
+      : '<div class="leaderboard-preview-no-bench">Geen bankdata</div>';
+
+    target.innerHTML =
+      '<div class="leaderboard-preview-head">' +
+        '<div><p class="eyebrow">' + (forDialog ? "PLOEG" : "GESELECTEERDE PLOEG") + '</p><h3>' + escapeHtml(displayTeam) + '</h3><small>' + escapeHtml(displayManager) + '</small></div>' +
+        '<span class="leaderboard-visibility-pill">' + escapeHtml(lineupVisibilityText(lineup)) + '</span>' +
+      '</div>' +
+      '<div class="leaderboard-preview-stage">' +
+        '<aside class="leaderboard-preview-bench"><span class="eyebrow">BANK</span><div>' + benchHtml + '</div></aside>' +
+        '<div class="leaderboard-preview-pitch">' + visibleLineupPitchHtml(starters,captainId) + '</div>' +
+      '</div>';
+
+    target.querySelectorAll("[data-preview-player]").forEach(button => button.addEventListener("click",() => {
+      const id = button.dataset.previewPlayer;
+      if(!id) return;
+      if(forDialog){
+        const dialog = document.getElementById("managerDialog");
+        if(dialog?.open) dialog.close();
+      }
+      openPlayerProfile(id);
+    }));
+  }
+
+  async function fetchVisibleManagerLineup(managerId){
+    const {data,error} = await cloud.client.rpc("public_manager_visible_lineup",{p_manager:managerId});
+    if(error) throw error;
+    return Array.isArray(data) ? (data[0] || null) : (data || null);
+  }
+
+  function markSelectedLeaderboardManager(managerId){
+    document.querySelectorAll(".leader-row[data-manager-id]").forEach(row => {
+      row.classList.toggle("selected-team",String(row.dataset.managerId) === String(managerId));
+    });
+  }
+
+  async function showLeaderboardManager(managerId,managerName,teamName){
+    cloud.selectedLeaderboardManager = String(managerId);
+    markSelectedLeaderboardManager(managerId);
+
+    const target = document.getElementById("leaderboardLineupPreview");
+    if(target){
+      target.innerHTML = '<div class="leaderboard-preview-empty"><strong>' + escapeHtml(teamName || "Ploeg") + '</strong><span>Opstelling laden…</span></div>';
+    }
+
+    try{
+      const lineup = await fetchVisibleManagerLineup(managerId);
+      if(target) renderVisibleManagerLineup(target,lineup,managerName,teamName,false);
+    }catch(error){
+      console.warn("Zichtbare klassement-opstelling kon niet worden geladen",error?.message || error);
+      if(target){
+        target.innerHTML = '<div class="leaderboard-preview-empty"><strong>' + escapeHtml(teamName || "Ploeg") + '</strong><span>Voer migratie 025 uit om de klassement-opstelling te activeren.</span></div>';
+      }
+    }
+  }
+
   async function loadLeaderboard(){
     const rpc = cloud.selectedLeague === "global" ? "public_leaderboard" : "private_league_leaderboard";
     const params = cloud.selectedLeague === "global" ? undefined : {p_league:cloud.selectedLeague};
     const {data,error} = await cloud.client.rpc(rpc,params);
     if(error) throw error;
+
+    cloud.leaderboardRows = data || [];
     const card = document.querySelector(".leaderboard-card");
     card.innerHTML = '<div class="leader-head"><span>#</span><span>Ploeg</span><span>Speeldag</span><span>Totaal</span></div>';
-    (data || []).forEach((row,index) => {
+
+    cloud.leaderboardRows.forEach((row,index) => {
       const mine = cloud.user && row.manager_id === cloud.user.id;
       const line = make("button","leader-row" + (mine ? " current-user" : ""));
       line.type = "button";
+      line.dataset.managerId = String(row.manager_id);
       const rank = make("span","rank",String(row.rank || index + 1));
       const info = make("div");
       const teamName = row.team_name || "Ploeg";
@@ -965,46 +1087,45 @@
       const latest = make("strong","gameweek-points",row.latest_gameweek_number
         ? "S" + row.latest_gameweek_number + " · " + Number(row.latest_gameweek_points || 0).toFixed(1).replace(".0","")
         : "—");
-      const points = make("strong","",Number(row.total_points || 0).toFixed(1).replace(".0","") + " pts");
-      if(mine) points.id = "leaderPoints";
-      line.append(rank,info,latest,points);
-      line.addEventListener("click",() => loadManagerHistory(row.manager_id,teamName));
+      const pointsTotal = make("strong","",Number(row.total_points || 0).toFixed(1).replace(".0","") + " pts");
+      if(mine) pointsTotal.id = "leaderPoints";
+      line.append(rank,info,latest,pointsTotal);
+      line.addEventListener("click",() => {
+        if(leaderboardUsesDialog()) loadManagerHistory(row.manager_id,teamName,managerName);
+        else showLeaderboardManager(row.manager_id,managerName,teamName);
+      });
       card.appendChild(line);
     });
-    if(!data || !data.length){
+
+    if(!cloud.leaderboardRows.length){
       card.appendChild(make("div","empty-state","Nog geen teams in het leaderboard."));
+      const preview = document.getElementById("leaderboardLineupPreview");
+      if(preview) preview.innerHTML = '<div class="leaderboard-preview-empty"><strong>Nog geen ploegen</strong><span>De opstelling verschijnt hier zodra er managers zijn.</span></div>';
+      return;
+    }
+
+    const own = cloud.leaderboardRows.find(row => cloud.user && String(row.manager_id) === String(cloud.user.id));
+    const preserved = cloud.leaderboardRows.find(row => String(row.manager_id) === String(cloud.selectedLeaderboardManager));
+    const selected = preserved || own || cloud.leaderboardRows[0];
+    if(!leaderboardUsesDialog()){
+      await showLeaderboardManager(selected.manager_id,selected.manager_name,selected.team_name);
+    }else{
+      markSelectedLeaderboardManager(selected.manager_id);
     }
   }
 
-  async function loadManagerHistory(managerId,managerName){
+  async function loadManagerHistory(managerId,teamName,managerName){
     const dialog = document.getElementById("managerDialog");
     const target = document.getElementById("managerHistory");
-    target.innerHTML = '<p class="eyebrow">PLOEG VAN MANAGER</p><h2>' + escapeHtml(managerName) + '</h2><div class="empty-state">Speeldagen laden…</div>';
+    target.innerHTML = '<p class="eyebrow">PLOEG</p><h2>' + escapeHtml(teamName || "Ploeg") + '</h2><div class="empty-state">Opstelling laden…</div>';
     if(!dialog.open) dialog.showModal();
-    const {data,error} = await cloud.client.rpc("public_manager_history",{p_manager:managerId});
-    if(error){
-      target.innerHTML = '<p class="eyebrow">PLOEG VAN MANAGER</p><h2>' + escapeHtml(managerName) + '</h2><div class="empty-state">Deze ploeg wordt zichtbaar zodra de deadline verstreken is.</div>';
-      return;
+
+    try{
+      const lineup = await fetchVisibleManagerLineup(managerId);
+      renderVisibleManagerLineup(target,lineup,managerName,teamName,true);
+    }catch(error){
+      target.innerHTML = '<p class="eyebrow">PLOEG</p><h2>' + escapeHtml(teamName || "Ploeg") + '</h2><div class="empty-state">Deze ploeg wordt zichtbaar zodra de deadline verstreken is. Voer migratie 025 uit als deze functie nog niet actief is.</div>';
     }
-    const history = (data || []).map(row => {
-      const starters = (row.starter_ids || []).map(id => playerById(id) || {id,name:id,pos:""});
-      const benchIds = [row.bench_gk_id,row.bench_outfield_id].filter(Boolean);
-      const bench = benchIds.map(id => playerById(id) || {id,name:"Onbekende speler",pos:""});
-      const effectiveCaptainId = String(row.breakdown?.effective_captain_id || row.captain_id || "");
-      const captainBadge = player => effectiveCaptainId === String(player.id)
-        ? ' <span class="history-captain">C</span>'
-        : '';
-      const lineup = starters.map(player => '<button type="button" class="history-player" data-history-player="' + escapeHtml(String(player.id)) + '"><strong>' + escapeHtml(player.name) +
-        captainBadge(player) +
-        '</strong><small>' + escapeHtml(player.pos) + ' · basis</small></button>').join("") +
-        bench.map(player => '<button type="button" class="history-player bench" data-history-player="' + escapeHtml(String(player.id)) + '"><strong>' + escapeHtml(player.name) +
-        captainBadge(player) +
-        '</strong><small>' + escapeHtml(player.pos) + ' · bank</small></button>').join("");
-      const transferCost = Number(row.breakdown?.transfer_cost || 0);
-      return '<article class="history-card"><div class="history-card-head"><div><strong>Speeldag ' + row.gameweek_number + '</strong><small>' + (transferCost ? " · −" + transferCost + " transferpunten" : "") + '</small></div><strong>' + points(row.points) + '</strong></div><div class="history-lineup">' + (lineup || '<span class="muted">Geen vastgezette spelers.</span>') + '</div></article>';
-    }).join("");
-    target.innerHTML = '<p class="eyebrow">PLOEG VAN MANAGER</p><h2>' + escapeHtml(managerName) + '</h2><p class="muted">Vastgezette opstellingen na de deadline.</p><div class="history-list">' + (history || '<div class="empty-state">Deze ploeg wordt zichtbaar zodra de deadline verstreken is.</div>') + '</div>';
-    target.querySelectorAll("[data-history-player]").forEach(button => button.addEventListener("click",() => openPlayerProfile(button.dataset.historyPlayer)));
   }
 
   async function loadPlayerStats(playerId){
