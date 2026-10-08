@@ -1330,10 +1330,37 @@ function renderMatchPlayerDetail(match,row){
   const rowsHtml = renderMatchStatGroups(breakdown,position);
   const totalScoreClass = scoreContributionClass(row.fantasy_points);
 
+  // Controleer dat de opgeslagen fantasy_points exact overeenkomt met alle
+  // scorende stats. Zo wordt een oude/stale score nooit stilletjes verborgen.
+  const visibleKeys = new Set(orderedKeys);
+  const hiddenBreakdown = Object.entries(weights).map(([key,rawWeight]) => {
+    if(visibleKeys.has(key) || rawWeight == null || Number(rawWeight) === 0) return null;
+    const amount = Number(stats[key] || 0);
+    if(amount === 0) return null;
+    const contribution = Math.round(amount * Number(rawWeight) * 100) / 100;
+    return {key,amount,contribution};
+  }).filter(Boolean);
+  const calculatedScore = Math.round((
+    breakdown.reduce((sum,item) => sum + Number(item.contribution || 0),0) +
+    hiddenBreakdown.reduce((sum,item) => sum + Number(item.contribution || 0),0)
+  ) * 100) / 100;
+  const storedScore = Number(row.fantasy_points || 0);
+  const scoreMismatch = Math.abs(calculatedScore-storedScore) > 0.005;
+  const hiddenStatsHtml = hiddenBreakdown.length
+    ? '<div class="match-score-audit-warning"><strong>Niet-zichtbare scoringsdata gevonden:</strong> ' +
+      hiddenBreakdown.map(item => escapeHtml(MATCH_STAT_LABELS[item.key] || item.key) + ' (' + item.amount + ', ' + scoreLabel(item.contribution) + ' pts)').join(', ') +
+      '</div>'
+    : '';
+  const scoreAuditHtml = scoreMismatch
+    ? '<div class="match-score-audit-warning"><strong>Score niet up-to-date:</strong> de zichtbare/gekende stats tellen op tot ' +
+      points(calculatedScore) + ', maar de database bevat ' + points(storedScore) + '.</div>'
+    : '';
+
   const dialog = document.getElementById("matchPlayerDialog");
   document.getElementById("matchPlayerDetail").innerHTML =
     '<p class="eyebrow">WEDSTRIJDSTATISTIEKEN</p>' +
     '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2>' + escapeHtml(player.name || "Onbekend") + '</h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>' +
+    hiddenStatsHtml + scoreAuditHtml +
     '<div class="stat-groups match-stat-groups">' + rowsHtml + '</div>' +
     '<div class="match-stat-total"><span>Totaal deze wedstrijd</span><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>';
   if(!dialog.open) dialog.showModal();
