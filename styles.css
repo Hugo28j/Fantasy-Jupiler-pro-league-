@@ -952,68 +952,93 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .prediction-empty-state span{max-width:520px;color:var(--muted);line-height:1.5}
 
 
-/* Spelerranking punten per 90 */
-.player-per90-card{
-  margin-top:22px;
-  background:linear-gradient(180deg,rgba(17,38,56,.95),rgba(10,27,41,.95));
-  border:1px solid var(--border);
-  border-radius:18px;
-  box-shadow:var(--shadow);
-  overflow:hidden;
-}
-.player-ranking-title{padding:16px 18px 8px;margin:0}
-.player-ranking-title h3{margin:2px 0 0}
-.player-ranking-head,
-.player-ranking-row{
-  display:grid;
-  grid-template-columns:52px minmax(180px,1.4fr) minmax(150px,1fr) 90px 110px;
-  align-items:center;
-  gap:12px;
-}
-.player-ranking-head{
-  padding:10px 16px;
-  border-top:1px solid rgba(255,255,255,.06);
-  border-bottom:1px solid rgba(255,255,255,.08);
-  color:var(--muted);
-  font-size:10px;
-  font-weight:900;
-  letter-spacing:.06em;
-  text-transform:uppercase;
-}
-.player-ranking-list{max-height:620px;overflow-y:auto}
-.player-ranking-row{
-  width:100%;
-  border:0;
-  border-bottom:1px solid rgba(255,255,255,.055);
-  background:transparent;
-  color:var(--text);
-  padding:11px 16px;
-  text-align:left;
-  cursor:pointer;
-}
-.player-ranking-row:hover{background:rgba(56,210,122,.07)}
-.player-ranking-position{font-weight:950;color:#8fc8e7}
-.player-ranking-player{min-width:0}
-.player-ranking-player strong,.player-ranking-player small{display:block}
-.player-ranking-player strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.player-ranking-player small{margin-top:2px;color:var(--muted);font-size:10px}
-.player-ranking-club{color:#b7d4e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.player-ranking-minutes{text-align:right;color:#b7d4e5}
-.player-ranking-score{text-align:right;font-size:15px;color:#61d7ff}
-@media(max-width:760px){
-  .player-ranking-head,.player-ranking-row{
-    grid-template-columns:34px minmax(135px,1fr) 72px 82px;
-    gap:8px;
-  }
-  .player-ranking-head span:nth-child(3),
-  .player-ranking-row .player-ranking-club{display:none}
-  .player-ranking-title{align-items:flex-start}
-}
-
 .admin-editor-context{
   margin:5px 0 0;
   max-width:620px;
   color:var(--muted);
   font-size:11px;
   line-height:1.45;
+}
+
+
+/* 028 — één compacte bovenbalk: navigatie + teamstatus */
+.tabs{
+  top:0;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  justify-content:flex-start;
+  min-height:72px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:8px clamp(14px,3vw,32px);
+}
+.tab-links{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex:0 0 auto;
+}
+.nav-header-tools{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex:0 0 auto;
+  min-width:max-content;
+}
+.nav-header-tools .header-stats{
+  display:flex;
+  align-items:stretch;
+  gap:6px;
+  flex-wrap:nowrap;
+}
+.nav-header-tools .header-stats>div{
+  min-width:84px;
+  padding:7px 9px;
+  border-radius:11px;
+}
+.nav-header-tools .header-stats span{
+  font-size:9px;
+}
+.nav-header-tools .header-stats strong{
+  font-size:14px;
+  white-space:nowrap;
+}
+.nav-header-tools .header-stats .deadline-card{
+  min-width:142px;
+}
+.nav-header-tools .header-stats .transfer-card{
+  min-width:82px;
+}
+.nav-header-tools .cloud-bar{
+  flex-wrap:nowrap;
+  min-width:max-content;
+}
+.nav-header-tools #authButton{
+  white-space:nowrap;
+  padding:9px 12px;
+}
+.nav-header-tools .cloud-status{
+  white-space:nowrap;
+}
+
+/* De oude titelbalk is volledig verwijderd; benut de vrijgekomen hoogte. */
+@media(min-width:1061px){
+  .squad-market-workspace{height:calc(100dvh - 108px);min-height:610px}
+}
+
+@media(max-width:760px){
+  .tabs{
+    min-height:60px;
+    padding:7px 10px;
+    gap:8px;
+  }
+  .tab{padding:9px 11px}
+  .nav-header-tools{gap:6px}
+  .nav-header-tools .header-stats>div{min-width:76px;padding:6px 8px}
+  .nav-header-tools .header-stats .deadline-card{min-width:128px}
+  .nav-header-tools .cloud-status{display:none}
+  main{padding-top:16px}
 }
