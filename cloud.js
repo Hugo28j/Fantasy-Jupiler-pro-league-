@@ -478,27 +478,38 @@
     for(const row of priceRows){
       const fixture = Array.isArray(row.fixtures) ? row.fixtures[0] : row.fixtures;
       if(!fixture || fixture.status !== "FT") continue;
-      if(Number(row.minutes || 0) <= 0) continue;
+
       const playerId = String(row.player_id);
+      const kickoff = String(fixture.kickoff || "");
+
+      // De prijswijziging rechts op de marktkaart hoort ALTIJD bij de
+      // meest recente afgewerkte wedstrijd van de speler, ook bij 0 minuten.
+      // Zo toont een DNP na migratie 021 bijvoorbeeld -€0,3M in plaats van
+      // de prijswijziging van zijn vorige wedstrijd met speelminuten.
+      const deltaRaw = row.stats?.priceDelta;
+      if(deltaRaw != null && Number.isFinite(Number(deltaRaw))){
+        const previous = latestPriceChange.get(playerId);
+        if(!previous || kickoff > previous.kickoff){
+          latestPriceChange.set(playerId,{
+            kickoff,
+            delta:Number(deltaRaw)
+          });
+        }
+      }
+
+      // De vormgrafiek zelf blijft alleen daadwerkelijk gespeelde wedstrijden
+      // tonen; een DNP blijft daar dus een leeg slot zoals afgesproken.
+      if(Number(row.minutes || 0) <= 0) continue;
+
       const history = playerMatchHistory.get(playerId) || [];
       history.push({
         fixtureId:fixture.id == null ? null : String(fixture.id),
         gameweek:Number(fixture.gameweeks?.number || 0) || null,
-        kickoff:String(fixture.kickoff || ""),
+        kickoff,
         points:Number(row.fantasy_points || 0),
         minutes:Number(row.minutes || 0)
       });
       playerMatchHistory.set(playerId,history);
-      const deltaRaw = row.stats?.priceDelta;
-      if(deltaRaw == null || !Number.isFinite(Number(deltaRaw))) continue;
-      const kickoff = String(fixture.kickoff || "");
-      const previous = latestPriceChange.get(String(row.player_id));
-      if(!previous || kickoff > previous.kickoff){
-        latestPriceChange.set(String(row.player_id),{
-          kickoff,
-          delta:Number(deltaRaw)
-        });
-      }
     }
 
     PLAYERS.splice(0,PLAYERS.length,...data.map(p => ({
