@@ -605,9 +605,9 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .market-player-identity>div{display:flex;align-items:center;gap:6px;min-width:0}
 .market-player-row .market-player-identity h3{min-width:0;margin:0;font-size:13px}
 .market-player-identity strong,.market-player-identity small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.market-player-row .market-player-identity .club{display:block;margin-top:3px;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.market-player-row .market-player-identity .club{display:block;margin-top:4px;color:#b7d4e5;font-size:11.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .market-form{min-width:0}
-.market-form>span,.market-form>small{display:block;color:var(--muted);font-size:9px}
+.market-form>span{display:block;color:var(--muted);font-size:9px}.market-form>small{display:block;color:#b7d4e5;font-size:10.5px;font-weight:750}
 .market-form>small{margin-top:3px}
 .market-form-bars{
   position:relative;
@@ -654,7 +654,7 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .market-form-slot.is-empty{background:transparent}
 .market-player-numbers{text-align:right;white-space:nowrap}
 .market-player-numbers strong,.market-player-numbers small{display:block}
-.market-player-numbers small{margin-top:3px;color:var(--muted);font-size:9px}
+.market-player-numbers small{margin-top:3px;color:#b7d4e5;font-size:10.5px;font-weight:750}
 .market-player-price{text-align:right;white-space:nowrap}
 .market-player-price strong,.market-player-price small{display:block}
 .market-player-price small{margin-top:3px;font-size:9px}
@@ -916,8 +916,8 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   margin-left:7px;
   padding:2px 6px;
   border-radius:999px;
-  font-size:9px;
-  line-height:1.2;
+  font-size:11px;
+  line-height:1.25;
   font-weight:950;
   vertical-align:middle;
   white-space:nowrap;
@@ -948,3 +948,62 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 }
 .prediction-empty-state strong{font-size:18px;color:#e8f5fc}
 .prediction-empty-state span{max-width:520px;color:var(--muted);line-height:1.5}
+
+
+/* Spelerranking punten per 90 */
+.player-per90-card{
+  margin-top:22px;
+  background:linear-gradient(180deg,rgba(17,38,56,.95),rgba(10,27,41,.95));
+  border:1px solid var(--border);
+  border-radius:18px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.player-ranking-title{padding:16px 18px 8px;margin:0}
+.player-ranking-title h3{margin:2px 0 0}
+.player-ranking-head,
+.player-ranking-row{
+  display:grid;
+  grid-template-columns:52px minmax(180px,1.4fr) minmax(150px,1fr) 90px 110px;
+  align-items:center;
+  gap:12px;
+}
+.player-ranking-head{
+  padding:10px 16px;
+  border-top:1px solid rgba(255,255,255,.06);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  color:var(--muted);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.player-ranking-list{max-height:620px;overflow-y:auto}
+.player-ranking-row{
+  width:100%;
+  border:0;
+  border-bottom:1px solid rgba(255,255,255,.055);
+  background:transparent;
+  color:var(--text);
+  padding:11px 16px;
+  text-align:left;
+  cursor:pointer;
+}
+.player-ranking-row:hover{background:rgba(56,210,122,.07)}
+.player-ranking-position{font-weight:950;color:#8fc8e7}
+.player-ranking-player{min-width:0}
+.player-ranking-player strong,.player-ranking-player small{display:block}
+.player-ranking-player strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-ranking-player small{margin-top:2px;color:var(--muted);font-size:10px}
+.player-ranking-club{color:#b7d4e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-ranking-minutes{text-align:right;color:#b7d4e5}
+.player-ranking-score{text-align:right;font-size:15px;color:#61d7ff}
+@media(max-width:760px){
+  .player-ranking-head,.player-ranking-row{
+    grid-template-columns:34px minmax(135px,1fr) 72px 82px;
+    gap:8px;
+  }
+  .player-ranking-head span:nth-child(3),
+  .player-ranking-row .player-ranking-club{display:none}
+  .player-ranking-title{align-items:flex-start}
+}
