@@ -1449,3 +1449,8 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .leaderboard-preview-metric.prediction-red{background:#ff4d5f!important;color:#fff!important}
 .leaderboard-preview-metric.prediction-yellow{background:#f1d43b!important;color:#171400!important}
 .leaderboard-preview-metric.prediction-green{background:#35e38a!important;color:#062014!important}
+
+
+@media(max-width:1060px){
+  .leaderboard-preview-metric{display:none}
+}
