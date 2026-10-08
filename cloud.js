@@ -748,6 +748,33 @@
 
     const status = String(match.status || "");
     if(!["FT","LIVE"].includes(status)){
+      // Ook voorspelde/toekomstige wedstrijden gebruiken de door Hugo opgeslagen
+      // visuele formatie-override. Zo ziet iedereen exact dezelfde handmatig
+      // gecorrigeerde prediction-opstelling.
+      let fixtureOverrides = {};
+      try{
+        const {data:overrideData,error:overrideError} = await cloud.client
+          .from("fixture_lineup_overrides")
+          .select("fixture_id,side,formation,slots,updated_at")
+          .eq("fixture_id",fixtureId);
+        if(!overrideError){
+          (overrideData || []).forEach(item => {
+            if(item && (item.side === "home" || item.side === "away")){
+              fixtureOverrides[item.side] = {
+                formation:String(item.formation || ""),
+                slots:Array.isArray(item.slots) ? item.slots : [],
+                updatedAt:item.updated_at || null
+              };
+            }
+          });
+        }
+      }catch(error){
+        console.warn("Prediction-opstelling override kon niet worden geladen",error?.message || error);
+      }
+
+      window.FANTASY_MATCH_LAYOUT_OVERRIDES = window.FANTASY_MATCH_LAYOUT_OVERRIDES || {};
+      window.FANTASY_MATCH_LAYOUT_OVERRIDES[String(fixtureId)] = fixtureOverrides;
+
       const predictionRows = window.FANTASY_FIXTURE_START_PREDICTIONS?.[String(fixtureId)] || [];
       if(!predictionRows.length){
         renderNoPrediction(match);
