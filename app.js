@@ -584,7 +584,7 @@ function renderMarket(){
     }).join("");
     return '<article class="player-card market-player-row ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
       '<button class="market-player-avatar role-ring-' + p.pos + ' player-title-link" data-player-id="' + escapeHtml(p.id) + '" type="button" aria-label="Bekijk ' + escapeHtml(p.name) + '">' + initials(p.name) + '</button>' +
-      '<div class="market-player-identity"><div><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3></div><span class="club">' + escapeHtml(p.club) + predictionBadge + '</span></div>' +
+      '<div class="market-player-identity"><div><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3></div><div class="market-player-club-row"><span class="club">' + escapeHtml(p.club) + '</span>' + predictionBadge + '</div></div>' +
       '<div class="market-form"><span>Laatste speeldagen</span><div class="market-form-bars" aria-label="Recente wedstrijdscores met scorekleuren">' + profileBars + '</div><small>' + scorePer90.toFixed(1).replace(".",",") + ' pts/90</small></div>' +
       '<div class="market-player-numbers"><strong class="market-total-points">' + points(p.score).replace(" pts","") + '</strong><small>' + Number(p.minutes || 0) + ' min</small></div>' +
       '<div class="market-player-price"><strong>' + money(p.price) + '</strong><small class="market-price-change ' +
@@ -1138,17 +1138,34 @@ function renderMatchBench(rows,match,side){
 function normalizeClubName(value){
   let normalized = String(value || "").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().replace(/[^a-z0-9]/g,"");
   const aliases = {
-    stvv:"sinttruidensevv",
-    sinttruiden:"sinttruidensevv",
+    stvv:"stvv",
+    sinttruiden:"stvv",
+    sinttruidensevv:"stvv",
     krcgenk:"genk",
     kaagent:"gent",
     gent:"gent",
     skbeveren:"waaslandbeveren",
     waaslandbeveren:"waaslandbeveren",
     clubbruggekv:"clubbrugge",
-    royantwerpfc:"royalantwerpfc",
-    unionsaintgilloise:"royaleunionsaintgilloise",
-    rusg:"royaleunionsaintgilloise"
+    standardliege:"standardliege",
+    standarddeliege:"standardliege",
+    royalcharleroisc:"charleroi",
+    royalcharleroisportingclub:"charleroi",
+    sportingcharleroi:"charleroi",
+    charleroi:"charleroi",
+    royantwerpfc:"royalantwerp",
+    royalantwerpfc:"royalantwerp",
+    royalantwerp:"royalantwerp",
+    antwerp:"royalantwerp",
+    kvcwesterlo:"westerlo",
+    westerlo:"westerlo",
+    yrkvmechelen:"mechelen",
+    kvmechelen:"mechelen",
+    mechelen:"mechelen",
+    royalunionsaintgilloise:"unionsaintgilloise",
+    royaleunionsaintgilloise:"unionsaintgilloise",
+    unionsaintgilloise:"unionsaintgilloise",
+    rusg:"unionsaintgilloise"
   };
   return aliases[normalized] || normalized;
 }
