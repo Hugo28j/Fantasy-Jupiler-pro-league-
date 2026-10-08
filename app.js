@@ -629,11 +629,18 @@ function statGroupDefinitions(position,availableKeys=[]){
     return groups.filter(group => group.keys.length);
   }
 
+  const defendingKeys = position === "FWD"
+    ? STAT_GROUP_KEYS.defending.filter(key => key !== "duelWon" && key !== "duelLost")
+    : STAT_GROUP_KEYS.defending;
+  const attackKeys = position === "FWD"
+    ? [...STAT_GROUP_KEYS.attack,"duelWon","duelLost"]
+    : STAT_GROUP_KEYS.attack;
+
   const groups = [
     make("Algemeen",STAT_GROUP_KEYS.general),
-    make("Defending",STAT_GROUP_KEYS.defending),
+    make("Defending",defendingKeys),
     make("Possession",STAT_GROUP_KEYS.possession),
-    make("Aanval",STAT_GROUP_KEYS.attack)
+    make("Aanval",attackKeys)
   ];
   const remaining = availableKeys.filter(key => !used.has(key));
   if(remaining.length) groups.push(make("Resterende",remaining));
