@@ -565,9 +565,178 @@
     if(typeof window.renderAdminMatches === "function") window.renderAdminMatches();
   }
 
+  function normalizePredictionName(value){
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu,"")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g,"");
+  }
+
+  function manualPredictionRowsForMatch(match){
+    const entries = Array.isArray(window.FANTASY_MANUAL_START_PREDICTIONS)
+      ? window.FANTASY_MANUAL_START_PREDICTIONS
+      : [];
+    const rows = [];
+
+    for(const entry of entries){
+      const teams = Array.isArray(entry?.teams) ? entry.teams : [];
+      if(teams.length !== 2) continue;
+
+      const matchesFixture =
+        (sameClubName(teams[0],match.home) && sameClubName(teams[1],match.away)) ||
+        (sameClubName(teams[0],match.away) && sameClubName(teams[1],match.home));
+      if(!matchesFixture) continue;
+
+      const predictionGroups = entry.predictions || {};
+      for(const [clubLabel,list] of Object.entries(predictionGroups)){
+        const actualClub = sameClubName(clubLabel,match.home)
+          ? match.home
+          : sameClubName(clubLabel,match.away) ? match.away : null;
+        if(!actualClub || !Array.isArray(list)) continue;
+
+        for(const item of list){
+          if(!Array.isArray(item) || item.length < 2) continue;
+          const name = String(item[0] || "");
+          const percent = Number(item[1]);
+          if(!Number.isFinite(percent)) continue;
+
+          const player = PLAYERS.find(candidate =>
+            sameClubName(candidate.club,actualClub) &&
+            normalizePredictionName(candidate.name) === normalizePredictionName(name)
+          );
+          // Bewust niets aanmaken wanneer een voorspelde speler niet in de game zit.
+          if(!player) continue;
+
+          rows.push({
+            fixture_id:String(match.id),
+            player_id:String(player.id),
+            start_probability:Math.max(0,Math.min(100,percent)),
+            reliability:null,
+            source:"manual",
+            player:{
+              id:player.id,
+              name:player.name,
+              club_name:player.club,
+              position:player.pos
+            },
+            stats:{teamName:actualClub}
+          });
+        }
+      }
+    }
+    return rows;
+  }
+
+  function rebuildStartPredictionIndexes(databaseRows=[]){
+    const byFixture = {};
+
+    for(const row of databaseRows || []){
+      const fixtureId = String(row.fixture_id || "");
+      const match = MATCHES.find(item => String(item.id) === fixtureId);
+      const player = playerById(String(row.player_id || ""));
+      const percent = Number(row.starter_probability);
+      if(!fixtureId || !match || !player || !Number.isFinite(percent)) continue;
+
+      byFixture[fixtureId] = byFixture[fixtureId] || [];
+      byFixture[fixtureId].push({
+        fixture_id:fixtureId,
+        player_id:String(player.id),
+        start_probability:Math.max(0,Math.min(100,percent)),
+        reliability:row.reliability ?? null,
+        source:row.source || "sorare",
+        player:{
+          id:player.id,
+          name:player.name,
+          club_name:player.club,
+          position:player.pos
+        },
+        stats:{teamName:player.club}
+      });
+    }
+
+    // Handmatige data overschrijft voor dezelfde speler/wedstrijd de API-waarde.
+    for(const match of MATCHES){
+      const status = String(match.status || "");
+      if(["FT","CANC"].includes(status)) continue;
+      const manualRows = manualPredictionRowsForMatch(match);
+      if(!manualRows.length) continue;
+
+      const fixtureId = String(match.id);
+      const merged = new Map((byFixture[fixtureId] || []).map(row => [String(row.player_id),row]));
+      manualRows.forEach(row => merged.set(String(row.player_id),row));
+      byFixture[fixtureId] = [...merged.values()];
+    }
+
+    window.FANTASY_FIXTURE_START_PREDICTIONS = byFixture;
+
+    const nextByPlayer = {};
+    const futureMatches = MATCHES
+      .filter(match => !["FT","CANC"].includes(String(match.status || "")) && new Date(match.kickoff).getTime() > Date.now())
+      .slice()
+      .sort((a,b) => new Date(a.kickoff).getTime()-new Date(b.kickoff).getTime());
+
+    for(const match of futureMatches){
+      const rows = byFixture[String(match.id)] || [];
+      for(const row of rows){
+        const playerId = String(row.player_id);
+        if(nextByPlayer[playerId]) continue;
+        nextByPlayer[playerId] = {
+          percent:Number(row.start_probability),
+          fixtureId:String(match.id),
+          kickoff:match.kickoff,
+          opponent:sameClubName(row.player?.club_name,match.home) ? match.away : match.home,
+          source:row.source || "sorare",
+          reliability:row.reliability ?? null
+        };
+      }
+    }
+
+    window.FANTASY_PLAYER_NEXT_START_ODDS = nextByPlayer;
+  }
+
+  async function loadStartPredictions(){
+    let rows = [];
+    try{
+      const {data,error} = await cloud.client
+        .from("fixture_start_predictions")
+        .select("fixture_id,player_id,starter_probability,reliability,source,updated_at")
+        .limit(2000);
+      if(error) throw error;
+      rows = data || [];
+    }catch(error){
+      // Migratie 020 is optioneel voor de handmatige fallback. Zolang ze nog
+      // niet uitgevoerd is, blijft de site werken met manual-predictions.js.
+      console.warn("Sorare-opstellingsvoorspellingen nog niet beschikbaar",error?.message || error);
+    }
+
+    rebuildStartPredictionIndexes(rows);
+  }
+
+  function renderNoPrediction(match){
+    const target = document.getElementById("matchDetail");
+    target.innerHTML =
+      '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p>' +
+      '<h2>' + escapeHtml(match.home || "") + ' <span>vs</span> ' + escapeHtml(match.away || "") + '</h2>' +
+      '<p>' + escapeHtml(match.date || "") + '</p></div></div>' +
+      '<div class="empty-state prediction-empty-state"><strong>Momenteel geen opstelling voorspelling</strong>' +
+      '<span>Zodra Sorare of een handmatige voorspelling beschikbaar is, verschijnt hier de verwachte basis en bank.</span></div>';
+  }
+
   async function loadMatchDetail(fixtureId,fallbackMatch){
     const match = fallbackMatch || MATCHES.find(m => String(m.id) === String(fixtureId));
     if(!match) return;
+
+    const status = String(match.status || "");
+    if(!["FT","LIVE"].includes(status)){
+      const predictionRows = window.FANTASY_FIXTURE_START_PREDICTIONS?.[String(fixtureId)] || [];
+      if(!predictionRows.length){
+        renderNoPrediction(match);
+        return;
+      }
+      renderMatchDetail(match,predictionRows);
+      return;
+    }
 
     const [statsResult,overrideResult] = await Promise.all([
       cloud.client
@@ -1021,7 +1190,9 @@
     try{
       setStatus("Gegevens laden…","");
       await loadPlayers();
-      await Promise.all([loadFixtures(),loadDeadline(),loadTransferStatus(),loadGameweekBalance()]);
+      await loadFixtures();
+      await loadStartPredictions();
+      await Promise.all([loadDeadline(),loadTransferStatus(),loadGameweekBalance()]);
       await loadCurrentGameweekPlayerScores();
       await loadTeam();
       await loadCompetitions();
@@ -1086,6 +1257,8 @@
       window.FANTASY_LIVE_SCORE_MODE = false;
       window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
       window.FANTASY_IS_ADMIN = false;
+      window.FANTASY_FIXTURE_START_PREDICTIONS = {};
+      window.FANTASY_PLAYER_NEXT_START_ODDS = {};
       window.dispatchEvent(new CustomEvent("fantasy:admin-access",{detail:{isAdmin:false}}));
       button.textContent = "Inloggen";
       setStatus("Niet ingelogd","");
@@ -1118,7 +1291,10 @@
       document.getElementById("competitionInvites").hidden = true;
       updateCompetitionActions();
       try{
-        await Promise.all([loadPlayers(),loadFixtures(),loadGameweekBalance()]);
+        await loadPlayers();
+        await loadFixtures();
+        await loadStartPredictions();
+        await loadGameweekBalance();
         renderAll();
       }catch(error){
         console.warn("Publieke voetbaldata kon niet worden geladen",error);
