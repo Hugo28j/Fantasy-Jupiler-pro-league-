@@ -113,31 +113,48 @@
     const starterIds = new Set(
       (overridden || naturalInferredMatchStarters(rows)).map(row => String(row.player_id))
     );
+    const predictedRows = rows.filter(row => predictionPercent(row) != null);
 
-    const hasLineupMetadata = rows.some(row => {
-      const stats = row.stats || {};
-      return stats.gameStarted != null || stats.onGameSheet != null;
-    });
+    let bench;
+    if(predictedRows.length){
+      bench = predictedRows
+        .filter(row => !starterIds.has(String(row.player_id)))
+        .slice()
+        .sort((a,b) => predictionPercent(b)-predictionPercent(a));
+    }else{
+      const hasLineupMetadata = rows.some(row => {
+        const stats = row.stats || {};
+        return stats.gameStarted != null || stats.onGameSheet != null;
+      });
 
-    const bench = hasLineupMetadata
-      ? rows.filter(row => Boolean((row.stats || {}).onGameSheet) && !starterIds.has(String(row.player_id)))
-      : rows.filter(row => !starterIds.has(String(row.player_id)) && Number(row.minutes || 0) > 0);
+      bench = hasLineupMetadata
+        ? rows.filter(row => Boolean((row.stats || {}).onGameSheet) && !starterIds.has(String(row.player_id)))
+        : rows.filter(row => !starterIds.has(String(row.player_id)) && Number(row.minutes || 0) > 0);
 
-    bench.sort((a,b) => Number(b.minutes || 0)-Number(a.minutes || 0));
+      bench.sort((a,b) => Number(b.minutes || 0)-Number(a.minutes || 0));
+    }
 
     return bench.map(row => {
       const player = row.player || {};
       const score = Number(row.fantasy_points || 0);
+      const startPct = predictionPercent(row);
       const played = Number(row.minutes || 0) > 0;
-      const scoreClass = score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+      const scoreClass = startPct != null
+        ? "prediction-chip " + predictionBandClass(startPct)
+        : score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+      const scoreText = startPct != null
+        ? Math.round(startPct) + "%"
+        : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
+      const meta = startPct != null
+        ? '<span class="prediction-bench-label">Kans op basis</span>'
+        : (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>');
 
       return '<button class="match-bench-player" type="button" data-match-player="' + escapeHtml(String(row.player_id)) + '">' +
         '<span class="match-bench-avatar">' + initials(player.name || "?") + '</span>' +
         '<span><strong class="match-bench-name-row">' + escapeHtml(player.name || "Onbekend") +
-          '<span class="match-name-events bench-name-events">' + matchNameBadges(row) + matchCardBadges(row) + '</span></strong>' +
-          '<small class="match-bench-meta">' + (played ? matchSubstitutionLabel(row,match) : '<span class="dnp-label">DNP</span>') +
-        '</small></span>' +
-        '<span class="match-bench-score ' + scoreClass + '">' + score.toFixed(score % 1 ? 1 : 0).replace(".",",") + '</span>' +
+          '<span class="match-name-events bench-name-events">' + (startPct != null ? "" : matchNameBadges(row) + matchCardBadges(row)) + '</span></strong>' +
+          '<small class="match-bench-meta">' + meta + '</small></span>' +
+        '<span class="match-bench-score ' + scoreClass + '">' + scoreText + '</span>' +
       '</button>';
     }).join("") || '<div class="empty-state">Geen bankdata beschikbaar.</div>';
   };
