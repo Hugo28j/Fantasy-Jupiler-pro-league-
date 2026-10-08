@@ -1050,6 +1050,10 @@
     if(target){
       target.innerHTML = '<div class="leaderboard-preview-empty"><strong>' + escapeHtml(teamName || "Ploeg") + '</strong><span>Opstelling laden…</span></div>';
     }
+    if(!cloud.user){
+      if(target) target.innerHTML = '<div class="leaderboard-preview-empty"><strong>' + escapeHtml(teamName || "Ploeg") + '</strong><span>Log in om opstellingen te bekijken.</span></div>';
+      return;
+    }
 
     try{
       const lineup = await fetchVisibleManagerLineup(managerId);
@@ -1119,6 +1123,10 @@
     const target = document.getElementById("managerHistory");
     target.innerHTML = '<p class="eyebrow">PLOEG</p><h2>' + escapeHtml(teamName || "Ploeg") + '</h2><div class="empty-state">Opstelling laden…</div>';
     if(!dialog.open) dialog.showModal();
+    if(!cloud.user){
+      target.innerHTML = '<p class="eyebrow">PLOEG</p><h2>' + escapeHtml(teamName || "Ploeg") + '</h2><div class="empty-state">Log in om opstellingen te bekijken.</div>';
+      return;
+    }
 
     try{
       const lineup = await fetchVisibleManagerLineup(managerId);
@@ -1127,6 +1135,12 @@
       target.innerHTML = '<p class="eyebrow">PLOEG</p><h2>' + escapeHtml(teamName || "Ploeg") + '</h2><div class="empty-state">Deze ploeg wordt zichtbaar zodra de deadline verstreken is. Voer migratie 025 uit als deze functie nog niet actief is.</div>';
     }
   }
+
+  document.querySelector('.tab[data-tab="leaderboard"]')?.addEventListener("click",() => {
+    if(leaderboardUsesDialog() || !cloud.user) return;
+    const own = cloud.leaderboardRows.find(row => String(row.manager_id) === String(cloud.user.id));
+    if(own) showLeaderboardManager(own.manager_id,own.manager_name,own.team_name);
+  });
 
   async function loadPlayerStats(playerId){
     const player = playerById(playerId);
