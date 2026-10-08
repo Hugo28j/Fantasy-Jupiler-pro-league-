@@ -150,6 +150,11 @@ function sellPlayer(id){
   if(p) toast(p.name + " verkocht.");
 }
 
+function transferCaptainWithBenchSwap(outgoingId,incomingId){
+  if(state.captainId !== outgoingId) return;
+  state.captainId = incomingId || null;
+}
+
 function setBench(id){
   const p = playerById(id);
   if(!p || !state.squad.includes(id)) return;
@@ -162,11 +167,12 @@ function setBench(id){
     }
 
     if(state.benchGK === id){
-      // "Naar basis": de andere keeper gaat meteen naar de bank.
       const otherKeeper = keepers.find(player => player.id !== id);
+      if(otherKeeper) transferCaptainWithBenchSwap(otherKeeper.id,id);
       state.benchGK = otherKeeper ? otherKeeper.id : null;
     }else{
-      // "Op bank": de huidige reservekeeper komt automatisch in de basis.
+      const incomingKeeper = state.benchGK;
+      transferCaptainWithBenchSwap(id,incomingKeeper);
       state.benchGK = id;
     }
   }else{
@@ -177,8 +183,6 @@ function setBench(id){
     }
 
     if(state.benchOutfield === id){
-      // Kies bij "Naar basis" eerst de andere speler van dezelfde positie.
-      // Zo blijft de formatie zo logisch mogelijk.
       const samePositionStarter = outfield.find(player =>
         player.id !== id &&
         player.pos === p.pos &&
@@ -189,10 +193,11 @@ function setBench(id){
         player.id !== state.benchOutfield
       );
       const replacement = samePositionStarter || fallbackStarter;
+      if(replacement) transferCaptainWithBenchSwap(replacement.id,id);
       state.benchOutfield = replacement ? replacement.id : null;
     }else{
-      // De aangeklikte basisspeler gaat naar de bank en de huidige bankspeler
-      // komt vanzelf in de basis doordat lineupPlayers() hem niet langer uitsluit.
+      const incomingOutfield = state.benchOutfield;
+      transferCaptainWithBenchSwap(id,incomingOutfield);
       state.benchOutfield = id;
     }
   }
@@ -203,6 +208,10 @@ function setBench(id){
 
 function setCaptain(id){
   if(!state.squad.includes(id)) return;
+  if(id === state.benchGK || id === state.benchOutfield){
+    toast("Een bankspeler kan geen captain zijn.");
+    return;
+  }
   state.captainId = id;
   saveState();
   renderAll();
@@ -216,6 +225,9 @@ function autoLineup(){
   const outfield = squadPlayers().filter(p => p.pos !== "GK").sort((a,b) => a.price - b.price);
   state.benchGK = keepers[0].id;
   state.benchOutfield = outfield[0].id;
+  if(state.captainId === state.benchGK || state.captainId === state.benchOutfield){
+    state.captainId = null;
+  }
   saveState();
   renderAll();
   toast("Automatische opstelling gemaakt.");
@@ -257,10 +269,13 @@ function lineupPlayerHtml(p,isBench){
     ? Number(liveScores[p.id] || 0)
     : Number(p.score || 0);
   const scoreClass = scoreBandClass(score);
-  const isCaptain = state.captainId === p.id;
-  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + (isCaptain ? " is-captain":"") + '">' +
+  const isCaptain = !isBench && state.captainId === p.id;
+  const captainControl = isBench ? "" :
     '<button class="captain-toggle ' + (isCaptain ? "selected":"") + '" data-id="' + escapeHtml(p.id) + '" type="button" aria-label="' +
-      (isCaptain ? "Captain" : "Maak captain") + '" title="' + (isCaptain ? "Captain" : "Maak captain") + '">C</button>' +
+      (isCaptain ? "Captain" : "Maak captain") + '" title="' + (isCaptain ? "Captain" : "Maak captain") + '">C</button>';
+
+  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + (isCaptain ? " is-captain":"") + '">' +
+    captainControl +
     '<button class="sorare-player-main player-name-link" data-player-id="' + escapeHtml(p.id) + '" type="button">' +
       '<span class="sorare-avatar role-ring-' + p.pos + '">' + initials(p.name) + '</span>' +
       '<span class="sorare-score ' + scoreClass + '">' + score.toFixed(0) + '</span>' +
@@ -462,6 +477,25 @@ function filteredPlayers(){
   return list;
 }
 
+function recentFormGameweeks(){
+  const supplied = (Array.isArray(window.FANTASY_RECENT_GAMEWEEKS) ? window.FANTASY_RECENT_GAMEWEEKS : [])
+    .map(Number)
+    .filter(Number.isFinite);
+
+  const fromHistory = [...new Set(PLAYERS.flatMap(player =>
+    (Array.isArray(player.matchHistory) ? player.matchHistory : [])
+      .map(item => Number(item.gameweek))
+      .filter(Number.isFinite)
+  ))];
+
+  const source = (supplied.length ? supplied : fromHistory)
+    .sort((a,b) => a-b)
+    .slice(-5);
+
+  while(source.length < 5) source.unshift(null);
+  return source;
+}
+
 function renderMarket(){
   const grid = document.getElementById("playerGrid");
   syncPriceFilterBounds();
@@ -470,35 +504,50 @@ function renderMarket(){
   const missing = Object.entries(REQUIRED_BY_POS).filter(([pos,n]) => countPos(pos) < n).map(([pos,n]) => (n-countPos(pos)) + "× " + pos);
   document.getElementById("selectionWarning").textContent = missing.length ? "Nog nodig: " + missing.join(", ") : (isLineupComplete() ? "Team klaar ✓" : "Selectie compleet — kies je bank");
 
+  const formGameweeks = recentFormGameweeks();
+
   grid.innerHTML = list.map(p => {
     const owned = state.squad.includes(p.id);
     const check = canBuy(p);
     const disabled = !owned && !check.ok;
     const scorePer90 = Number(p.minutes || 0) > 0 ? Number(p.score || 0) / Number(p.minutes) * 90 : 0;
-    const recentMatches = (Array.isArray(p.matchHistory) ? p.matchHistory : [])
-      .slice()
-      .sort((a,b) => String(a.kickoff || "").localeCompare(String(b.kickoff || "")))
-      .slice(-5);
-    const chartMatches = recentMatches.length
-      ? recentMatches
-      : [{points:Number(p.score || 0),gameweek:null,minutes:Number(p.minutes || 0)}];
-    const maxChartScore = Math.max(15,...chartMatches.map(item => Math.abs(Number(item.points || 0))));
-    const missingRecentMatches = Math.max(0,5-chartMatches.length);
-    const missingBars = Array.from({length:missingRecentMatches},() =>
-      '<i class="score-negative market-form-missing" style="--bar:100%" title="Geen wedstrijd gespeeld"></i>'
-    ).join("");
-    const playedBars = chartMatches.map(item => {
+
+    // Vijf vaste chronologische speeldagslots:
+    // links = vijf speeldagen geleden, rechts = de laatste afgewerkte speeldag.
+    const byGameweek = new Map();
+    (Array.isArray(p.matchHistory) ? p.matchHistory : []).forEach(item => {
+      const gameweek = Number(item.gameweek);
+      if(!Number.isFinite(gameweek)) return;
+      const previous = byGameweek.get(gameweek) || {gameweek,points:0,minutes:0,kickoff:""};
+      previous.points += Number(item.points || 0);
+      previous.minutes += Number(item.minutes || 0);
+      if(String(item.kickoff || "") > previous.kickoff) previous.kickoff = String(item.kickoff || "");
+      byGameweek.set(gameweek,previous);
+    });
+
+    const chartMatches = formGameweeks.map(gameweek =>
+      gameweek == null ? null : (byGameweek.get(gameweek) || null)
+    );
+    const playedMatches = chartMatches.filter(Boolean);
+    const maxChartScore = Math.max(15,...playedMatches.map(item => Math.abs(Number(item.points || 0))));
+
+    const profileBars = chartMatches.map((item,index) => {
+      const gameweek = formGameweeks[index];
+      if(!item){
+        const emptyTitle = gameweek == null ? "Nog geen speeldag" : "Speeldag " + gameweek + " · niet gespeeld";
+        return '<span class="market-form-slot is-empty" title="' + escapeHtml(emptyTitle) + '"></span>';
+      }
+
       const score = Number(item.points || 0);
-      // 0 en negatieve scores blijven visueel vrijwel plat.
-      // Alleen positieve scores krijgen hoogte volgens hun score.
-      const height = score <= 0
-        ? 4
-        : Math.max(10,Math.round(score / maxChartScore * 100));
-      const title = (item.gameweek ? "Speeldag " + item.gameweek + " · " : "") +
-        points(score) + " · " + Number(item.minutes || 0) + " min";
-      return '<i class="' + scoreBandClass(score) + '" style="--bar:' + height + '%" title="' + escapeHtml(title) + '"></i>';
+      const height = score === 0
+        ? 0
+        : Math.max(8,Math.round(Math.abs(score) / maxChartScore * 100));
+      const directionClass = score < 0 ? "is-negative" : score > 0 ? "is-positive" : "is-zero";
+      const title = "Speeldag " + gameweek + " · " + points(score) + " · " + Number(item.minutes || 0) + " min";
+
+      return '<span class="market-form-slot ' + directionClass + '" title="' + escapeHtml(title) + '">' +
+        '<i class="' + scoreBandClass(score) + '" style="--bar:' + height + '%"></i></span>';
     }).join("");
-    const profileBars = missingBars + playedBars;
     return '<article class="player-card market-player-row ' + (owned ? "owned":"") + '" data-player-id="' + escapeHtml(p.id) + '">' +
       '<button class="market-player-avatar role-ring-' + p.pos + ' player-title-link" data-player-id="' + escapeHtml(p.id) + '" type="button" aria-label="Bekijk ' + escapeHtml(p.name) + '">' + initials(p.name) + '</button>' +
       '<div class="market-player-identity"><div><span class="role-badge role-' + p.pos + '">' + p.pos + '</span><h3><button class="player-title-link" data-player-id="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</button></h3></div><span class="club">' + escapeHtml(p.club) + '</span></div>' +
