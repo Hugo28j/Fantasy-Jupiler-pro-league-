@@ -9,7 +9,7 @@ const GAME_PAGE_SIZE = 50;
 const PLAYER_BATCH_SIZE = 8;
 const PLAYER_STATS_LAST = 30;
 const STAT_SCHEMA_VERSION = 3;
-const SCORING_VERSION = 3;
+const SCORING_VERSION = 4;
 const PRICE_MODEL_VERSION = 1;
 
 const weights: Record<string,Record<string,number>> = {
