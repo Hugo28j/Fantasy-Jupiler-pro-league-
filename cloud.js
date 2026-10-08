@@ -697,16 +697,24 @@
 
   async function loadStartPredictions(){
     let rows = [];
+    const futureFixtureIds = MATCHES
+      .filter(match => !["FT","CANC"].includes(String(match.status || "")) && new Date(match.kickoff).getTime() > Date.now())
+      .slice()
+      .sort((a,b) => new Date(a.kickoff).getTime()-new Date(b.kickoff).getTime())
+      .slice(0,36)
+      .map(match => Number(match.id))
+      .filter(Number.isFinite);
+
     try{
-      const {data,error} = await cloud.client
-        .from("fixture_start_predictions")
-        .select("fixture_id,player_id,starter_probability,reliability,source,updated_at")
-        .limit(2000);
-      if(error) throw error;
-      rows = data || [];
+      if(futureFixtureIds.length){
+        const query = cloud.client
+          .from("fixture_start_predictions")
+          .select("fixture_id,player_id,starter_probability,reliability,source,updated_at");
+        const result = await query.in("fixture_id",futureFixtureIds).limit(3000);
+        if(result.error) throw result.error;
+        rows = result.data || [];
+      }
     }catch(error){
-      // Migratie 020 is optioneel voor de handmatige fallback. Zolang ze nog
-      // niet uitgevoerd is, blijft de site werken met manual-predictions.js.
       console.warn("Sorare-opstellingsvoorspellingen nog niet beschikbaar",error?.message || error);
     }
 
