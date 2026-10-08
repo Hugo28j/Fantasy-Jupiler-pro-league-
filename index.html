@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#071421" />
   <title>Fantasy Jupiler Pro League</title>
-  <link rel="stylesheet" href="styles.css?v=023" />
+  <link rel="stylesheet" href="styles.css?v=024" />
 </head>
 <body>
   <header class="topbar">
@@ -73,7 +73,7 @@
             <label class="search-box"><span>Zoeken</span><input id="playerSearch" type="search" placeholder="Naam of club..." /></label>
             <label><span>Positie</span><select id="positionFilter"><option value="ALL">Alle posities</option><option value="GK">Keeper</option><option value="DEF">Verdediger</option><option value="MID">Middenvelder</option><option value="FWD">Aanvaller</option></select></label>
             <label><span>Club</span><select id="clubFilter"><option value="ALL">Alle clubs</option></select></label>
-            <label><span>Sorteren</span><select id="sortFilter"><option value="price-desc">Prijs hoog → laag</option><option value="price-asc">Prijs laag → hoog</option><option value="minutes-desc">Minuten hoog → laag</option><option value="points-desc">Punten hoog → laag</option><option value="points-asc">Punten laag → hoog</option><option value="name">Naam A → Z</option></select></label>
+            <label><span>Sorteren</span><select id="sortFilter"><option value="price-desc">Prijs hoog → laag</option><option value="price-asc">Prijs laag → hoog</option><option value="minutes-desc">Minuten hoog → laag</option><option value="points-desc">Punten hoog → laag</option><option value="per90-desc">Punten/90 hoog → laag</option><option value="points-asc">Punten laag → hoog</option><option value="name">Naam A → Z</option></select></label>
           </div>
 
           <div class="price-range-filter">
@@ -108,6 +108,20 @@
         </button>
         <div class="leader-row demo"><span class="rank">–</span><div><strong>Vriendenteams</strong><small>Log in voor het gedeelde klassement</small></div><strong>—</strong><strong>—</strong></div>
       </div>
+
+      <section class="player-per90-card" aria-labelledby="playerPer90Title">
+        <div class="card-title-row player-ranking-title">
+          <div>
+            <p class="eyebrow">SPELERRANKING</p>
+            <h3 id="playerPer90Title">Meeste fantasy-punten per 90 minuten</h3>
+          </div>
+          <span class="pill secondary">Alle spelers met minuten</span>
+        </div>
+        <div class="player-ranking-head">
+          <span>#</span><span>Speler</span><span>Club</span><span>Minuten</span><span>Punten/90</span>
+        </div>
+        <div id="playerPer90Ranking" class="player-ranking-list"></div>
+      </section>
     </section>
 
     <section id="matches" class="panel tab-panel">
@@ -170,7 +184,7 @@
         <p><strong>Speelminuten:</strong> iedere speler krijgt +0,1 punt per gespeelde minuut. Een volledige wedstrijd van 90 minuten levert dus 9 punten op.</p>
         <p><strong>Bank:</strong> exact één keeper en één veldspeler. Een bankspeler valt alleen in als hij zelf minuten speelt en een overeenkomstige basisspeler 0 minuten heeft. De reservekeeper vervangt uitsluitend de basiskeeper. De veldreserve kan maximaal één DEF, MID of FWD vervangen. Als twee of meer veldspelers 0 minuten hebben, blijven de overige afwezige spelers op 0 punten.</p>
         <p><strong>Transfers:</strong> na je eerste vastgezette selectie krijg je per speeldag 2 gratis transfers; ongebruikte transfers worden niet opgespaard. Iedere extra inkomende speler kost 4 punten. Teruggaan naar je oorspronkelijke selectie telt niet als extra transfer; de database vergelijkt je definitieve selectie met de vorige vastgezette speeldag.</p>
-        <p><strong>Marktwaarde:</strong> de prijs verandert na iedere verwerkte wedstrijd op basis van fantasy-punten tegenover de prijs in miljoenen. 100% betekent bijvoorbeeld 25 punten voor een speler van €25M. De minimumprijs blijft €1M.</p>
+        <p><strong>Marktwaarde:</strong> de prijs verandert na iedere verwerkte wedstrijd op basis van fantasy-punten tegenover de prijs in miljoenen. 100% betekent bijvoorbeeld 25 punten voor een speler van €25M. Een speler met 0 gespeelde minuten verliest €0,3M voor die wedstrijd. De minimumprijs blijft €1M.</p>
       </div>
 
       <div class="table-wrap">
@@ -259,8 +273,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="data.js"></script>
-  <script src="manual-predictions.js?v=004"></script>
-  <script src="app.js?v=025"></script>
+  <script src="manual-predictions.js?v=005"></script>
+  <script src="app.js?v=026"></script>
   <script src="cloud.js?v=024"></script>
   <script src="admin.js?v=002"></script>
 </body>
