@@ -294,10 +294,17 @@
     const awayRows = allRows.filter(row => sameClubName((row.stats || {}).teamName,match.away) || sameClubName(row.player?.club_name,match.away));
     if(homeRows.length < 11 || awayRows.length < 11) return;
 
+    const predictionMode = allRows.some(row => predictionPercent(row) != null);
     const editor = document.createElement("section");
     editor.className = "admin-lineup-editor";
     editor.innerHTML =
-      '<div class="admin-lineup-editor-head"><div><p class="eyebrow">ADMIN</p><h3>Werk de echte opstelling bij</h3></div>' +
+      '<div class="admin-lineup-editor-head"><div><p class="eyebrow">ADMIN</p><h3>' +
+        (predictionMode ? "Pas de voorspelde opstelling aan" : "Werk de echte opstelling bij") +
+      '</h3><p class="admin-editor-context">' +
+        (predictionMode
+          ? "Verplaats spelers handmatig naar de juiste linie/positie. Dit verandert hun vaste DEF/MID/FWD-klasse niet."
+          : "Pas de visuele wedstrijdopstelling aan zonder de vaste spelerklasse te wijzigen.") +
+      '</p></div>' +
       '<div class="admin-lineup-actions"><span class="admin-save-status">Niet opgeslagen wijzigingen worden alleen lokaal getoond.</span>' +
       '<button class="btn secondary-btn admin-reset-lineup" type="button">Reset to normal</button>' +
       '<button class="btn primary-btn admin-save-lineup" type="button">Save changes</button></div></div>' +
@@ -343,13 +350,13 @@
       reset.disabled = true;
       save.disabled = true;
       status.className = "admin-save-status";
-      status.textContent = "Originele Sorare-opstelling herstellen…";
+      status.textContent = predictionMode ? "Automatische prediction-opstelling herstellen…" : "Originele Sorare-opstelling herstellen…";
       try{
         const api = window.FANTASY_ADMIN_API;
         if(!api) throw new Error("Admin-API is niet beschikbaar.");
         await api.resetLineupOverride(match.id);
         status.className = "admin-save-status ok";
-        status.textContent = "Teruggezet naar normaal.";
+        status.textContent = predictionMode ? "Prediction teruggezet naar automatisch." : "Teruggezet naar normaal.";
         await reloadAdminMatch(match);
       }catch(error){
         status.className = "admin-save-status error";
@@ -422,7 +429,7 @@
 
     list.innerHTML = visible.map(match => {
       const status = String(match.status || "");
-      const editable = Boolean(match.id) && ["FT","LIVE"].includes(status);
+      const editable = Boolean(match.id) && status !== "CANC";
       const tag = status === "LIVE"
         ? '<span class="match-live-badge">LIVE</span>'
         : !["FT","CANC"].includes(status) ? '<span class="match-upcoming-badge">KOMEND</span>' : "";
