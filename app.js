@@ -1386,10 +1386,17 @@ function renderMatchPlayerDetail(match,row){
   const dialog = document.getElementById("matchPlayerDialog");
   document.getElementById("matchPlayerDetail").innerHTML =
     '<p class="eyebrow">WEDSTRIJDSTATISTIEKEN</p>' +
-    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2>' + escapeHtml(player.name || "Onbekend") + '</h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>' +
+    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2><button type="button" class="match-player-profile-link" data-profile-player="' + escapeHtml(String(row.player_id || player.id || "")) + '">' + escapeHtml(player.name || "Onbekend") + '</button></h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>' +
     hiddenStatsHtml + scoreAuditHtml +
     '<div class="stat-groups match-stat-groups">' + rowsHtml + '</div>' +
     '<div class="match-stat-total"><span>Totaal deze wedstrijd</span><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>';
+  const profileLink = document.querySelector("#matchPlayerDetail [data-profile-player]");
+  profileLink?.addEventListener("click",() => {
+    const playerId = profileLink.dataset.profilePlayer;
+    if(!playerId) return;
+    if(dialog.open) dialog.close();
+    openPlayerProfile(playerId);
+  });
   if(!dialog.open) dialog.showModal();
 }
 
