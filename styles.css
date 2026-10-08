@@ -609,8 +609,45 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .market-form{min-width:0}
 .market-form>span,.market-form>small{display:block;color:var(--muted);font-size:9px}
 .market-form>small{margin-top:3px}
-.market-form-bars{height:25px;display:flex;align-items:flex-end;gap:3px;margin-top:3px}
-.market-form-bars i{display:block;flex:1;min-width:5px;height:var(--bar);min-height:3px;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#55e99a,#1b9f63)}
+.market-form-bars{
+  position:relative;
+  height:30px;
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:4px;
+  margin-top:3px;
+}
+.market-form-bars::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  height:1px;
+  background:rgba(255,255,255,.09);
+  pointer-events:none;
+}
+.market-form-slot{position:relative;display:block;height:30px;min-width:0}
+.market-form-slot i{
+  position:absolute;
+  left:0;
+  right:0;
+  width:100%;
+  height:var(--bar);
+  max-height:14px;
+  min-height:2px;
+  border-radius:3px 3px 1px 1px;
+  background:linear-gradient(180deg,#55e99a,#1b9f63);
+}
+.market-form-slot.is-positive i{bottom:50%}
+.market-form-slot.is-negative i{top:50%;border-radius:1px 1px 3px 3px}
+.market-form-slot.is-zero i{
+  top:calc(50% - 1px);
+  height:2px!important;
+  min-height:2px;
+  border-radius:2px;
+}
+.market-form-slot.is-empty{background:transparent}
 .market-player-numbers{text-align:right;white-space:nowrap}
 .market-player-numbers strong,.market-player-numbers small{display:block}
 .market-player-numbers small{margin-top:3px;color:var(--muted);font-size:9px}
@@ -720,7 +757,6 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 .market-form-bars i.score-yellow{--bar-color:#f1d43b}
 .market-form-bars i.score-green{--bar-color:#35e38a}
 .market-form-bars i.score-blue{--bar-color:#61d7ff}
-.market-form-bars i.market-form-missing{opacity:.9}
 
 .profile-performance-card{margin-top:18px;padding:16px;border:1px solid var(--border);border-radius:16px;background:rgba(4,18,27,.34)}
 .profile-performance-card .profile-section-head{margin:0 0 12px}
