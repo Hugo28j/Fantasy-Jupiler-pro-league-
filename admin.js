@@ -46,7 +46,7 @@
   function layoutStarters(rows,match,side){
     return overrideStarterRows(rows,match,side) || naturalInferredMatchStarters(rows).map((row,index) => ({
       ...row,
-      _layoutZone:row.player?.position || "MID",
+      _layoutZone:matchVisualZone(row),
       _layoutOrder:index
     }));
   }
@@ -172,7 +172,7 @@
     const starters = naturalInferredMatchStarters(rows);
     const groups = {GK:[],DEF:[],MID:[],FWD:[]};
     starters.forEach(row => {
-      const zone = row.player?.position || "MID";
+      const zone = matchVisualZone(row);
       (groups[zone] || groups.MID).push(row);
     });
 
