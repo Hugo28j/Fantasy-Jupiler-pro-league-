@@ -84,10 +84,11 @@
   }
 
   function injectUi(){
-    document.head.insertAdjacentHTML("beforeend", '<link rel="stylesheet" href="cloud.css?v=017">');
+    document.head.insertAdjacentHTML("beforeend", '<link rel="stylesheet" href="cloud.css?v=018">');
     const bar = make("div","cloud-bar");
     bar.innerHTML = '<span id="cloudStatus" class="cloud-status">Demo op dit toestel</span><button id="authButton" class="btn secondary-btn" type="button">Inloggen</button>';
-    document.querySelector(".topbar").appendChild(bar);
+    const navTools = document.querySelector(".nav-header-tools") || document.querySelector(".tabs");
+    navTools.appendChild(bar);
 
     const headerStats = document.querySelector(".header-stats");
     const deadlineStat = make("div","header-live-stat deadline-card");
