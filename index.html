@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#071421" />
   <title>Fantasy Jupiler Pro League</title>
-  <link rel="stylesheet" href="styles.css?v=030" />
+  <link rel="stylesheet" href="styles.css?v=031" />
 </head>
 <body>
   <nav class="tabs" aria-label="Hoofdnavigatie">
@@ -90,17 +90,26 @@
         <div class="competition-actions"><select id="competitionSelect" aria-label="Competitie kiezen"><option value="global">Algemeen klassement</option></select><button id="createCompetitionBtn" class="btn primary-btn" type="button">Nieuwe competitie</button><button id="inviteCompetitionBtn" class="btn secondary-btn" type="button" hidden>Uitnodigen</button><button id="deleteCompetitionBtn" class="btn danger-btn" type="button" hidden>Verwijderen</button></div>
       </div>
       <div id="competitionInvites" class="competition-invites" hidden></div>
-      <div class="leaderboard-card">
-        <div class="leader-head">
-          <span>#</span><span>Ploeg</span><span>Speeldag</span><span>Totaal</span>
+      <div class="leaderboard-desktop-layout">
+        <div class="leaderboard-card">
+          <div class="leader-head">
+            <span>#</span><span>Ploeg</span><span>Speeldag</span><span>Totaal</span>
+          </div>
+          <button class="leader-row current-user" type="button" data-demo-history>
+            <span class="rank">1</span>
+            <div><strong id="leaderTeamName" class="leader-team-name">Mijn Fantasy Team</strong><small class="leader-manager-subname">Manager</small></div>
+            <strong class="gameweek-points">0 pts</strong>
+            <strong id="leaderPoints">0 pts</strong>
+          </button>
+          <div class="leader-row demo"><span class="rank">–</span><div><strong>Vriendenteams</strong><small>Log in voor het gedeelde klassement</small></div><strong>—</strong><strong>—</strong></div>
         </div>
-        <button class="leader-row current-user" type="button" data-demo-history>
-          <span class="rank">1</span>
-          <div><strong id="leaderTeamName" class="leader-team-name">Mijn Fantasy Team</strong><small class="leader-manager-subname">Manager</small></div>
-          <strong class="gameweek-points">0 pts</strong>
-          <strong id="leaderPoints">0 pts</strong>
-        </button>
-        <div class="leader-row demo"><span class="rank">–</span><div><strong>Vriendenteams</strong><small>Log in voor het gedeelde klassement</small></div><strong>—</strong><strong>—</strong></div>
+
+        <aside id="leaderboardLineupPreview" class="leaderboard-lineup-preview" aria-live="polite">
+          <div class="leaderboard-preview-empty">
+            <strong>Selecteer een ploeg</strong>
+            <span>De opstelling verschijnt hier.</span>
+          </div>
+        </aside>
       </div>
 
     </section>
@@ -256,7 +265,7 @@
   <script src="data.js?v=002"></script>
   <script src="manual-predictions.js?v=005"></script>
   <script src="app.js?v=034"></script>
-  <script src="cloud.js?v=028"></script>
+  <script src="cloud.js?v=029"></script>
   <script src="admin.js?v=006"></script>
 </body>
 </html>
