@@ -841,6 +841,92 @@ Deno.serve(async request => {
       if(error) throw error;
     }
 
+    // Voorbereiding op Sorare's voorspelde basispercentages.
+    // footballPlayingStatusOdds bestaat in het schema, maar kan momenteel null
+    // teruggeven. Daarom is dit volledig fail-safe: de gewone sync blijft werken
+    // wanneer Sorare niets terugstuurt of het veld tijdelijk niet resolveert.
+    let starterPredictionRowsUpdated = 0;
+    let starterPredictionGamesWithData = 0;
+    const starterPredictionWarnings:string[] = [];
+    const predictionGames = games
+      .filter((game:any) => {
+        const kickoff = new Date(game.date).getTime();
+        return Number.isFinite(kickoff) && kickoff > now;
+      })
+      .sort((a:any,b:any) => new Date(a.date).getTime()-new Date(b.date).getTime())
+      .slice(0,9);
+
+    for(const game of predictionGames){
+      try{
+        const providerGameId = String(game.id || "").replace(/["\\]/g,"");
+        if(!providerGameId) continue;
+
+        const predictionData = await sorare(`
+          query {
+            football {
+              game(id:"${providerGameId}") {
+                playerGameScores {
+                  anyPlayer {
+                    __typename
+                    ... on Player { slug displayName }
+                  }
+                  anyPlayerGameStats {
+                    ... on PlayerGameStats {
+                      footballPlayingStatusOdds {
+                        starterOddsBasisPoints
+                        reliability
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        `);
+
+        const rawScores = predictionData?.football?.game?.playerGameScores;
+        const scores = Array.isArray(rawScores)
+          ? rawScores
+          : Array.isArray(rawScores?.nodes) ? rawScores.nodes : [];
+
+        const predictionRows:any[] = [];
+        for(const score of scores){
+          const player = score?.anyPlayer;
+          const rawStats = Array.isArray(score?.anyPlayerGameStats)
+            ? score.anyPlayerGameStats[0]
+            : score?.anyPlayerGameStats;
+          const odds = rawStats?.footballPlayingStatusOdds;
+          const basisPoints = Number(odds?.starterOddsBasisPoints);
+          if(!player?.slug || !Number.isFinite(basisPoints)) continue;
+
+          predictionRows.push({
+            fixture_id:fixtureDbId(String(game.id)),
+            player_id:playerDbId(String(player.slug)),
+            starter_probability:Math.max(0,Math.min(100,Math.round(basisPoints/100))),
+            reliability:odds?.reliability == null ? null : String(odds.reliability),
+            source:"sorare",
+            updated_at:new Date().toISOString()
+          });
+        }
+
+        if(predictionRows.length){
+          const {error:predictionError} = await db
+            .from("fixture_start_predictions")
+            .upsert(predictionRows,{onConflict:"fixture_id,player_id"});
+          if(predictionError){
+            starterPredictionWarnings.push("DB " + providerGameId + ": " + predictionError.message);
+          }else{
+            starterPredictionRowsUpdated += predictionRows.length;
+            starterPredictionGamesWithData += 1;
+          }
+        }
+      }catch(error){
+        starterPredictionWarnings.push(
+          String(game.id || "?") + ": " + (error instanceof Error ? error.message : String(error))
+        );
+      }
+    }
+
     const latestCompleted = rounds
       .filter(r=>r.games.length===9 && r.games.every(g=>String(g.statusTyped).toLowerCase()==="played"))
       .sort((a,b)=>b.number-a.number)[0];
@@ -1182,6 +1268,9 @@ Deno.serve(async request => {
       rescoredPlayerRows,
       marketHistoryRowsUpdated,
       marketPricesUpdated,
+      starterPredictionRowsUpdated,
+      starterPredictionGamesWithData,
+      starterPredictionWarnings,
       processedFixtures,
       incompleteFixtures,
       importedPlayerRows,
