@@ -1042,3 +1042,18 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   .nav-header-tools .cloud-status{display:none}
   main{padding-top:16px}
 }
+
+
+/* Scorecontrole: verschijnt alleen als opgeslagen punten niet overeenkomen
+   met de scorende statistieken of als een scorende stat niet zichtbaar is. */
+.match-score-audit-warning{
+  margin:0 0 12px;
+  padding:10px 12px;
+  border:1px solid rgba(255,101,119,.42);
+  border-radius:11px;
+  background:rgba(255,101,119,.08);
+  color:#ffd1d7;
+  font-size:12px;
+  line-height:1.45;
+}
+.match-score-audit-warning strong{color:#ff9eaa}
