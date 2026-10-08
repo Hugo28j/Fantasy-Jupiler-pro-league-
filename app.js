@@ -495,6 +495,11 @@ function filteredPlayers(){
     if(sort === "price-asc") return a.price - b.price;
     if(sort === "minutes-desc") return (b.minutes ?? -1) - (a.minutes ?? -1);
     if(sort === "points-desc") return Number(b.score || 0) - Number(a.score || 0);
+    if(sort === "per90-desc"){
+      const a90 = Number(a.minutes || 0) > 0 ? Number(a.score || 0) * 90 / Number(a.minutes) : -Infinity;
+      const b90 = Number(b.minutes || 0) > 0 ? Number(b.score || 0) * 90 / Number(b.minutes) : -Infinity;
+      return b90-a90 || Number(b.minutes || 0)-Number(a.minutes || 0);
+    }
     if(sort === "points-asc") return Number(a.score || 0) - Number(b.score || 0);
     if(sort === "name") return a.name.localeCompare(b.name,"nl");
     return b.price - a.price;
@@ -1333,11 +1338,44 @@ function renderTeamName(){
   if(input) input.value = state.teamName;
 }
 
+function renderPlayerPer90Ranking(){
+  const target = document.getElementById("playerPer90Ranking");
+  if(!target) return;
+
+  const ranked = PLAYERS
+    .filter(player => Number(player.minutes || 0) > 0)
+    .map(player => ({
+      player,
+      per90:Number(player.score || 0) * 90 / Number(player.minutes || 1)
+    }))
+    .sort((a,b) =>
+      b.per90-a.per90 ||
+      Number(b.player.minutes || 0)-Number(a.player.minutes || 0) ||
+      String(a.player.name || "").localeCompare(String(b.player.name || ""),"nl")
+    );
+
+  target.innerHTML = ranked.map((entry,index) => {
+    const player = entry.player;
+    return '<button class="player-ranking-row" type="button" data-ranking-player="' + escapeHtml(player.id) + '">' +
+      '<span class="player-ranking-position">' + (index+1) + '</span>' +
+      '<span class="player-ranking-player"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(POSITION_LABELS[player.pos] || player.pos) + '</small></span>' +
+      '<span class="player-ranking-club">' + escapeHtml(player.club) + '</span>' +
+      '<span class="player-ranking-minutes">' + Number(player.minutes || 0) + '</span>' +
+      '<strong class="player-ranking-score">' + entry.per90.toFixed(1).replace(".",",") + '</strong>' +
+    '</button>';
+  }).join("") || '<div class="empty-state">Nog geen spelers met speelminuten.</div>';
+
+  target.querySelectorAll("[data-ranking-player]").forEach(button => {
+    button.addEventListener("click",() => openPlayerProfile(button.dataset.rankingPlayer));
+  });
+}
+
 function renderAll(){
   renderHeader();
   renderRequirements();
   renderTeam();
   renderMarket();
+  renderPlayerPer90Ranking();
   renderTeamName();
   if(typeof updateInitialSetupTabs === "function") updateInitialSetupTabs();
 }
