@@ -622,7 +622,7 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   position:absolute;
   left:0;
   right:0;
-  top:50%;
+  top:76%;
   height:1px;
   background:rgba(255,255,255,.09);
   pointer-events:none;
@@ -634,15 +634,19 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   right:0;
   width:100%;
   height:var(--bar);
-  max-height:14px;
+  max-height:22px;
   min-height:2px;
   border-radius:3px 3px 1px 1px;
   background:linear-gradient(180deg,#55e99a,#1b9f63);
 }
-.market-form-slot.is-positive i{bottom:50%}
-.market-form-slot.is-negative i{top:50%;border-radius:1px 1px 3px 3px}
+.market-form-slot.is-positive i{bottom:24%}
+.market-form-slot.is-negative i{
+  top:76%;
+  max-height:7px;
+  border-radius:1px 1px 3px 3px;
+}
 .market-form-slot.is-zero i{
-  top:calc(50% - 1px);
+  top:calc(76% - 1px);
   height:2px!important;
   min-height:2px;
   border-radius:2px;
@@ -866,3 +870,28 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 
 /* Captain dichter tegen de spelerscirkel */
 .captain-toggle{left:calc(50% + 21px);right:auto;top:1px}
+
+
+/* Admin lineup editor — only injected for the database-authorized admin account */
+.admin-panel-note{margin:0 0 14px;color:var(--muted);font-size:12px}
+.admin-match-row{cursor:pointer}
+.admin-lineup-editor{margin:18px 0 0;padding:16px;border:1px solid rgba(97,215,255,.28);border-radius:16px;background:rgba(7,25,38,.92)}
+.admin-lineup-editor-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.admin-lineup-editor-head h3{margin:0}
+.admin-lineup-actions{display:flex;gap:8px;flex-wrap:wrap}
+.admin-team-editors{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.admin-team-editor{border:1px solid var(--border);border-radius:14px;padding:12px;background:rgba(3,17,27,.48)}
+.admin-team-editor h4{margin:0 0 9px}
+.admin-team-editor label{display:grid;gap:5px}
+.admin-team-editor label>span{font-size:10px;color:var(--muted);font-weight:850}
+.admin-slot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.admin-slot{display:grid;gap:4px;padding:7px;border:1px solid rgba(255,255,255,.07);border-radius:9px;background:rgba(255,255,255,.025)}
+.admin-slot>span{font-size:9px;font-weight:900;color:#9ec7df}
+.admin-slot select{padding:8px 9px;font-size:11px}
+.admin-save-status{font-size:11px;color:var(--muted);margin-left:auto}
+.admin-save-status.ok{color:#58efa0}
+.admin-save-status.error{color:#ff8593}
+@media(max-width:820px){
+  .admin-team-editors{grid-template-columns:1fr}
+  .admin-slot-grid{grid-template-columns:1fr}
+}
