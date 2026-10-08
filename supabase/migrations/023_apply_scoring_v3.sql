@@ -23,9 +23,9 @@ set
   )::numeric,2),
   stats = coalesce(s.stats,'{}'::jsonb) || jsonb_build_object('scoringVersion',3),
   updated_at = now()
-from public.players p
-join public.fixtures f on f.id=s.fixture_id
+from public.players p, public.fixtures f
 where p.id=s.player_id
+  and f.id=s.fixture_id
   and f.status='FT'
   and coalesce((s.stats->>'scoringVersion')::integer,0) < 3;
 
