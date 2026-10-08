@@ -540,7 +540,28 @@
         awayScore:f.away_score == null ? "–" : f.away_score
       };
     }));
+
+    const statusesByGameweek = new Map();
+    data.forEach(fixture => {
+      const gameweek = Number(fixture.gameweeks?.number);
+      if(!Number.isFinite(gameweek)) return;
+      const statuses = statusesByGameweek.get(gameweek) || [];
+      statuses.push(String(fixture.status || ""));
+      statusesByGameweek.set(gameweek,statuses);
+    });
+
+    window.FANTASY_RECENT_GAMEWEEKS = [...statusesByGameweek.entries()]
+      .filter(([,statuses]) =>
+        statuses.length > 0 &&
+        statuses.some(status => status === "FT") &&
+        statuses.every(status => status === "FT" || status === "CANC")
+      )
+      .map(([gameweek]) => gameweek)
+      .sort((a,b) => a-b)
+      .slice(-5);
+
     renderMatches();
+    renderMarket();
   }
 
   async function loadMatchDetail(fixtureId,fallbackMatch){
@@ -598,6 +619,9 @@
     }
     if(remoteOutfield.length === 6 && !remoteOutfield.some(player => player.id === state.benchOutfield)){
       state.benchOutfield = remoteOutfield[remoteOutfield.length - 1].id;
+    }
+    if(state.captainId === state.benchGK || state.captainId === state.benchOutfield){
+      state.captainId = null;
     }
 
     cloud.initialSetupComplete = Boolean(data.initial_setup_complete);
@@ -723,10 +747,16 @@
       const starters = (row.starter_ids || []).map(id => playerById(id) || {id,name:id,pos:""});
       const benchIds = [row.bench_gk_id,row.bench_outfield_id].filter(Boolean);
       const bench = benchIds.map(id => playerById(id) || {id,name:"Onbekende speler",pos:""});
+      const effectiveCaptainId = String(row.breakdown?.effective_captain_id || row.captain_id || "");
+      const captainBadge = player => effectiveCaptainId === String(player.id)
+        ? ' <span class="history-captain">C</span>'
+        : '';
       const lineup = starters.map(player => '<button type="button" class="history-player" data-history-player="' + escapeHtml(String(player.id)) + '"><strong>' + escapeHtml(player.name) +
-        (String(row.captain_id || "") === String(player.id) ? ' <span class="history-captain">C</span>' : '') +
+        captainBadge(player) +
         '</strong><small>' + escapeHtml(player.pos) + ' · basis</small></button>').join("") +
-        bench.map(player => '<button type="button" class="history-player bench" data-history-player="' + escapeHtml(String(player.id)) + '"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(player.pos) + ' · bank</small></button>').join("");
+        bench.map(player => '<button type="button" class="history-player bench" data-history-player="' + escapeHtml(String(player.id)) + '"><strong>' + escapeHtml(player.name) +
+        captainBadge(player) +
+        '</strong><small>' + escapeHtml(player.pos) + ' · bank</small></button>').join("");
       const transferCost = Number(row.breakdown?.transfer_cost || 0);
       return '<article class="history-card"><div class="history-card-head"><div><strong>Speeldag ' + row.gameweek_number + '</strong><small>' + (transferCost ? " · −" + transferCost + " transferpunten" : "") + '</small></div><strong>' + points(row.points) + '</strong></div><div class="history-lineup">' + (lineup || '<span class="muted">Geen vastgezette spelers.</span>') + '</div></article>';
     }).join("");
