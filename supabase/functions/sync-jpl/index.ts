@@ -570,6 +570,10 @@ Deno.serve(async request => {
     let body:any = {};
     try{ body = await request.json(); }catch{ /* lege POST is geldig */ }
     const forcePlayers = body?.refreshPlayers === true;
+    // De 3-minuten live-cron gebruikt liveOnly. Die route houdt dezelfde
+    // Sorare-statussync, maar beperkt de zware spelerstat-query tot de clubs
+    // die op dat moment spelen of net klaar zijn.
+    const liveOnly = body?.liveOnly === true;
 
     const {data:existingPlayers,error:existingPlayersError} = await db
       .from("players")
@@ -848,7 +852,7 @@ Deno.serve(async request => {
     let starterPredictionRowsUpdated = 0;
     let starterPredictionGamesWithData = 0;
     const starterPredictionWarnings:string[] = [];
-    const predictionGames = games
+    const predictionGames = liveOnly ? [] : games
       .filter((game:any) => {
         const kickoff = new Date(game.date).getTime();
         return Number.isFinite(kickoff) && kickoff > now;
@@ -941,27 +945,33 @@ Deno.serve(async request => {
     // Verwerk iedere afgewerkte wedstrijd die nog ontbreekt, niet alleen de laatste
     // volledig afgewerkte speeldag. Zo worden ingehaalde of gemiste wedstrijden automatisch
     // bijgewerkt zodra de cron opnieuw draait.
-    const {data:pending,error:pendingError} = await db
+    const liveWindowStart = new Date(now - 4*60*60*1000).toISOString();
+
+    let pendingQuery:any = db
       .from("fixtures")
-      .select("id,gameweek_id,kickoff,status,details_processed")
+      .select("id,gameweek_id,kickoff,status,details_processed,home_team,away_team")
       .in("gameweek_id",seasonGameweekIds)
       .eq("stats_processed",false)
       .eq("status","FT")
       .order("kickoff",{ascending:true});
+    if(liveOnly) pendingQuery = pendingQuery.gte("kickoff",liveWindowStart);
+    const {data:pending,error:pendingError} = await pendingQuery;
     if(pendingError) throw pendingError;
 
-    const {data:pendingDetails,error:pendingDetailsError} = await db
+    let pendingDetailsQuery:any = db
       .from("fixtures")
-      .select("id,gameweek_id,kickoff,status,details_processed")
+      .select("id,gameweek_id,kickoff,status,details_processed,home_team,away_team")
       .in("gameweek_id",seasonGameweekIds)
       .eq("details_processed",false)
       .eq("status","FT")
       .order("kickoff",{ascending:true});
+    if(liveOnly) pendingDetailsQuery = pendingDetailsQuery.gte("kickoff",liveWindowStart);
+    const {data:pendingDetails,error:pendingDetailsError} = await pendingDetailsQuery;
     if(pendingDetailsError) throw pendingDetailsError;
 
     const {data:liveFixtures,error:liveError} = await db
       .from("fixtures")
-      .select("id,gameweek_id,kickoff,status,details_processed")
+      .select("id,gameweek_id,kickoff,status,details_processed,home_team,away_team")
       .in("gameweek_id",seasonGameweekIds)
       .eq("status","LIVE")
       .order("kickoff",{ascending:true});
@@ -978,7 +988,7 @@ Deno.serve(async request => {
     // Geen nieuwe SQL-migratie nodig voor toekomstige scoringwijzigingen:
     // - nieuwe Sorare-statvelden -> bump STAT_SCHEMA_VERSION en refresh alleen die fixtures;
     // - alleen andere puntengewichten -> bump SCORING_VERSION en herbereken uit opgeslagen JSON.
-    const finishedFixtures = fixtureRows.filter((f:any)=>f.status === "FT");
+    const finishedFixtures = liveOnly ? [] : fixtureRows.filter((f:any)=>f.status === "FT");
     const finishedFixtureById = new Map(finishedFixtures.map((f:any)=>[String(f.id),f]));
     const versionRows:any[] = [];
     for(const idBatch of chunks(finishedFixtures.map((f:any)=>f.id),75)){
@@ -1044,19 +1054,33 @@ Deno.serve(async request => {
     for(const id of scoreOnlyGameweeks) touchedGameweeks.add(id);
 
     if(targetById.size){
-      const {data:activePlayers,error:activePlayersError} = await db
+      const targetClubs = [...new Set(
+        [...targetById.values()]
+          .flatMap((fixture:any) => [fixture.home_team,fixture.away_team])
+          .filter(Boolean)
+          .map((club:any) => String(club))
+      )];
+
+      let activePlayersQuery:any = db
         .from("players")
-        .select("id,name,position")
+        .select("id,name,position,club_name")
         .eq("active",true)
         .like("id","sorare-%");
+      if(liveOnly && targetClubs.length){
+        activePlayersQuery = activePlayersQuery.in("club_name",targetClubs);
+      }
+      const {data:activePlayers,error:activePlayersError} = await activePlayersQuery;
       if(activePlayersError) throw activePlayersError;
 
       const slugs = (activePlayers || [])
         .map((p:any)=>String(p.id).replace(/^sorare-/,""))
         .filter(Boolean);
 
-      if(slugs.length < 270){
+      if(!liveOnly && slugs.length < 270){
         throw new Error(`Database bevat slechts ${slugs.length} actieve Sorare JPL-spelers. Voer eerst refreshPlayers uit.`);
+      }
+      if(liveOnly && targetClubs.length && slugs.length < 18){
+        throw new Error(`Live-sync vond slechts ${slugs.length} spelers voor actieve clubs: ${targetClubs.join(", ")}.`);
       }
 
       const positionByPlayerId = new Map((activePlayers || []).map((p:any)=>[String(p.id),String(p.position)]));
@@ -1243,15 +1267,18 @@ Deno.serve(async request => {
     // de historische fantasy-punten en bewaart per wedstrijd prijs vóór/na + verschil.
     let marketHistoryRowsUpdated = 0;
     let marketPricesUpdated = 0;
-    const {data:marketResult,error:marketError} = await db.rpc("recalculate_market_prices");
-    if(marketError) throw marketError;
-    const marketRow = Array.isArray(marketResult) ? marketResult[0] : marketResult;
-    marketHistoryRowsUpdated = Number(marketRow?.history_rows_updated || 0);
-    marketPricesUpdated = Number(marketRow?.players_updated || 0);
+    if(!liveOnly || processedFixtures > 0){
+      const {data:marketResult,error:marketError} = await db.rpc("recalculate_market_prices");
+      if(marketError) throw marketError;
+      const marketRow = Array.isArray(marketResult) ? marketResult[0] : marketResult;
+      marketHistoryRowsUpdated = Number(marketRow?.history_rows_updated || 0);
+      marketPricesUpdated = Number(marketRow?.players_updated || 0);
+    }
 
     return Response.json({
       ok:true,
       source:"Sorare",
+      mode:liveOnly ? "live" : "full",
       competition:COMPETITION_SLUG,
       season:SEASON_START,
       clubs:clubs.length,
