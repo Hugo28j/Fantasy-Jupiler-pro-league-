@@ -993,7 +993,7 @@ function matchPlayerButton(row,match,side,index,total,zone){
 function inferredMatchStarters(rows){
   const predicted = rows.filter(row => predictionPercent(row) != null);
   if(predicted.length){
-    return predicted
+    const sorted = predicted
       .slice()
       .sort((a,b) => {
         const pctDiff = predictionPercent(b)-predictionPercent(a);
@@ -1002,8 +1002,10 @@ function inferredMatchStarters(rows){
         const posDiff = (posOrder[a.player?.position] ?? 9)-(posOrder[b.player?.position] ?? 9);
         if(posDiff) return posDiff;
         return String(a.player?.name || "").localeCompare(String(b.player?.name || ""),"nl");
-      })
-      .slice(0,11);
+      });
+    const keeper = sorted.find(row => row.player?.position === "GK");
+    if(!keeper) return sorted.slice(0,11);
+    return [keeper,...sorted.filter(row => row !== keeper && row.player?.position !== "GK").slice(0,10)];
   }
 
   const explicit = rows.filter(row => Number((row.stats || {}).gameStarted || 0) > 0);
