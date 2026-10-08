@@ -5,30 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#071421" />
   <title>Fantasy Jupiler Pro League</title>
-  <link rel="stylesheet" href="styles.css?v=027" />
+  <link rel="stylesheet" href="styles.css?v=028" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark">FJ</div>
-      <div>
-        <h1>Fantasy Jupiler Pro League</h1>
-        <p>Seizoen 2026/27</p>
+  <nav class="tabs" aria-label="Hoofdnavigatie">
+    <div class="tab-links">
+      <button class="tab active" data-tab="team">Mijn ploeg</button>
+      <button class="tab" data-tab="leaderboard">Leaderboard</button>
+      <button class="tab" data-tab="matches">Wedstrijden</button>
+      <button class="tab" data-tab="rules">Regels</button>
+      <button class="tab" data-tab="settings">Instellingen</button>
+    </div>
+    <div class="nav-header-tools">
+      <div class="header-stats">
+        <div><span>Budget</span><strong id="budgetDisplay">€125,0M</strong></div>
+        <div><span>Selectie</span><strong id="squadDisplay">0 / 8</strong></div>
+        <div><span>Punten</span><strong id="pointsDisplay">0</strong></div>
       </div>
     </div>
-    <div class="header-stats">
-      <div><span>Budget</span><strong id="budgetDisplay">€125,0M</strong></div>
-      <div><span>Selectie</span><strong id="squadDisplay">0 / 8</strong></div>
-      <div><span>Punten</span><strong id="pointsDisplay">0</strong></div>
-    </div>
-  </header>
-
-  <nav class="tabs" aria-label="Hoofdnavigatie">
-    <button class="tab active" data-tab="team">Mijn ploeg</button>
-    <button class="tab" data-tab="leaderboard">Leaderboard</button>
-    <button class="tab" data-tab="matches">Wedstrijden</button>
-    <button class="tab" data-tab="rules">Regels</button>
-    <button class="tab" data-tab="settings">Instellingen</button>
   </nav>
 
   <main>
@@ -109,19 +103,6 @@
         <div class="leader-row demo"><span class="rank">–</span><div><strong>Vriendenteams</strong><small>Log in voor het gedeelde klassement</small></div><strong>—</strong><strong>—</strong></div>
       </div>
 
-      <section class="player-per90-card" aria-labelledby="playerPer90Title">
-        <div class="card-title-row player-ranking-title">
-          <div>
-            <p class="eyebrow">SPELERRANKING</p>
-            <h3 id="playerPer90Title">Meeste fantasy-punten per 90 minuten</h3>
-          </div>
-          <span class="pill secondary">Alle spelers met minuten</span>
-        </div>
-        <div class="player-ranking-head">
-          <span>#</span><span>Speler</span><span>Club</span><span>Minuten</span><span>Punten/90</span>
-        </div>
-        <div id="playerPer90Ranking" class="player-ranking-list"></div>
-      </section>
     </section>
 
     <section id="matches" class="panel tab-panel">
@@ -274,9 +255,9 @@
   <script src="config.js"></script>
   <script src="data.js?v=002"></script>
   <script src="manual-predictions.js?v=005"></script>
-  <script src="app.js?v=030"></script>
-  <script src="cloud.js?v=026"></script>
-  <script src="admin.js?v=004"></script>
+  <script src="app.js?v=031"></script>
+  <script src="cloud.js?v=027"></script>
+  <script src="admin.js?v=005"></script>
 </body>
 </html>
 
