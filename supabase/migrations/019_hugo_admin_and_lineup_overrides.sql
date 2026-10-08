@@ -1,10 +1,10 @@
 -- 019: één vaste adminaccount + handmatige wedstrijdopstelling-overrides.
 --
 -- BELANGRIJK:
--- De adminrechten worden NIET op de zichtbare naam "Hugo" gecontroleerd.
--- Deze migratie koppelt eenmalig het huidige bestaande username-account Hugo
--- (interne auth-email van register-username) aan zijn UUID.
--- Een later nieuw account met dezelfde zichtbare naam krijgt dus geen adminrechten.
+-- De adminrechten worden NIET blijvend op de zichtbare naam "Hugo" gecontroleerd.
+-- Net zoals migratie 013 zoeken we NU exact één bestaand profiel met display_name
+-- "Hugo", slaan alleen diens onveranderlijke UUID op en gebruiken vanaf dan alleen
+-- die UUID. Een toekomstig nieuw account dat ook Hugo heet krijgt dus geen rechten.
 
 create table if not exists public.fantasy_admin_users (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -13,15 +13,33 @@ create table if not exists public.fantasy_admin_users (
 
 alter table public.fantasy_admin_users enable row level security;
 
--- Username "Hugo" wordt door register-username genormaliseerd naar "hugo".
--- "hugo" in UTF-8 hex = 6875676f.
-insert into public.fantasy_admin_users(user_id)
-select id
-from auth.users
-where lower(email)='u-6875676f@fantasy.invalid'
-order by created_at asc
-limit 1
-on conflict(user_id) do nothing;
+do $
+declare
+  v_user uuid;
+  v_count integer;
+begin
+  select count(*)
+  into v_count
+  from public.profiles
+  where lower(trim(display_name))='hugo';
+
+  if v_count = 0 then
+    raise exception 'Geen bestaand profiel met naam Hugo gevonden. Adminrechten zijn niet toegekend.';
+  elsif v_count > 1 then
+    raise exception 'Meerdere bestaande profielen met naam Hugo gevonden. Adminrechten zijn voor veiligheid niet toegekend.';
+  end if;
+
+  select id
+  into v_user
+  from public.profiles
+  where lower(trim(display_name))='hugo'
+  limit 1;
+
+  insert into public.fantasy_admin_users(user_id)
+  values(v_user)
+  on conflict(user_id) do nothing;
+end;
+$;
 
 
 create or replace function public.is_fantasy_admin()
