@@ -568,18 +568,42 @@
     const match = fallbackMatch || MATCHES.find(m => String(m.id) === String(fixtureId));
     if(!match) return;
 
-    const {data,error} = await cloud.client
-      .from("player_match_stats")
-      .select("player_id,minutes,stats,fantasy_points,players(id,name,club_name,position)")
-      .eq("fixture_id",fixtureId)
-      .limit(100);
-    if(error){
-      console.error(error);
+    const [statsResult,overrideResult] = await Promise.all([
+      cloud.client
+        .from("player_match_stats")
+        .select("player_id,minutes,stats,fantasy_points,players(id,name,club_name,position)")
+        .eq("fixture_id",fixtureId)
+        .limit(100),
+      cloud.client
+        .from("fixture_lineup_overrides")
+        .select("fixture_id,side,formation,slots,updated_at")
+        .eq("fixture_id",fixtureId)
+    ]);
+
+    if(statsResult.error){
+      console.error(statsResult.error);
       document.getElementById("matchDetail").innerHTML = '<div class="empty-state">De wedstrijddata kon niet worden geladen.</div>';
       return;
     }
 
-    const rows = (data || []).map(row => {
+    // Migratie 019 kan nog niet uitgevoerd zijn. In dat geval blijft de normale
+    // Sorare-opstelling gewoon werken en wordt alleen de override overgeslagen.
+    window.FANTASY_MATCH_LAYOUT_OVERRIDES = window.FANTASY_MATCH_LAYOUT_OVERRIDES || {};
+    const fixtureOverrides = {};
+    if(!overrideResult.error){
+      (overrideResult.data || []).forEach(item => {
+        if(item && (item.side === "home" || item.side === "away")){
+          fixtureOverrides[item.side] = {
+            formation:String(item.formation || ""),
+            slots:Array.isArray(item.slots) ? item.slots : [],
+            updatedAt:item.updated_at || null
+          };
+        }
+      });
+    }
+    window.FANTASY_MATCH_LAYOUT_OVERRIDES[String(fixtureId)] = fixtureOverrides;
+
+    const rows = (statsResult.data || []).map(row => {
       const player = Array.isArray(row.players) ? row.players[0] : row.players;
       return {...row,player:player || {id:row.player_id,name:"Onbekend",club_name:"",position:"MID"}};
     });
@@ -1010,11 +1034,47 @@
     }
   }
 
+  async function refreshAdminAccess(){
+    let isAdmin = false;
+    if(cloud.user && cloud.client){
+      try{
+        const {data,error} = await cloud.client.rpc("is_fantasy_admin");
+        if(!error) isAdmin = Boolean(data);
+      }catch(error){
+        console.warn("Adminstatus kon niet worden geladen",error);
+      }
+    }
+    window.FANTASY_IS_ADMIN = isAdmin;
+    window.dispatchEvent(new CustomEvent("fantasy:admin-access",{detail:{isAdmin}}));
+    return isAdmin;
+  }
+
+  window.FANTASY_ADMIN_API = {
+    async saveLineupOverride(fixtureId,side,formation,slots){
+      if(!cloud.client || !cloud.user) throw new Error("Log eerst in.");
+      const {error} = await cloud.client.rpc("admin_save_fixture_lineup_override",{
+        p_fixture_id:Number(fixtureId),
+        p_side:String(side),
+        p_formation:String(formation),
+        p_slots:Array.isArray(slots) ? slots : []
+      });
+      if(error) throw error;
+    },
+    async resetLineupOverride(fixtureId){
+      if(!cloud.client || !cloud.user) throw new Error("Log eerst in.");
+      const {error} = await cloud.client.rpc("admin_reset_fixture_lineup_override",{
+        p_fixture_id:Number(fixtureId)
+      });
+      if(error) throw error;
+    }
+  };
+
   async function handleSession(session){
     cloud.user = session ? session.user : null;
     const button = document.getElementById("authButton");
     if(cloud.user){
       button.textContent = "Uitloggen";
+      await refreshAdminAccess();
       await refreshCloud();
     }else{
       cloud.locked = false;
@@ -1024,6 +1084,8 @@
       clearInterval(cloud.liveScoreTimer);
       window.FANTASY_LIVE_SCORE_MODE = false;
       window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
+      window.FANTASY_IS_ADMIN = false;
+      window.dispatchEvent(new CustomEvent("fantasy:admin-access",{detail:{isAdmin:false}}));
       button.textContent = "Inloggen";
       setStatus("Niet ingelogd","");
       document.getElementById("deadlineText").textContent = "Log in om de actuele deadline te zien";
