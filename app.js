@@ -908,6 +908,25 @@ function matchFormationPlace(row){
   return preferred > 0 ? preferred : 0;
 }
 
+function naturalMatchVisualZone(row){
+  const declared = row.player?.position || "MID";
+  const place = matchFormationPlace(row);
+
+  // formationPlace beschrijft waar iemand in deze wedstrijd werkelijk stond.
+  // Alleen de ondubbelzinnige plaatsen overschrijven de vaste spelersklasse.
+  // Zo kan bv. een MID/FWD die als spits start visueel gewoon in de spitsenlijn
+  // staan, zonder zijn permanente fantasy-positie te veranderen.
+  if(declared === "GK" || place === 1) return "GK";
+  if(place === 9 || place === 10) return "FWD";
+  if(place === 3 || place === 5 || place === 6) return "DEF";
+  if(place === 8) return "MID";
+  return declared;
+}
+
+function matchVisualZone(row){
+  return row._layoutZone || naturalMatchVisualZone(row);
+}
+
 function formationSideRank(row,position,total){
   const place = matchFormationPlace(row);
   const config = FORMATION_SIDE_ORDER[position] || {};
@@ -959,7 +978,7 @@ function inferredFormation(rows){
   const starters = inferredMatchStarters(rows);
   const counts = {DEF:0,MID:0,FWD:0};
   starters.forEach(row => {
-    const pos = row.player?.position || "MID";
+    const pos = matchVisualZone(row);
     if(counts[pos] != null) counts[pos] += 1;
   });
   return counts.DEF + "-" + counts.MID + "-" + counts.FWD;
@@ -979,8 +998,8 @@ function matchPlayerButton(row,match,side,index,total,zone){
     : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
 
   const xByPosition = side === "home"
-    ? {GK:7,DEF:20,MID:33,FWD:45}
-    : {GK:93,DEF:80,MID:67,FWD:55};
+    ? {GK:7,DEF:20,MID:33,FWD:43}
+    : {GK:93,DEF:80,MID:67,FWD:57};
 
   let x = xByPosition[zone || pos] || (side === "home" ? 33 : 67);
 
@@ -997,7 +1016,7 @@ function matchPlayerButton(row,match,side,index,total,zone){
     '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
     '<span class="match-score-chip ' + scoreClass + '">' + scoreText + '</span>' +
-    '<span class="match-player-name-row"><span class="match-player-name">' + escapeHtml(player.name || "Onbekend") + '</span>' +
+    '<span class="match-player-name-row"><span class="match-player-name" title="' + escapeHtml(player.name || "Onbekend") + '">' + escapeHtml(desktopMatchDisplayName(player.name)) + '</span>' +
       '<span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
   '</button>';
 }
@@ -1081,8 +1100,8 @@ function renderMatchTeamPlayers(rows,match,side){
   const starters = inferredMatchStarters(rows);
   const groups = {GK:[],DEF:[],MID:[],FWD:[]};
   starters.forEach(row => {
-    const pos = row.player?.position || "MID";
-    (groups[pos] || groups.MID).push(row);
+    const zone = matchVisualZone(row);
+    (groups[zone] || groups.MID).push(row);
   });
 
   return ["GK","DEF","MID","FWD"].flatMap(zone => {
@@ -1094,6 +1113,14 @@ function renderMatchTeamPlayers(rows,match,side){
     });
     return group.map((row,index) => matchPlayerButton(row,match,side,index,group.length,zone));
   }).join("");
+}
+
+function desktopMatchDisplayName(name){
+  const fullName = String(name || "").trim();
+  if(!fullName) return "Onbekend";
+  // Korte namen blijven volledig zichtbaar; langere namen krijgen op desktop
+  // alleen de achternaam zodat aangrenzende spelers niet overlappen.
+  return fullName.length > 15 ? mobileMatchSurname(fullName) : fullName;
 }
 
 function mobileMatchSurname(name){
@@ -1147,8 +1174,8 @@ function renderMatchMobileTeam(rows,match){
   const starters = inferredMatchStarters(rows);
   const groups = {GK:[],DEF:[],MID:[],FWD:[]};
   starters.forEach(row => {
-    const pos = row.player?.position || "MID";
-    (groups[pos] || groups.MID).push(row);
+    const zone = matchVisualZone(row);
+    (groups[zone] || groups.MID).push(row);
   });
   return ["GK","DEF","MID","FWD"].flatMap(zone => {
     const group = groups[zone];
