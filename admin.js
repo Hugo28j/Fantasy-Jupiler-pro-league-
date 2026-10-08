@@ -141,7 +141,7 @@
       const played = Number(row.minutes || 0) > 0;
       const scoreClass = startPct != null
         ? "prediction-chip " + predictionBandClass(startPct)
-        : score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+        : scoreBandClass(score);
       const scoreText = startPct != null
         ? Math.round(startPct) + "%"
         : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
@@ -486,7 +486,7 @@
     tab.type = "button";
     tab.textContent = "Admin";
     tab.hidden = true;
-    document.querySelector(".tabs").appendChild(tab);
+    (document.querySelector(".tab-links") || document.querySelector(".tabs")).appendChild(tab);
 
     const panel = document.createElement("section");
     panel.id = "admin";
