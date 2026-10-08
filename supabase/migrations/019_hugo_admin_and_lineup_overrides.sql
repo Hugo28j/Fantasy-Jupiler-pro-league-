@@ -13,33 +13,19 @@ create table if not exists public.fantasy_admin_users (
 
 alter table public.fantasy_admin_users enable row level security;
 
-do $
-declare
-  v_user uuid;
-  v_count integer;
-begin
-  select count(*)
-  into v_count
-  from public.profiles
-  where lower(trim(display_name))='hugo';
-
-  if v_count = 0 then
-    raise exception 'Geen bestaand profiel met naam Hugo gevonden. Adminrechten zijn niet toegekend.';
-  elsif v_count > 1 then
-    raise exception 'Meerdere bestaande profielen met naam Hugo gevonden. Adminrechten zijn voor veiligheid niet toegekend.';
-  end if;
-
-  select id
-  into v_user
-  from public.profiles
-  where lower(trim(display_name))='hugo'
-  limit 1;
-
-  insert into public.fantasy_admin_users(user_id)
-  values(v_user)
-  on conflict(user_id) do nothing;
-end;
-$;
+-- Ken de rechten alleen toe wanneer er NU exact één bestaand Hugo-profiel is.
+-- Omdat alleen de UUID in fantasy_admin_users wordt opgeslagen, krijgt een later
+-- aangemaakt account met dezelfde naam nooit automatisch adminrechten.
+insert into public.fantasy_admin_users(user_id)
+select p.id
+from public.profiles p
+where lower(trim(p.display_name))='hugo'
+  and (
+    select count(*)
+    from public.profiles
+    where lower(trim(display_name))='hugo'
+  )=1
+on conflict(user_id) do nothing;
 
 
 create or replace function public.is_fantasy_admin()
