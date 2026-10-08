@@ -896,8 +896,10 @@ Deno.serve(async request => {
             ? score.anyPlayerGameStats[0]
             : score?.anyPlayerGameStats;
           const odds = rawStats?.footballPlayingStatusOdds;
-          const basisPoints = Number(odds?.starterOddsBasisPoints);
-          if(!player?.slug || !Number.isFinite(basisPoints)) continue;
+          const rawBasisPoints = odds?.starterOddsBasisPoints;
+          if(rawBasisPoints == null || !player?.slug) continue;
+          const basisPoints = Number(rawBasisPoints);
+          if(!Number.isFinite(basisPoints)) continue;
 
           predictionRows.push({
             fixture_id:fixtureDbId(String(game.id)),
