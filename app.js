@@ -83,10 +83,10 @@ function points(value){
 
 function scoreBandClass(value){
   const score = Number(value || 0);
-  if(score < 0) return "score-negative";
+  if(score < 5) return "score-negative";
   if(score < 15) return "score-orange";
-  if(score < 30) return "score-yellow";
-  if(score < 50) return "score-green";
+  if(score < 25) return "score-yellow";
+  if(score < 40) return "score-green";
   return "score-blue";
 }
 
@@ -973,7 +973,7 @@ function matchPlayerButton(row,match,side,index,total,zone){
   const startPct = predictionPercent(row);
   const scoreClass = startPct != null
     ? "prediction-chip " + predictionBandClass(startPct)
-    : score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+    : scoreBandClass(score);
   const scoreText = startPct != null
     ? Math.round(startPct) + "%"
     : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
@@ -1125,7 +1125,7 @@ function matchMobilePlayerButton(row,match,index,total,zone){
   const startPct = predictionPercent(row);
   const scoreClass = startPct != null
     ? "prediction-chip " + predictionBandClass(startPct)
-    : score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+    : scoreBandClass(score);
   const scoreText = startPct != null
     ? Math.round(startPct) + "%"
     : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
@@ -1188,7 +1188,7 @@ function renderMatchBench(rows,match,side){
     const played = Number(row.minutes || 0) > 0;
     const scoreClass = startPct != null
       ? "prediction-chip " + predictionBandClass(startPct)
-      : score < 0 ? "score-negative" : score < 15 ? "score-orange" : score < 30 ? "score-yellow" : score < 50 ? "score-green" : "score-blue";
+      : scoreBandClass(score);
     const scoreText = startPct != null
       ? Math.round(startPct) + "%"
       : score.toFixed(score % 1 ? 1 : 0).replace(".",",");
@@ -1426,44 +1426,11 @@ function renderTeamName(){
   if(input) input.value = state.teamName;
 }
 
-function renderPlayerPer90Ranking(){
-  const target = document.getElementById("playerPer90Ranking");
-  if(!target) return;
-
-  const ranked = PLAYERS
-    .filter(player => Number(player.minutes || 0) > 0)
-    .map(player => ({
-      player,
-      per90:Number(player.score || 0) * 90 / Number(player.minutes || 1)
-    }))
-    .sort((a,b) =>
-      b.per90-a.per90 ||
-      Number(b.player.minutes || 0)-Number(a.player.minutes || 0) ||
-      String(a.player.name || "").localeCompare(String(b.player.name || ""),"nl")
-    );
-
-  target.innerHTML = ranked.map((entry,index) => {
-    const player = entry.player;
-    return '<button class="player-ranking-row" type="button" data-ranking-player="' + escapeHtml(player.id) + '">' +
-      '<span class="player-ranking-position">' + (index+1) + '</span>' +
-      '<span class="player-ranking-player"><strong>' + escapeHtml(player.name) + '</strong><small>' + escapeHtml(POSITION_LABELS[player.pos] || player.pos) + '</small></span>' +
-      '<span class="player-ranking-club">' + escapeHtml(player.club) + '</span>' +
-      '<span class="player-ranking-minutes">' + Number(player.minutes || 0) + '</span>' +
-      '<strong class="player-ranking-score">' + entry.per90.toFixed(1).replace(".",",") + '</strong>' +
-    '</button>';
-  }).join("") || '<div class="empty-state">Nog geen spelers met speelminuten.</div>';
-
-  target.querySelectorAll("[data-ranking-player]").forEach(button => {
-    button.addEventListener("click",() => openPlayerProfile(button.dataset.rankingPlayer));
-  });
-}
-
 function renderAll(){
   renderHeader();
   renderRequirements();
   renderTeam();
   renderMarket();
-  renderPlayerPer90Ranking();
   renderTeamName();
   if(typeof updateInitialSetupTabs === "function") updateInitialSetupTabs();
 }
