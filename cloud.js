@@ -950,23 +950,25 @@
     const {data,error} = await cloud.client.rpc(rpc,params);
     if(error) throw error;
     const card = document.querySelector(".leaderboard-card");
-    card.innerHTML = '<div class="leader-head"><span>#</span><span>Manager</span><span>Speeldag</span><span>Totaal</span></div>';
+    card.innerHTML = '<div class="leader-head"><span>#</span><span>Ploeg</span><span>Speeldag</span><span>Totaal</span></div>';
     (data || []).forEach((row,index) => {
       const mine = cloud.user && row.manager_id === cloud.user.id;
       const line = make("button","leader-row" + (mine ? " current-user" : ""));
       line.type = "button";
       const rank = make("span","rank",String(row.rank || index + 1));
       const info = make("div");
-      info.appendChild(make("strong","leader-manager-name",row.manager_name || row.team_name || "Manager"));
+      const teamName = row.team_name || "Ploeg";
+      const managerName = row.manager_name || "Manager";
+      info.appendChild(make("strong","leader-team-name",teamName));
       if(mine) info.querySelector("strong").id = "leaderTeamName";
-      info.appendChild(make("small","",(mine ? "Jij · " : "") + (row.team_name || "Ploeg") + " · bekijk ploeg"));
+      info.appendChild(make("small","leader-manager-subname",managerName));
       const latest = make("strong","gameweek-points",row.latest_gameweek_number
         ? "S" + row.latest_gameweek_number + " · " + Number(row.latest_gameweek_points || 0).toFixed(1).replace(".0","")
         : "—");
       const points = make("strong","",Number(row.total_points || 0).toFixed(1).replace(".0","") + " pts");
       if(mine) points.id = "leaderPoints";
       line.append(rank,info,latest,points);
-      line.addEventListener("click",() => loadManagerHistory(row.manager_id,row.manager_name || row.team_name));
+      line.addEventListener("click",() => loadManagerHistory(row.manager_id,teamName));
       card.appendChild(line);
     });
     if(!data || !data.length){
