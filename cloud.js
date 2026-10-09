@@ -616,6 +616,9 @@
           if(!Array.isArray(item) || item.length < 2) continue;
           const name = String(item[0] || "");
           const percent = Number(item[1]);
+          const requestedZone = ["GK","DEF","MID","FWD"].includes(String(item[2] || ""))
+            ? String(item[2])
+            : null;
           if(!Number.isFinite(percent)) continue;
 
           const player = PLAYERS.find(candidate =>
@@ -630,14 +633,19 @@
             player_id:String(player.id),
             start_probability:Math.max(0,Math.min(100,percent)),
             reliability:null,
-            source:"manual",
+            source:entry.source || "manual",
             player:{
               id:player.id,
               name:player.name,
               club_name:player.club,
-              position:player.pos
+              // Voor bevestigde opstellingen mag de visuele wedstrijdpositie
+              // afwijken van de vaste fantasy-positie van de speler.
+              position:requestedZone || player.pos
             },
-            stats:{teamName:actualClub}
+            stats:{
+              teamName:actualClub,
+              confirmedStarter:entry.source === "confirmed" && percent >= 100
+            }
           });
         }
       }
