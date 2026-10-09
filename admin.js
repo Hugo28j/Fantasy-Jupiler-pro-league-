@@ -20,7 +20,23 @@
     return sameClubName(teamName,match.away) ? "away" : "home";
   }
 
+  function confirmedStarterRows(rows){
+    const confirmed = (rows || []).filter(row => Boolean((row.stats || {}).confirmedStarter));
+    if(confirmed.length !== 11) return null;
+
+    return confirmed.map((row,index) => ({
+      ...row,
+      _layoutZone:String(row.player?.position || matchVisualZone(row) || "MID"),
+      _layoutOrder:index
+    }));
+  }
+
   function overrideStarterRows(rows,match,side){
+    // Zodra we een echte bevestigde XI hebben, mag een oudere handmatige
+    // prediction-layout nooit nog een 0%-bankspeler op het veld houden.
+    const confirmed = confirmedStarterRows(rows);
+    if(confirmed) return confirmed;
+
     const override = getOverride(match,side);
     const slots = Array.isArray(override?.slots) ? override.slots : [];
     if(slots.length !== 11) return null;
@@ -52,6 +68,9 @@
   }
 
   function effectiveFormation(rows,match,side){
+    // Een bevestigde basiself heeft voorrang op een opgeslagen prediction-override.
+    // Zo verdwijnt bv. een oude 3-5-2 zodra de echte 4-5-1 bekend is.
+    if(confirmedStarterRows(rows)) return naturalInferredFormation(rows);
     const override = getOverride(match,side);
     return override?.formation || naturalInferredFormation(rows);
   }
