@@ -313,11 +313,14 @@ function currentStartedFixtureForPlayer(player,gameweekOverride=null){
   if(!player) return null;
   const gameweek = Number(gameweekOverride || window.FANTASY_CURRENT_GAMEWEEK_NUMBER || 0);
   if(!Number.isFinite(gameweek) || gameweek <= 0) return null;
-  return MATCHES.find(match =>
-    matchweekNumber(match) === gameweek &&
-    (sameClubName(player.club,match.home) || sameClubName(player.club,match.away)) &&
-    ["LIVE","FT"].includes(String(match.status || ""))
-  ) || null;
+  return MATCHES.find(match => {
+    const kickoffMs = match?.kickoff ? new Date(match.kickoff).getTime() : NaN;
+    const started = ["LIVE","FT"].includes(String(match.status || "")) ||
+      (Number.isFinite(kickoffMs) && Date.now() >= kickoffMs);
+    return matchweekNumber(match) === gameweek &&
+      (sameClubName(player.club,match.home) || sameClubName(player.club,match.away)) &&
+      started;
+  }) || null;
 }
 
 function fantasyDisplayNumber(value){
