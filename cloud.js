@@ -1147,14 +1147,23 @@
     const displayedCaptainId = String(lineup?.effective_captain_id || captainId || "");
     const isCaptain = displayedCaptainId === String(player.id || "");
     const metric = visibleLineupMetric(player,lineup);
+    const subInfo = lineup?.auto_substitutions || {};
+    const playerId = String(player.id || "");
+    const entering = (subInfo.incoming || []).includes(playerId);
+    const leaving = (subInfo.outgoing || []).includes(playerId);
+    const subBadge = entering
+      ? '<span class="leaderboard-auto-sub-badge leaderboard-auto-sub-in" title="Automatisch ingevallen; punten tellen mee">↗ IN</span>'
+      : leaving
+        ? '<span class="leaderboard-auto-sub-badge leaderboard-auto-sub-out" title="Niet gespeeld; vervangen door reserve">↘ UIT</span>'
+        : "";
     const metricScope = String(lineup?.team_name || lineup?.manager_name || "team") + ":" + String(lineup?.gameweek_number || "");
     const metricHtml = metric
       ? '<span class="leaderboard-preview-metric ' + escapeHtml(metric.className) + '" title="' + escapeHtml(metric.title) + '"' +
           (metric.animated ? fantasyScoreAnimationAttrs("leaderboard-player:" + metricScope + ":" + player.id,metric.value) : "") +
         '>' + escapeHtml(metric.text) + '</span>'
       : "";
-    return '<button type="button" class="leaderboard-preview-player" data-preview-player="' + escapeHtml(String(player.id || "")) + '">' +
-      '<span class="leaderboard-preview-avatar role-ring-' + escapeHtml(player.pos || "MID") + '">' + escapeHtml(initials(player.name || "?")) + '</span>' +
+    return '<button type="button" class="leaderboard-preview-player' + (entering ? ' leaderboard-auto-sub-entering' : '') + '" data-preview-player="' + escapeHtml(String(player.id || "")) + '">' +
+      subBadge + '<span class="leaderboard-preview-avatar role-ring-' + escapeHtml(player.pos || "MID") + '">' + escapeHtml(initials(player.name || "?")) + '</span>' +
       (isCaptain ? '<span class="leaderboard-preview-captain">C</span>' : '') +
       metricHtml +
       '<strong>' + escapeHtml(player.name || "Onbekend") + '</strong>' +
@@ -1285,6 +1294,48 @@
           .eq("gameweek_id",gameweekId)
           .maybeSingle();
         const breakdown = scoreRow?.breakdown || {};
+        // Confirmed substitutions for THIS manager (not only the logged-in team).
+        // Use the same FT / played-minutes constraints as recalculate_gameweek_scores.
+        const ids = [...new Set([...(lineup.starter_ids || []),lineup.bench_gk_id,lineup.bench_outfield_id].filter(Boolean).map(String))];
+        const {data:subMinutes,error:subError} = ids.length
+          ? await cloud.client.from("player_match_stats")
+              .select("player_id,minutes,fixtures!inner(gameweek_id,status)")
+              .eq("fixtures.gameweek_id",gameweekId)
+              .in("fixtures.status",["FT","LIVE"])
+              .in("player_id",ids)
+              .limit(100)
+          : {data:[],error:null};
+        if(subError) console.warn("Automatische wissels konden niet worden geladen",subError.message);
+        const minutes = new Map();
+        for(const item of subMinutes || []){
+          const id = String(item.player_id);
+          minutes.set(id,(minutes.get(id)||0)+Number(item.minutes || 0));
+        }
+        const substitutions = {incoming:[],outgoing:[]};
+        if(!subError){
+          const completedClubs = new Set();
+          for(const match of MATCHES){
+            if(Number(match.gameweek) !== Number(lineup.gameweek_number) || match.status !== "FT") continue;
+            completedClubs.add(String(match.home || "").trim().toLowerCase());
+            completedClubs.add(String(match.away || "").trim().toLowerCase());
+          }
+          for(const [flag,isKeeper,benchId] of [
+            ["keeper_substitution",true,lineup.bench_gk_id],
+            ["outfield_substitution",false,lineup.bench_outfield_id]
+          ]){
+            if(breakdown[flag] !== true || !benchId || (minutes.get(String(benchId)) || 0) <= 0) continue;
+            const replaced = (lineup.starter_ids || []).map(id => playerById(String(id))).find(player =>
+              player && (player.pos === "GK") === isKeeper &&
+              (minutes.get(String(player.id)) || 0) === 0 &&
+              completedClubs.has(String(player.club || "").trim().toLowerCase())
+            );
+            if(replaced){
+              substitutions.incoming.push(String(benchId));
+              substitutions.outgoing.push(String(replaced.id));
+            }
+          }
+        }
+        lineup.auto_substitutions = substitutions;
         lineup.effective_captain_id = breakdown.effective_captain_id || lineup.captain_id || null;
         lineup.captain_multiplier = Number(breakdown.captain_multiplier || 1.5);
       }
