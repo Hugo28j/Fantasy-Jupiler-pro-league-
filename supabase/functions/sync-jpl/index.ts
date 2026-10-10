@@ -1066,6 +1066,7 @@ Deno.serve(async request => {
     if(liveError) throw liveError;
 
     let preMatchFixtures:any[] = [];
+    let recentFinishedFixtures:any[] = [];
     if(liveOnly){
       const {data:preMatch,error:preMatchError} = await db
         .from("fixtures")
@@ -1077,6 +1078,19 @@ Deno.serve(async request => {
         .order("kickoff",{ascending:true});
       if(preMatchError) throw preMatchError;
       preMatchFixtures = preMatch || [];
+
+      // Blijf na het eerste FT-signaal nog 10 minuten dezelfde matchstats ophalen.
+      // Sorare kan vlak na het laatste fluitsignaal nog minuten, kaarten, assists
+      // of andere Opta-statistieken corrigeren.
+      const {data:recentFinished,error:recentFinishedError} = await db
+        .from("fixtures")
+        .select("id,gameweek_id,kickoff,status,details_processed,home_team,away_team,live_finished_at")
+        .in("gameweek_id",seasonGameweekIds)
+        .eq("status","FT")
+        .gte("live_finished_at",new Date(now - 10*60*1000).toISOString())
+        .order("live_finished_at",{ascending:false});
+      if(recentFinishedError) throw recentFinishedError;
+      recentFinishedFixtures = recentFinished || [];
     }
 
     const targetById = new Map<string,any>();
@@ -1084,6 +1098,7 @@ Deno.serve(async request => {
     for(const fixture of pendingDetails || []) targetById.set(String(fixture.id),fixture);
     for(const fixture of liveFixtures || []) targetById.set(String(fixture.id),fixture);
     for(const fixture of preMatchFixtures) targetById.set(String(fixture.id),fixture);
+    for(const fixture of recentFinishedFixtures) targetById.set(String(fixture.id),fixture);
 
     const pendingStatIds = new Set((pending || []).map((f:any)=>String(f.id)));
     const pendingDetailIds = new Set((pendingDetails || []).map((f:any)=>String(f.id)));
@@ -1618,7 +1633,7 @@ Deno.serve(async request => {
     // de historische fantasy-punten en bewaart per wedstrijd prijs vóór/na + verschil.
     let marketHistoryRowsUpdated = 0;
     let marketPricesUpdated = 0;
-    if(!liveOnly || processedFixtures > 0){
+    if(!liveOnly || processedFixtures > 0 || recentFinishedFixtures.length > 0){
       const {data:marketResult,error:marketError} = await db.rpc("recalculate_market_prices");
       if(marketError) throw marketError;
       const marketRow = Array.isArray(marketResult) ? marketResult[0] : marketResult;
@@ -1646,6 +1661,7 @@ Deno.serve(async request => {
       pendingFixtures:(pending || []).length,
       liveFixtures:(liveFixtures || []).length,
       preMatchFixtures:preMatchFixtures.length,
+      recentFinishedFixtures:recentFinishedFixtures.length,
       lineupBackfillFixtures:pendingDetailIds.size,
       scoringSchemaRefreshFixtures:schemaRefreshIds.size,
       rescoredPlayerRows,
