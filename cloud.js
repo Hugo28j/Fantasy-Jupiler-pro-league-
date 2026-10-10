@@ -835,7 +835,16 @@
 
     const rows = (statsResult.data || []).map(row => {
       const player = Array.isArray(row.players) ? row.players[0] : row.players;
-      return {...row,player:player || {id:row.player_id,name:"Onbekend",club_name:"",position:"MID"}};
+      const normalizedPlayer = player || {id:row.player_id,name:"Onbekend",club_name:"",position:"MID"};
+      return {
+        ...row,
+        player:normalizedPlayer,
+        fantasy_points:canonicalFantasyScore(
+          normalizedPlayer.position || "MID",
+          row.stats || {},
+          row.minutes
+        )
+      };
     });
     renderMatchDetail(match,rows);
   }
@@ -1241,7 +1250,11 @@
       console.error(error);
       return;
     }
-    renderPlayerProfile(player,data || []);
+    const normalizedRows = (data || []).map(row => ({
+      ...row,
+      fantasy_points:canonicalFantasyScore(player.pos,row.stats || {},row.minutes)
+    }));
+    renderPlayerProfile(player,normalizedRows);
   }
 
   async function loadDeadline(){
@@ -1280,7 +1293,7 @@
 
     const {data,error} = await cloud.client
       .from("player_match_stats")
-      .select("player_id,fantasy_points,fixtures!inner(gameweek_id,status)")
+      .select("player_id,minutes,stats,fantasy_points,players(position),fixtures!inner(gameweek_id,status)")
       .eq("fixtures.gameweek_id",cloud.currentGameweekId)
       .in("fixtures.status",["LIVE","FT"])
       .limit(1000);
@@ -1293,7 +1306,10 @@
     const scores = {};
     for(const row of data || []){
       const id = String(row.player_id);
-      scores[id] = Number(scores[id] || 0) + Number(row.fantasy_points || 0);
+      const playerRow = Array.isArray(row.players) ? row.players[0] : row.players;
+      const position = playerRow?.position || playerById(id)?.pos || "MID";
+      const score = canonicalFantasyScore(position,row.stats || {},row.minutes);
+      scores[id] = Number(scores[id] || 0) + Number(score || 0);
     }
 
     window.FANTASY_GAMEWEEK_PLAYER_SCORES = scores;
