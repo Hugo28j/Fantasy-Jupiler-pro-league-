@@ -1085,9 +1085,17 @@
       ? bench.map(player => visibleLineupPlayerHtml(player,captainId,lineup)).join("")
       : '<div class="leaderboard-preview-no-bench">Geen bankdata</div>';
 
+    const gameweekPoints = Number(lineup.gameweek_points || 0);
+    const totalPoints = Number(lineup.total_points || 0);
+    const gameweekLabel = Number(lineup.gameweek_number || 0)
+      ? "SD " + Number(lineup.gameweek_number)
+      : "Speeldag";
+    const scoreText = value => Number(value || 0).toFixed(Number(value || 0) % 1 ? 1 : 0).replace(".",",");
+
     target.innerHTML =
       '<div class="leaderboard-preview-head">' +
         '<div><p class="eyebrow">' + (forDialog ? "PLOEG" : "GESELECTEERDE PLOEG") + '</p><h3>' + escapeHtml(displayTeam) + '</h3><small>' + escapeHtml(displayManager) + '</small></div>' +
+        '<div class="leaderboard-preview-team-score"><span>' + escapeHtml(gameweekLabel) + '</span><strong>' + scoreText(gameweekPoints) + ' pts</strong><small>Totaal ' + scoreText(totalPoints) + ' pts</small></div>' +
         '<span class="leaderboard-visibility-pill">' + escapeHtml(lineupVisibilityText(lineup)) + '</span>' +
       '</div>' +
       '<div class="leaderboard-preview-stage">' +
@@ -1304,6 +1312,12 @@
           false
         );
       }
+    }
+
+    // Wanneer het klassement open staat, vernieuw ook de team-/speeldagpunten.
+    // Dit leest alleen Supabase; het veroorzaakt geen extra Sorare API-call.
+    if(document.getElementById("leaderboard")?.classList.contains("active")){
+      await loadLeaderboard();
     }
   }
 
