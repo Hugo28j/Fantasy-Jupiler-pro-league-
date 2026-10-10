@@ -868,7 +868,11 @@ function renderMatches(){
     const scoreText = ["FT","LIVE"].includes(status)
       ? escapeHtml(String(m.homeScore)) + "–" + escapeHtml(String(m.awayScore))
       : "vs";
-    const content = '<span class="date">' + escapeHtml(m.date || "") + '</span>' +
+    const liveMinute = status === "LIVE" && Number(m.liveMinute || 0) > 0
+      ? Math.max(1,Math.round(Number(m.liveMinute))) + "′"
+      : null;
+    const dateText = liveMinute || (m.date || "");
+    const content = '<span class="date' + (liveMinute ? ' live-minute' : '') + '">' + escapeHtml(dateText) + '</span>' +
       '<strong class="home">' + escapeHtml(m.home || "") + '</strong>' +
       '<span class="match-score' + (!["FT","LIVE"].includes(status) ? " future" : "") + '">' + scoreText + tag + '</span>' +
       '<strong>' + escapeHtml(m.away || "") + '</strong><span class="matchweek">' + escapeHtml(m.week || "") + '</span>';
@@ -1332,12 +1336,17 @@ function renderMatchDetail(match,rows=[]){
   const middle = predictionMode
     ? "vs"
     : escapeHtml(String(match.homeScore)) + " – " + escapeHtml(String(match.awayScore));
+  const currentMinute = Math.max(0,...allRows.map(row => Number((row.stats || {}).gameMinute || 0)),Number(match.liveMinute || 0));
+  const liveMinuteText = match.status === "LIVE" && currentMinute > 0
+    ? Math.max(1,Math.round(currentMinute)) + "′"
+    : null;
   const detailStatus = predictionMode
     ? ' · <strong class="prediction-detail-label">Opstellingsvoorspelling</strong>'
     : (match.status === "LIVE" ? ' · <strong class="live-text">LIVE</strong>' : "");
+  const detailTime = liveMinuteText || (match.date || "");
 
   document.getElementById("matchDetail").innerHTML =
-    '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p><h2>' + escapeHtml(match.home) + ' <span>' + middle + '</span> ' + escapeHtml(match.away) + '</h2><p>' + escapeHtml(match.date || "") + detailStatus + '</p></div></div>' +
+    '<div class="match-detail-head"><div><p class="eyebrow">' + escapeHtml(match.week || "") + '</p><h2>' + escapeHtml(match.home) + ' <span>' + middle + '</span> ' + escapeHtml(match.away) + '</h2><p>' + escapeHtml(detailTime) + detailStatus + '</p></div></div>' +
     '<div class="match-desktop-layout"><div class="real-match-pitch"><div class="real-pitch-lines"><span class="real-half"></span><span class="real-circle"></span><span class="real-box left"></span><span class="real-box right"></span></div>' +
         '<span class="team-pitch-label home">' + escapeHtml(match.home) + '<small>' + escapeHtml(inferredFormation(homeRows)) + '</small></span><span class="team-pitch-label away">' + escapeHtml(match.away) + '<small>' + escapeHtml(inferredFormation(awayRows)) + '</small></span>' +
         renderMatchTeamPlayers(homeRows,match,"home") + renderMatchTeamPlayers(awayRows,match,"away") +
