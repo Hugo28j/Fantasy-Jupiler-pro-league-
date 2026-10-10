@@ -84,6 +84,25 @@ function marketPriceDelta(price:number, points:number){
   return 2;
 }
 
+// Sorare can report cleanSheet=0 on a live player even when his team has
+// conceded zero and the player has completed the required 60 minutes.
+// Keep Sorare's positive stat; supplement missing live values from the
+// authoritative fixture score. Reevaluate every sync so a later goal removes it.
+function liveCleanSheet(raw:any, position:string, fixture:any, clubName:any, sourceStatus:string){
+  const reported = num(raw?.cleanSheet);
+  if(position !== "GK" && position !== "DEF") return 0;
+  const minutes = num(raw?.minsPlayed);
+  if(minutes < 60) return 0;
+  if(reported > 0) return reported;
+  if(!["playing","live"].includes(String(sourceStatus).toLowerCase())) return reported;
+  if(!fixture || !clubName) return reported;
+  const home = String(fixture.home_team || "").trim().toLowerCase();
+  const away = String(fixture.away_team || "").trim().toLowerCase();
+  const club = String(clubName).trim().toLowerCase();
+  const opposingGoals = club === home ? fixture.away_score : club === away ? fixture.home_score : null;
+  return opposingGoals !== null && opposingGoals !== undefined && Number(opposingGoals) === 0 ? 1 : reported;
+}
+
 function mapSorareStats(raw:any){
   return {
     minutes:num(raw.minsPlayed),
@@ -1327,6 +1346,7 @@ Deno.serve(async request => {
               const statKey = fixtureId + "::" + id;
               if(!statRowKeys.has(statKey)){
                 const stats = mapSorareStats(rawStats || {});
+                stats.cleanSheet = liveCleanSheet(rawStats,position,fixture,team?.name,sourceStatus);
                 const previousStats = existingStatsByFixturePlayer.get(statKey) || {};
                 const sourceMinute = num(providerGame?.minute);
                 const fieldStatus = String(rawStats?.fieldStatus || "UNKNOWN");
@@ -1347,6 +1367,7 @@ Deno.serve(async request => {
                   stats:{
                     ...previousStats,
                     ...stats,
+                    sorareCleanSheet:num(rawStats?.cleanSheet),
                     provider:"sorare",
                     sorareStatId:rawStats?.id || null,
                     sorareGameId:providerGame?.id || null,
@@ -1513,6 +1534,7 @@ Deno.serve(async request => {
             if(statRowKeys.has(statKey)) continue;
 
             const stats = mapSorareStats(raw);
+            stats.cleanSheet = liveCleanSheet(raw,position,targetFixture,raw.anyTeam?.name,sourceStatus);
             const previousStats = existingStatsByFixturePlayer.get(statKey) || {};
             const sourceMinute = num(sourceGame.minute);
             const fieldStatus = String(raw.fieldStatus || "UNKNOWN");
@@ -1532,6 +1554,7 @@ Deno.serve(async request => {
               stats:{
                 ...previousStats,
                 ...stats,
+                sorareCleanSheet:num(raw?.cleanSheet),
                 provider:"sorare",
                 sorareStatId:raw.id,
                 sorareGameId:sourceGame.id,
