@@ -23,6 +23,18 @@
   function actualStarterRows(rows,match){
     if(!["LIVE","FT"].includes(String(match?.status || ""))) return null;
 
+    // Als de live-sync de eerste minuten van de wedstrijd heeft gezien, bewaren
+    // we die elf spelers permanent als echte aftrapbasis.
+    const kickoff = (rows || []).filter(row => (row.stats || {}).kickoffStarter === true);
+    if(kickoff.length === 11){
+      return kickoff.map((row,index) => ({
+        ...row,
+        _layoutZone:String(matchVisualZone(row) || row.player?.position || "MID"),
+        _layoutOrder:index,
+        _layoutSource:"kickoff"
+      }));
+    }
+
     // Sorare levert gameStarted=1 voor de echte basis. Zodra we exact elf
     // spelers hebben, is dit altijd belangrijker dan een oude prediction/admin override.
     const explicit = (rows || []).filter(row => Number((row.stats || {}).gameStarted || 0) > 0);
