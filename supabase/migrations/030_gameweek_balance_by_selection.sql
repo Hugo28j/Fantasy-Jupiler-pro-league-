@@ -124,7 +124,7 @@ language sql
 stable
 security definer
 set search_path=public
-as $$
+as $season$
   with current_season as (
     select max(season) as season
     from public.gameweeks
@@ -184,7 +184,7 @@ as $$
       when 'FWD' then 4
       else 5
     end;
-$;
+$season$;
 
 revoke all on function public.season_score_averages() from public;
 grant execute on function public.season_score_averages() to anon,authenticated;
