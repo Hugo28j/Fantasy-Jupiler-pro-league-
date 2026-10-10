@@ -1056,6 +1056,9 @@ Deno.serve(async request => {
     }
     for(const id of scoreOnlyGameweeks) touchedGameweeks.add(id);
 
+    let participantCardsCreated = 0;
+    const participantDiscoveryWarnings:string[] = [];
+
     if(targetById.size){
       const targetClubs = [...new Set(
         [...targetById.values()]
@@ -1068,8 +1071,6 @@ Deno.serve(async request => {
       // activePlayers-roster staat (transfer, jeugdspeler, late registratie, ...).
       // Lees daarom de gamesheet van elke LIVE/recent-FT match en maak ontbrekende
       // spelerkaarten automatisch aan vóór we gameStats per speler ophalen.
-      let participantCardsCreated = 0;
-      const participantDiscoveryWarnings:string[] = [];
       const knownPlayerIds = new Set((existingPlayers || []).map((p:any)=>String(p.id)));
 
       for(const fixture of [...targetById.values()]){
