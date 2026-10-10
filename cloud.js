@@ -537,7 +537,7 @@
   async function loadFixtures(){
     const {data,error} = await cloud.client
       .from("fixtures")
-      .select("id,kickoff,status,home_team,away_team,home_score,away_score,gameweeks(number)")
+      .select("id,kickoff,status,live_minute,home_team,away_team,home_score,away_score,gameweeks(number)")
       .order("kickoff",{ascending:true})
       .limit(400);
     if(error) throw error;
@@ -549,6 +549,7 @@
         id:f.id,
         kickoff:f.kickoff,
         status:f.status,
+        liveMinute:Number(f.live_minute || 0) || null,
         date:date.format(new Date(f.kickoff)),
         gameweek,
         week:"Speeldag " + (gameweek || "?"),
@@ -676,7 +677,10 @@
           club_name:player.club,
           position:player.pos
         },
-        stats:{teamName:player.club}
+        stats:{
+          teamName:player.club,
+          confirmedStarter:String(row.source || "") === "sorare-lineup" && percent >= 100
+        }
       });
     }
 
@@ -689,7 +693,13 @@
 
       const fixtureId = String(match.id);
       const merged = new Map((byFixture[fixtureId] || []).map(row => [String(row.player_id),row]));
-      manualRows.forEach(row => merged.set(String(row.player_id),row));
+      manualRows.forEach(row => {
+        const existing = merged.get(String(row.player_id));
+        // Een officiële Sorare-XI (100%/confirmed) heeft voorrang op de
+        // handmatige voorspelling die eerder voor deze wedstrijd was ingevoerd.
+        if(String(existing?.source || "") === "sorare-lineup") return;
+        merged.set(String(row.player_id),row);
+      });
       byFixture[fixtureId] = [...merged.values()];
     }
 
@@ -1362,6 +1372,8 @@
     cloud.liveScoreTimer = setInterval(async () => {
       if(!cloud.enabled || !cloud.user) return;
       try{
+        await loadFixtures();
+        await loadStartPredictions();
         await loadDeadline();
         await loadCurrentGameweekPlayerScores();
       }catch(error){
