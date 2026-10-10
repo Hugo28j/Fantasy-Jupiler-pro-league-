@@ -594,9 +594,13 @@
       .sort((a,b) => a-b)
       .slice(-5);
 
-    renderMatches();
-    renderMarket();
-    if(typeof window.renderAdminMatches === "function") window.renderAdminMatches();
+    const fixtureSnapshot = JSON.stringify(MATCHES.map(m => [m.id,m.status,m.liveMinute,m.homeScore,m.awayScore,m.kickoff]));
+    if(cloud.lastFixtureSnapshot !== fixtureSnapshot){
+      cloud.lastFixtureSnapshot = fixtureSnapshot;
+      renderMatches();
+      // Only refresh the match-dependent admin view if fixture data changed.
+      if(typeof window.renderAdminMatches === "function") window.renderAdminMatches();
+    }
   }
 
   function normalizePredictionName(value){
@@ -1546,9 +1550,17 @@
       scores[id] = Number(scores[id] || 0) + Number(score || 0);
     }
 
-    window.FANTASY_GAMEWEEK_PLAYER_SCORES = scores;
-    renderTeam();
-    renderHeader();
+    const liveScoreSnapshot = JSON.stringify({
+      scores,
+      captain:window.FANTASY_EFFECTIVE_CAPTAIN_ID,
+      total:cloud.totalPoints
+    });
+    if(cloud.lastLiveScoreSnapshot !== liveScoreSnapshot){
+      cloud.lastLiveScoreSnapshot = liveScoreSnapshot;
+      window.FANTASY_GAMEWEEK_PLAYER_SCORES = scores;
+      renderTeam();
+      renderHeader();
+    }
 
     // Op desktop toont het klassement dezelfde live punten. De browser controleert
     // dit elke minuut; vóór de aftrap blijft de basisprognose zichtbaar.
@@ -1575,7 +1587,8 @@
   function startLiveScorePolling(){
     clearInterval(cloud.liveScoreTimer);
     cloud.liveScoreTimer = setInterval(async () => {
-      if(!cloud.enabled || !cloud.user) return;
+      if(!cloud.enabled || !cloud.user || cloud.livePollingBusy || document.hidden) return;
+      cloud.livePollingBusy = true;
       try{
         await loadFixtures();
         await loadStartPredictions();
@@ -1592,6 +1605,8 @@
         }
       }catch(error){
         console.warn("Live speeldagscore verversen mislukt",error);
+      }finally{
+        cloud.livePollingBusy = false;
       }
     },60000);
   }
@@ -1884,6 +1899,16 @@
     auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
   });
   cloud.client.auth.getSession().then(({data}) => handleSession(data.session));
-  cloud.client.auth.onAuthStateChange((_event,session) => handleSession(session));
+  // TOKEN_REFRESHED mag de gehele pagina niet opnieuw opbouwen.
+  // Alleen echte sessiewijzigingen leiden tot opnieuw laden van de ploeg.
+  let authenticatedUserId = null;
+  cloud.client.auth.onAuthStateChange((event,session) => {
+    if(event === "TOKEN_REFRESHED" || event === "USER_UPDATED") return;
+    const nextUserId = session?.user?.id || null;
+    if(event === "INITIAL_SESSION" && cloud.user?.id === nextUserId) return;
+    if(event === "SIGNED_IN" && authenticatedUserId === nextUserId && cloud.user?.id === nextUserId) return;
+    authenticatedUserId = nextUserId;
+    void handleSession(session);
+  });
 })();
 
