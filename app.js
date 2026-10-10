@@ -328,6 +328,88 @@ function fantasyDisplayNumber(value){
   return n.toFixed(Number.isInteger(n) ? 0 : 1).replace(".",",");
 }
 
+const fantasyScoreAnimationValues = window.FANTASY_SCORE_ANIMATION_VALUES || new Map();
+window.FANTASY_SCORE_ANIMATION_VALUES = fantasyScoreAnimationValues;
+const fantasyScoreAnimations = new WeakMap();
+
+function fantasyScoreAnimationAttrs(key,value,suffix=""){
+  const numeric = Number(value || 0);
+  return ' data-animate-score="1" data-score-key="' + escapeHtml(String(key)) +
+    '" data-score-value="' + escapeHtml(String(numeric)) +
+    '" data-score-suffix="' + escapeHtml(String(suffix || "")) + '"';
+}
+
+function animateFantasyScoreElement(element){
+  if(!element || element.nodeType !== 1 || !element.matches?.("[data-animate-score]")) return;
+  if(fantasyScoreAnimations.has(element)) return;
+
+  const key = String(element.dataset.scoreKey || "");
+  const target = Number(element.dataset.scoreValue);
+  const suffix = String(element.dataset.scoreSuffix || "");
+  if(!key || !Number.isFinite(target)) return;
+
+  const previous = fantasyScoreAnimationValues.has(key)
+    ? Number(fantasyScoreAnimationValues.get(key))
+    : target;
+  fantasyScoreAnimationValues.set(key,target);
+
+  const format = value => fantasyDisplayNumber(value) + suffix;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  if(!Number.isFinite(previous) || Math.abs(target-previous) < 0.001 || reducedMotion){
+    if(element.textContent !== format(target)) element.textContent = format(target);
+    return;
+  }
+
+  const delta = target-previous;
+  const duration = Math.max(450,Math.min(1150,520 + Math.abs(delta)*28));
+  const start = performance.now();
+  element.classList.add("fantasy-score-counting",delta > 0 ? "fantasy-score-up" : "fantasy-score-down");
+  fantasyScoreAnimations.set(element,true);
+
+  const frame = now => {
+    const progress = Math.min(1,(now-start)/duration);
+    const eased = 1-Math.pow(1-progress,3);
+    const value = previous + delta*eased;
+    element.textContent = format(value);
+
+    if(progress < 1){
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    element.textContent = format(target);
+    element.classList.remove("fantasy-score-counting","fantasy-score-up","fantasy-score-down");
+    fantasyScoreAnimations.delete(element);
+  };
+  requestAnimationFrame(frame);
+}
+
+function scanFantasyScoreAnimations(root=document){
+  if(root?.matches?.("[data-animate-score]")) animateFantasyScoreElement(root);
+  root?.querySelectorAll?.("[data-animate-score]").forEach(animateFantasyScoreElement);
+}
+
+function installFantasyScoreAnimator(){
+  if(window.FANTASY_SCORE_ANIMATOR_INSTALLED) return;
+  window.FANTASY_SCORE_ANIMATOR_INSTALLED = true;
+
+  const start = () => {
+    scanFantasyScoreAnimations(document);
+    const observer = new MutationObserver(records => {
+      for(const record of records){
+        for(const node of record.addedNodes || []){
+          if(node.nodeType === 1) scanFantasyScoreAnimations(node);
+        }
+      }
+    });
+    observer.observe(document.body,{childList:true,subtree:true});
+  };
+
+  if(document.body) start();
+  else document.addEventListener("DOMContentLoaded",start,{once:true});
+}
+installFantasyScoreAnimator();
+
 function predictionBandClass(percent){
   const value = Number(percent);
   if(value < 40) return "prediction-red";
@@ -380,7 +462,9 @@ function lineupPlayerHtml(p,isBench){
     captainControl +
     '<button class="sorare-player-main player-name-link" data-player-id="' + escapeHtml(p.id) + '" type="button">' +
       '<span class="sorare-avatar role-ring-' + p.pos + '">' + initials(p.name) + '</span>' +
-      '<span class="sorare-score ' + scoreClass + '"' + scoreTitle + '>' + scoreText + '</span>' +
+      '<span class="sorare-score ' + scoreClass + '"' + scoreTitle +
+        (nextPrediction ? "" : fantasyScoreAnimationAttrs("team-player:" + p.id,displayedScore)) +
+      '>' + scoreText + '</span>' +
       '<span class="sorare-player-name">' + escapeHtml(p.name) + '</span>' +
       '<span class="sorare-player-meta">' + escapeHtml(p.club) + ' · ' + (isBench ? benchLabel : POSITION_LABELS[p.pos]) + '</span>' +
     '</button>' +
@@ -1151,7 +1235,9 @@ function matchPlayerButton(row,match,side,index,total,zone){
     '<span class="match-card-strip">' + matchCardBadges(row) + '</span>' +
     '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
-    '<span class="match-score-chip ' + scoreClass + '">' + scoreText + '</span>' +
+    '<span class="match-score-chip ' + scoreClass + '"' +
+      (startPct != null ? "" : fantasyScoreAnimationAttrs("match-desktop:" + match.id + ":" + row.player_id,score)) +
+    '>' + scoreText + '</span>' +
     '<span class="match-player-name-row"><span class="match-player-name" title="' + escapeHtml(player.name || "Onbekend") + '">' + escapeHtml(desktopMatchDisplayName(player.name)) + '</span>' +
       '<span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
   '</button>';
@@ -1301,7 +1387,9 @@ function matchMobilePlayerButton(row,match,index,total,zone){
     '<span class="match-card-strip">' + matchCardBadges(row) + '</span>' +
     '<span class="match-sub-strip">' + matchSubstitutionLabel(row,match) + '</span>' +
     '<span class="match-avatar role-ring-' + escapeHtml(pos) + '">' + initials(player.name || "?") + '</span>' +
-    '<span class="match-score-chip ' + scoreClass + '">' + scoreText + '</span>' +
+    '<span class="match-score-chip ' + scoreClass + '"' +
+      (startPct != null ? "" : fantasyScoreAnimationAttrs("match-mobile:" + match.id + ":" + row.player_id,score)) +
+    '>' + scoreText + '</span>' +
     '<span class="match-player-name-row"><span class="match-player-name" title="' + escapeHtml(player.name || "Onbekend") + '">' + escapeHtml(mobileMatchSurname(player.name)) + '</span><span class="match-name-events">' + matchNameBadges(row) + '</span></span>' +
   '</button>';
 }
@@ -1364,7 +1452,9 @@ function renderMatchBench(rows,match,side){
       '<span><strong class="match-bench-name-row">' + escapeHtml(player.name || "Onbekend") +
         '<span class="match-name-events bench-name-events">' + (startPct != null ? "" : matchNameBadges(row) + matchCardBadges(row)) + '</span></strong>' +
         '<small class="match-bench-meta">' + meta + '</small></span>' +
-      '<span class="match-bench-score ' + scoreClass + '">' + scoreText + '</span>' +
+      '<span class="match-bench-score ' + scoreClass + '"' +
+        (startPct != null ? "" : fantasyScoreAnimationAttrs("match-bench:" + match.id + ":" + side + ":" + row.player_id,score)) +
+      '>' + scoreText + '</span>' +
     '</button>';
   }).join("") || '<div class="empty-state">Geen bankdata beschikbaar.</div>';
 }
