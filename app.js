@@ -796,15 +796,22 @@ function automaticMatchweekForNow(weeks){
   const starts = weeks.map(week => {
     const kickoffs = MATCHES
       .filter(match => matchweekNumber(match) === week)
-      .map(match => new Date(match.kickoff || 0).getTime())
-      .filter(Number.isFinite);
+      .map(match => match.kickoff ? new Date(match.kickoff).getTime() : Number.NaN)
+      .filter(value => Number.isFinite(value) && value > 0);
     return {
       week,
       firstKickoff:kickoffs.length ? Math.min(...kickoffs) : Number.POSITIVE_INFINITY
     };
   }).filter(item => Number.isFinite(item.firstKickoff));
 
-  if(!starts.length) return weeks[0];
+  if(!starts.length){
+    const liveWeek = weeks.find(week => MATCHES.some(match => matchweekNumber(match) === week && String(match.status) === "LIVE"));
+    const nextWeek = weeks.find(week => MATCHES.some(match =>
+      matchweekNumber(match) === week && !["FT","CANC"].includes(String(match.status || ""))
+    ));
+    const played = weeks.filter(week => MATCHES.some(match => matchweekNumber(match) === week && String(match.status) === "FT"));
+    return liveWeek ?? nextWeek ?? (played.length ? played[played.length-1] : weeks[0]);
+  }
 
   const activeWindow = starts
     .filter(item => now >= item.firstKickoff - 24*60*60*1000)
