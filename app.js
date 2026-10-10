@@ -835,6 +835,15 @@ function renderMatches(){
     }
   }
 
+  const resolvedWeek = Number(selectedMatchweek);
+  if(Number.isFinite(resolvedWeek)){
+    const previousWeek = Number(window.FANTASY_SELECTED_MATCHWEEK);
+    window.FANTASY_SELECTED_MATCHWEEK = resolvedWeek;
+    if(previousWeek !== resolvedWeek){
+      window.dispatchEvent(new CustomEvent("fantasy:matchweek-change",{detail:{gameweek:resolvedWeek}}));
+    }
+  }
+
   if(select){
     select.innerHTML = weeks.map(week => '<option value="' + week + '">Speeldag ' + week + '</option>').join("");
     if(selectedMatchweek != null) select.value = String(selectedMatchweek);
@@ -1419,7 +1428,7 @@ function renderMatchPlayerDetail(match,row){
   if(!dialog.open) dialog.showModal();
 }
 
-function renderGameweekBalance(balanceRows=[]){
+function renderGameweekBalance(balanceRows=[],requestedGameweek=null){
   const rows = (Array.isArray(balanceRows) ? balanceRows : [])
     .filter(row => Number(row.minutes || 0) > 0)
     .sort((a,b) => Number(b.fantasy_points || 0)-Number(a.fantasy_points || 0));
@@ -1430,21 +1439,43 @@ function renderGameweekBalance(balanceRows=[]){
   const table = document.getElementById("balanceTable");
   if(!source || !summary || !positions || !notice || !table) return;
 
+  const requestedWeek = Number(requestedGameweek || rows[0]?.gameweek_number || window.FANTASY_SELECTED_MATCHWEEK || 0);
+  const fixtureCount = Number.isFinite(requestedWeek) && requestedWeek > 0
+    ? MATCHES.filter(match => matchweekNumber(match) === requestedWeek).length
+    : 0;
+  const title = document.getElementById("balanceTitle");
+  if(title && Number.isFinite(requestedWeek) && requestedWeek > 0){
+    title.textContent = "Puntenbalans van speeldag " + requestedWeek;
+  }
+
   if(!rows.length){
-    source.textContent = "Wacht op API-data";
+    source.textContent = Number.isFinite(requestedWeek) && requestedWeek > 0
+      ? "Speeldag " + requestedWeek + " · nog geen spelerstats"
+      : "Wacht op API-data";
     source.classList.remove("live");
+    summary.innerHTML =
+      '<article><span>Wedstrijden</span><strong>' + (fixtureCount || "—") + '</strong></article>' +
+      '<article><span>Spelers met minuten</span><strong>0</strong></article>' +
+      '<article><span>Gemiddelde score</span><strong>—</strong></article>' +
+      '<article><span>Hoogste score</span><strong>—</strong></article>';
     positions.innerHTML = "";
+    notice.textContent = Number.isFinite(requestedWeek) && requestedWeek > 0
+      ? "Voor speeldag " + requestedWeek + " zijn nog geen verwerkte spelerstatistieken beschikbaar."
+      : "Kies een speeldag om de puntenbalans te bekijken.";
+    notice.classList.remove("warning");
+    table.querySelector("thead").innerHTML = "";
+    table.querySelector("tbody").innerHTML = '<tr><td>Nog geen verwerkte spelerstatistieken voor deze speeldag.</td></tr>';
     return;
   }
 
   const average = values => values.length ? values.reduce((sum,value) => sum+value,0)/values.length : 0;
   const scoreValues = rows.map(row => Number(row.fantasy_points || 0));
   const top = rows[0];
-  const gameweek = rows[0].gameweek_number;
+  const gameweek = Number(rows[0].gameweek_number || requestedWeek);
   source.textContent = "Sorare · speeldag " + gameweek;
   source.classList.add("live");
   summary.innerHTML =
-    '<article><span>Wedstrijden</span><strong>9</strong></article>' +
+    '<article><span>Wedstrijden</span><strong>' + (fixtureCount || 9) + '</strong></article>' +
     '<article><span>Spelers met minuten</span><strong>' + rows.length + '</strong></article>' +
     '<article><span>Gemiddelde score</span><strong>' + points(average(scoreValues)) + '</strong></article>' +
     '<article><span>Hoogste score</span><strong>' + points(top.fantasy_points) + '</strong><small>' + escapeHtml(top.player_name) + '</small></article>';
