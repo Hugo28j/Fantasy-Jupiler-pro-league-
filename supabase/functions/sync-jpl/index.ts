@@ -871,7 +871,7 @@ Deno.serve(async request => {
 
     for(const game of predictionGames){
       try{
-        const providerGameId = String(game.id || "").replace(/["\\]/g,"");
+        const providerGameId = String(game.id || "").replace(/^Game:/,"").replace(/["\\]/g,"");
         if(!providerGameId) continue;
 
         const predictionData = await sorare(`
@@ -1142,7 +1142,7 @@ Deno.serve(async request => {
 
       for(const fixture of [...targetById.values()]){
         const providerGame = providerGameByFixtureId.get(String(fixture.id));
-        const providerGameId = String(providerGame?.id || "").replace(/["\\]/g,"");
+        const providerGameId = String(providerGame?.id || "").replace(/^Game:/,"").replace(/["\\]/g,"");
         if(!providerGameId) continue;
 
         try{
