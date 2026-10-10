@@ -309,6 +309,22 @@ function playerCurrentGameweekPrediction(player){
   return fallback && String(fallback.fixtureId) === String(fixture.id) ? fallback : null;
 }
 
+function currentStartedFixtureForPlayer(player,gameweekOverride=null){
+  if(!player) return null;
+  const gameweek = Number(gameweekOverride || window.FANTASY_CURRENT_GAMEWEEK_NUMBER || 0);
+  if(!Number.isFinite(gameweek) || gameweek <= 0) return null;
+  return MATCHES.find(match =>
+    matchweekNumber(match) === gameweek &&
+    (sameClubName(player.club,match.home) || sameClubName(player.club,match.away)) &&
+    ["LIVE","FT"].includes(String(match.status || ""))
+  ) || null;
+}
+
+function fantasyDisplayNumber(value){
+  const n = Math.round(Number(value || 0)*10)/10;
+  return n.toFixed(Number.isInteger(n) ? 0 : 1).replace(".",",");
+}
+
 function predictionBandClass(percent){
   const value = Number(percent);
   if(value < 40) return "prediction-red";
@@ -332,19 +348,32 @@ function lineupPlayerHtml(p,isBench){
   // Ook wanneer speeldagpunten al live zijn, blijft een speler wiens eigen
   // wedstrijd nog niet begonnen is zijn startkans tonen.
   const nextPrediction = playerCurrentGameweekPrediction(p);
+  const selectedCaptain = !isBench && state.captainId === p.id;
+  const effectiveCaptainId = liveScoreMode
+    ? String(window.FANTASY_EFFECTIVE_CAPTAIN_ID || state.captainId || "")
+    : String(state.captainId || "");
+  const isEffectiveCaptain =
+    !nextPrediction &&
+    Boolean(effectiveCaptainId) &&
+    effectiveCaptainId === String(p.id);
+  const displayedScore = isEffectiveCaptain ? score*1.5 : score;
   const scoreClass = nextPrediction
     ? "prediction-score " + predictionBandClass(nextPrediction.percent)
-    : scoreBandClass(score);
-  const scoreText = nextPrediction ? Math.round(nextPrediction.percent) + "%" : score.toFixed(0);
+    : scoreBandClass(displayedScore);
+  const scoreText = nextPrediction
+    ? Math.round(nextPrediction.percent) + "%"
+    : fantasyDisplayNumber(displayedScore);
   const scoreTitle = nextPrediction
     ? ' title="Kans op basis volgende wedstrijd: ' + Math.round(nextPrediction.percent) + '%"'
-    : "";
-  const isCaptain = !isBench && state.captainId === p.id;
-  const captainControl = isBench ? "" :
-    '<button class="captain-toggle ' + (isCaptain ? "selected":"") + '" data-id="' + escapeHtml(p.id) + '" type="button" aria-label="' +
-      (isCaptain ? "Captain" : "Maak captain") + '" title="' + (isCaptain ? "Captain" : "Maak captain") + '">C</button>';
+    : isEffectiveCaptain
+      ? ' title="Captain: ' + fantasyDisplayNumber(score) + ' × 1,5 = ' + fantasyDisplayNumber(displayedScore) + ' punten"'
+      : "";
+  const captainControl = isBench
+    ? (isEffectiveCaptain ? '<span class="captain-toggle selected captain-static" title="Effectieve captain · ×1,5">C</span>' : "")
+    : '<button class="captain-toggle ' + (selectedCaptain ? "selected":"") + '" data-id="' + escapeHtml(p.id) + '" type="button" aria-label="' +
+      (selectedCaptain ? "Captain" : "Maak captain") + '" title="' + (selectedCaptain ? "Captain · punten ×1,5" : "Maak captain") + '">C</button>';
 
-  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + (isCaptain ? " is-captain":"") + '">' +
+  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + (isEffectiveCaptain ? " is-captain":"") + '">' +
     captainControl +
     '<button class="sorare-player-main player-name-link" data-player-id="' + escapeHtml(p.id) + '" type="button">' +
       '<span class="sorare-avatar role-ring-' + p.pos + '">' + initials(p.name) + '</span>' +
@@ -433,7 +462,17 @@ function renderTeam(){
   document.querySelectorAll("#team .bench-toggle").forEach(btn => btn.addEventListener("click", () => setBench(btn.dataset.id)));
   document.querySelectorAll("#team .captain-toggle").forEach(btn => btn.addEventListener("click", () => setCaptain(btn.dataset.id)));
   document.querySelectorAll("#team .sell-direct").forEach(btn => btn.addEventListener("click", () => sellPlayer(btn.dataset.id)));
-  document.querySelectorAll("#team .player-name-link").forEach(btn => btn.addEventListener("click", () => openPlayerProfile(btn.dataset.playerId)));
+  document.querySelectorAll("#team .player-name-link").forEach(btn => btn.addEventListener("click", () => {
+    const id = btn.dataset.playerId;
+    const player = playerById(id);
+    const fixture = currentStartedFixtureForPlayer(player);
+    const effectiveCaptainId = String(window.FANTASY_EFFECTIVE_CAPTAIN_ID || state.captainId || "");
+    openPlayerProfile(id,{
+      fixtureId:fixture?.id || null,
+      gameweek:Number(window.FANTASY_CURRENT_GAMEWEEK_NUMBER || 0) || null,
+      captainMultiplier:fixture && effectiveCaptainId === String(id) ? 1.5 : 1
+    });
+  }));
 }
 
 function renderClubFilter(){
@@ -797,13 +836,20 @@ function renderPlayerProfile(player,matchRows=[]){
   });
 }
 
-function openPlayerProfile(id){
+function openPlayerProfile(id,context={}){
   const player = playerById(id);
   if(!player) return;
   renderPlayerProfile(player,[]);
   const dialog = document.getElementById("playerDialog");
   if(!dialog.open) dialog.showModal();
-  window.dispatchEvent(new CustomEvent("fantasy:player-profile",{detail:{playerId:id}}));
+  window.dispatchEvent(new CustomEvent("fantasy:player-profile",{
+    detail:{
+      playerId:id,
+      fixtureId:context?.fixtureId || null,
+      gameweek:context?.gameweek || null,
+      captainMultiplier:Number(context?.captainMultiplier || 1)
+    }
+  }));
 }
 
 function matchweekNumber(match){
@@ -1430,7 +1476,7 @@ const MATCH_STAT_LABELS = {
   penAreaEntries:"Penalty area entries",errorLeadToGoal:"Fout leidend tot goal"
 };
 
-function renderMatchPlayerDetail(match,row){
+function renderMatchPlayerDetail(match,row,options={}){
   const player = row.player || {};
   const position = player.position || "MID";
   const stats = {...(row.stats || {}),minutes:Number(row.minutes || 0)};
@@ -1452,14 +1498,21 @@ function renderMatchPlayerDetail(match,row){
   const calculatedScore = Math.round(
     breakdown.reduce((sum,item) => sum + Number(item.contribution || 0),0) * 100
   ) / 100;
-  const totalScoreClass = scoreContributionClass(calculatedScore);
+  const captainMultiplier = Number(options?.captainMultiplier || 1) === 1.5 ? 1.5 : 1;
+  const fantasyScore = Math.round(calculatedScore*captainMultiplier*100)/100;
+  const captainBonus = Math.round((fantasyScore-calculatedScore)*100)/100;
+  const totalScoreClass = scoreContributionClass(fantasyScore);
+  const captainBonusHtml = captainMultiplier > 1
+    ? '<div class="match-captain-bonus"><span>Captain ×1,5</span><strong class="' + scoreContributionClass(captainBonus) + '">' + scoreLabel(captainBonus) + ' pts</strong></div>'
+    : "";
 
   const dialog = document.getElementById("matchPlayerDialog");
   document.getElementById("matchPlayerDetail").innerHTML =
     '<p class="eyebrow">WEDSTRIJDSTATISTIEKEN</p>' +
-    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2><button type="button" class="match-player-profile-link" data-profile-player="' + escapeHtml(String(row.player_id || player.id || "")) + '">' + escapeHtml(player.name || "Onbekend") + '</button></h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong class="' + totalScoreClass + '">' + points(calculatedScore) + '</strong></div>' +
+    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2><button type="button" class="match-player-profile-link" data-profile-player="' + escapeHtml(String(row.player_id || player.id || "")) + '">' + escapeHtml(player.name || "Onbekend") + '</button></h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong class="' + totalScoreClass + '">' + points(fantasyScore) + '</strong></div>' +
     '<div class="stat-groups match-stat-groups">' + rowsHtml + '</div>' +
-    '<div class="match-stat-total"><span>Totaal deze wedstrijd</span><strong class="' + totalScoreClass + '">' + points(calculatedScore) + '</strong></div>';
+    captainBonusHtml +
+    '<div class="match-stat-total"><span>' + (captainMultiplier > 1 ? "Totaal voor fantasyploeg" : "Totaal deze wedstrijd") + '</span><strong class="' + totalScoreClass + '">' + points(fantasyScore) + '</strong></div>';
   const profileLink = document.querySelector("#matchPlayerDetail [data-profile-player]");
   profileLink?.addEventListener("click",() => {
     const playerId = profileLink.dataset.profilePlayer;
