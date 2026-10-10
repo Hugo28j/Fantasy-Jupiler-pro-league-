@@ -278,6 +278,37 @@ function playerStartPrediction(id){
   return {...item,percent:Math.max(0,Math.min(100,Number(item.percent)))};
 }
 
+function playerCurrentGameweekPrediction(player){
+  if(!player) return null;
+  const currentGameweek = Number(window.FANTASY_CURRENT_GAMEWEEK_NUMBER || 0);
+  if(!Number.isFinite(currentGameweek) || currentGameweek <= 0) return playerStartPrediction(player.id);
+
+  const fixture = MATCHES.find(match =>
+    Number(match.gameweek) === currentGameweek &&
+    (sameClubName(player.club,match.home) || sameClubName(player.club,match.away))
+  );
+  if(!fixture) return playerStartPrediction(player.id);
+
+  const status = String(fixture.status || "");
+  if(["LIVE","FT","CANC"].includes(status)) return null;
+
+  const rows = window.FANTASY_FIXTURE_START_PREDICTIONS?.[String(fixture.id)] || [];
+  const row = rows.find(item => String(item.player_id) === String(player.id));
+  if(row && Number.isFinite(Number(row.start_probability))){
+    return {
+      fixtureId:String(fixture.id),
+      kickoff:fixture.kickoff,
+      opponent:sameClubName(player.club,fixture.home) ? fixture.away : fixture.home,
+      source:row.source || "sorare",
+      reliability:row.reliability ?? null,
+      percent:Math.max(0,Math.min(100,Number(row.start_probability)))
+    };
+  }
+
+  const fallback = playerStartPrediction(player.id);
+  return fallback && String(fallback.fixtureId) === String(fixture.id) ? fallback : null;
+}
+
 function predictionBandClass(percent){
   const value = Number(percent);
   if(value < 40) return "prediction-red";
@@ -298,7 +329,9 @@ function lineupPlayerHtml(p,isBench){
   const score = liveScoreMode
     ? Number(liveScores[p.id] || 0)
     : Number(p.score || 0);
-  const nextPrediction = liveScoreMode ? null : playerStartPrediction(p.id);
+  // Ook wanneer speeldagpunten al live zijn, blijft een speler wiens eigen
+  // wedstrijd nog niet begonnen is zijn startkans tonen.
+  const nextPrediction = playerCurrentGameweekPrediction(p);
   const scoreClass = nextPrediction
     ? "prediction-score " + predictionBandClass(nextPrediction.percent)
     : scoreBandClass(score);
