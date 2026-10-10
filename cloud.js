@@ -733,7 +733,7 @@
   async function loadStartPredictions(){
     let rows = [];
     const futureFixtureIds = MATCHES
-      .filter(match => !["LIVE","FT","CANC"].includes(String(match.status || "")))
+      .filter(match => !["FT","CANC"].includes(String(match.status || "")))
       .slice()
       .sort((a,b) => new Date(a.kickoff).getTime()-new Date(b.kickoff).getTime())
       .slice(0,36)
@@ -808,7 +808,7 @@
       return;
     }
 
-    const [statsResult,overrideResult] = await Promise.all([
+    const [statsResult,overrideResult,predictionResult] = await Promise.all([
       cloud.client
         .from("player_match_stats")
         .select("player_id,minutes,stats,fantasy_points,players(id,name,club_name,position)")
@@ -817,7 +817,12 @@
       cloud.client
         .from("fixture_lineup_overrides")
         .select("fixture_id,side,formation,slots,updated_at")
+        .eq("fixture_id",fixtureId),
+      cloud.client
+        .from("fixture_start_predictions")
+        .select("fixture_id,player_id,starter_probability,reliability,source,updated_at")
         .eq("fixture_id",fixtureId)
+        .limit(100)
     ]);
 
     if(statsResult.error){
@@ -843,7 +848,7 @@
     }
     window.FANTASY_MATCH_LAYOUT_OVERRIDES[String(fixtureId)] = fixtureOverrides;
 
-    const rows = (statsResult.data || []).map(row => {
+    const statsRows = (statsResult.data || []).map(row => {
       const player = Array.isArray(row.players) ? row.players[0] : row.players;
       const normalizedPlayer = player || {id:row.player_id,name:"Onbekend",club_name:"",position:"MID"};
       return {
@@ -856,6 +861,57 @@
         )
       };
     });
+
+    // Sorare publiceert de officiële XI vaak vóór de live-statregels beschikbaar
+    // zijn. Laat die spelers daarom nooit verdwijnen bij de overgang NS -> LIVE.
+    // De kaarten starten tijdelijk op 0 punten en echte stats overschrijven ze
+    // zodra de API ze doorstuurt.
+    const confirmedRows = (predictionResult.data || [])
+      .filter(row => String(row.source || "") === "sorare-lineup" || String(row.reliability || "") === "confirmed")
+      .map(row => {
+        const player = playerById(String(row.player_id || ""));
+        if(!player) return null;
+        const starter = Number(row.starter_probability || 0) >= 100;
+        return {
+          player_id:String(player.id),
+          minutes:0,
+          fantasy_points:0,
+          player:{
+            id:player.id,
+            name:player.name,
+            club_name:player.club,
+            position:player.pos
+          },
+          stats:{
+            teamName:player.club,
+            confirmedStarter:starter,
+            lineupPlaceholder:true,
+            gameStarted:starter ? 1 : 0,
+            onGameSheet:true,
+            playedInGame:false,
+            fieldStatus:starter ? "ON_FIELD" : "ON_BENCH"
+          }
+        };
+      })
+      .filter(Boolean);
+
+    const mergedByPlayer = new Map(
+      confirmedRows.map(row => [String(row.player_id),row])
+    );
+    for(const row of statsRows){
+      const previous = mergedByPlayer.get(String(row.player_id));
+      mergedByPlayer.set(String(row.player_id),{
+        ...(previous || {}),
+        ...row,
+        stats:{
+          ...((previous || {}).stats || {}),
+          ...(row.stats || {}),
+          lineupPlaceholder:false
+        }
+      });
+    }
+
+    const rows = [...mergedByPlayer.values()];
     renderMatchDetail(match,rows);
   }
 
@@ -1500,6 +1556,15 @@
         await loadStartPredictions();
         await loadDeadline();
         await loadCurrentGameweekPlayerScores();
+
+        const openMatchDialog = document.getElementById("matchDialog");
+        const openFixtureId = openMatchDialog?.dataset?.fixtureId;
+        if(openMatchDialog?.open && openFixtureId){
+          await loadMatchDetail(
+            openFixtureId,
+            MATCHES.find(match => String(match.id) === String(openFixtureId))
+          );
+        }
       }catch(error){
         console.warn("Live speeldagscore verversen mislukt",error);
       }
