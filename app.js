@@ -473,6 +473,9 @@ function predictionPercent(row){
 }
 
 function lineupPlayerHtml(p,isBench){
+  const substitution = window.FANTASY_AUTO_SUBSTITUTIONS || {};
+  const incoming = substitution.incoming?.includes(String(p.id));
+  const outgoing = substitution.outgoing?.includes(String(p.id));
   const benchLabel = p.pos === "GK" ? "Reservekeeper" : "Reserve veldspeler";
   const buttonText = isBench ? "Naar basis" : "Op bank";
   const liveScoreMode = Boolean(window.FANTASY_LIVE_SCORE_MODE);
@@ -508,8 +511,13 @@ function lineupPlayerHtml(p,isBench){
     : '<button class="captain-toggle ' + (selectedCaptain ? "selected":"") + '" data-id="' + escapeHtml(p.id) + '" type="button" aria-label="' +
       (selectedCaptain ? "Captain" : "Maak captain") + '" title="' + (selectedCaptain ? "Captain · punten ×1,5" : "Maak captain") + '">C</button>';
 
-  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + (isEffectiveCaptain ? " is-captain":"") + '">' +
-    captainControl +
+  const subMarker = incoming
+    ? '<span class="fantasy-auto-sub-marker fantasy-auto-sub-in" title="Automatisch ingevallen: punten tellen mee">↗ IN</span>'
+    : outgoing
+      ? '<span class="fantasy-auto-sub-marker fantasy-auto-sub-out" title="Niet gespeeld: automatisch vervangen">↘ UIT</span>'
+      : "";
+  return '<article class="sorare-player ' + (isBench ? "is-bench":"") + (isEffectiveCaptain ? " is-captain":"") + (incoming ? " fantasy-auto-sub-active":"") + '">' +
+    subMarker + captainControl +
     '<button class="sorare-player-main player-name-link" data-player-id="' + escapeHtml(p.id) + '" type="button">' +
       '<span class="sorare-avatar role-ring-' + p.pos + '">' + initials(p.name) + '</span>' +
       '<span class="sorare-score ' + scoreClass + '"' + scoreTitle +
@@ -585,12 +593,22 @@ function renderTeam(){
     if(lineupPill) lineupPill.textContent = bp.length ? "Bank wordt automatisch opgebouwd" : "Nog bezig met bouwen";
   }else{
     const starters = lineupPlayers();
-    starting.className = "fantasy-pitch";
-    starting.innerHTML = renderPitch(starters);
-    bench.className = "sorare-bench";
     const bp = benchPlayers();
-    bench.innerHTML = bp.length
-      ? bp.map(p => lineupPlayerHtml(p,true)).join("")
+    const substitutions = window.FANTASY_AUTO_SUBSTITUTIONS || {};
+    const swaps = substitutions.swaps || {};
+    const effectiveStarters = starters.map(player => {
+      const substituteId = swaps[String(player.id)];
+      return substituteId ? (playerById(substituteId) || player) : player;
+    });
+    const effectiveBench = bp.map(player => {
+      const outgoingId = Object.keys(swaps).find(id => String(swaps[id]) === String(player.id));
+      return outgoingId ? (playerById(outgoingId) || player) : player;
+    });
+    starting.className = "fantasy-pitch";
+    starting.innerHTML = renderPitch(effectiveStarters);
+    bench.className = "sorare-bench";
+    bench.innerHTML = effectiveBench.length
+      ? effectiveBench.map(p => lineupPlayerHtml(p,true)).join("")
       : '<div class="empty-state bench-empty">Kies één keeper en één veldspeler voor de bank.</div>';
     if(lineupTitle) lineupTitle.textContent = "Basis · " + starters.length + " spelers";
     if(lineupPill) lineupPill.textContent = isLineupComplete() ? "Opstelling klaar ✓" : "Kies nog je bank";
