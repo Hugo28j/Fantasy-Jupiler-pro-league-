@@ -855,13 +855,17 @@ Deno.serve(async request => {
     let starterPredictionRowsUpdated = 0;
     let starterPredictionGamesWithData = 0;
     const starterPredictionWarnings:string[] = [];
-    const predictionGames = liveOnly ? [] : games
+    const predictionGames = games
       .filter((game:any) => {
         const kickoff = new Date(game.date).getTime();
-        return Number.isFinite(kickoff) && kickoff > now;
+        if(!Number.isFinite(kickoff) || kickoff <= now) return false;
+        // De 2-minuten live-sync begint al 75 minuten vóór de aftrap.
+        // In die modus hoeven we alleen de wedstrijden te controleren waarvan
+        // de officiële opstelling elk moment gepubliceerd kan worden.
+        return !liveOnly || kickoff <= now + 90*60*1000;
       })
       .sort((a:any,b:any) => new Date(a.date).getTime()-new Date(b.date).getTime())
-      .slice(0,9);
+      .slice(0,liveOnly ? 4 : 9);
 
     for(const game of predictionGames){
       try{
@@ -879,6 +883,15 @@ Deno.serve(async request => {
                   }
                   anyPlayerGameStats {
                     ... on PlayerGameStats {
+                      gameStarted
+                      onGameSheet
+                      playedInGame
+                      formationPlace
+                      fieldStatus
+                      anyTeam {
+                        __typename
+                        ... on Club { id name slug }
+                      }
                       footballPlayingStatusOdds {
                         starterOddsBasisPoints
                         reliability
@@ -896,26 +909,63 @@ Deno.serve(async request => {
           ? rawScores
           : Array.isArray(rawScores?.nodes) ? rawScores.nodes : [];
 
-        const predictionRows:any[] = [];
-        for(const score of scores){
+        const rawLineupEntries = scores.map((score:any) => {
           const player = score?.anyPlayer;
           const rawStats = Array.isArray(score?.anyPlayerGameStats)
             ? score.anyPlayerGameStats[0]
             : score?.anyPlayerGameStats;
-          const odds = rawStats?.footballPlayingStatusOdds;
-          const rawBasisPoints = odds?.starterOddsBasisPoints;
-          if(rawBasisPoints == null || !player?.slug) continue;
-          const basisPoints = Number(rawBasisPoints);
-          if(!Number.isFinite(basisPoints)) continue;
+          return {player,rawStats};
+        }).filter((entry:any) => entry.player?.slug && entry.rawStats?.anyTeam?.name);
 
-          predictionRows.push({
-            fixture_id:fixtureDbId(String(game.id)),
-            player_id:playerDbId(String(player.slug)),
-            starter_probability:Math.max(0,Math.min(100,Math.round(basisPoints/100))),
-            reliability:odds?.reliability == null ? null : String(odds.reliability),
-            source:"sorare",
-            updated_at:new Date().toISOString()
-          });
+        const homeName = String(game.homeTeam?.name || "");
+        const awayName = String(game.awayTeam?.name || "");
+        const officialHomeStarters = rawLineupEntries.filter((entry:any) =>
+          String(entry.rawStats?.anyTeam?.name || "") === homeName &&
+          num(entry.rawStats?.gameStarted) > 0
+        );
+        const officialAwayStarters = rawLineupEntries.filter((entry:any) =>
+          String(entry.rawStats?.anyTeam?.name || "") === awayName &&
+          num(entry.rawStats?.gameStarted) > 0
+        );
+        const officialLineupReady =
+          officialHomeStarters.length === 11 &&
+          officialAwayStarters.length === 11;
+
+        const predictionRows:any[] = [];
+        if(officialLineupReady){
+          // Zodra Sorare de officiële opstelling publiceert, wordt die de bron
+          // van waarheid vóór de aftrap. Bankspelers op het gamesheet krijgen 0%.
+          for(const {player,rawStats} of rawLineupEntries){
+            const teamName = String(rawStats?.anyTeam?.name || "");
+            if(teamName !== homeName && teamName !== awayName) continue;
+            if(!Boolean(rawStats?.onGameSheet) && num(rawStats?.gameStarted) <= 0) continue;
+            predictionRows.push({
+              fixture_id:fixtureDbId(String(game.id)),
+              player_id:playerDbId(String(player.slug)),
+              starter_probability:num(rawStats?.gameStarted) > 0 ? 100 : 0,
+              reliability:"confirmed",
+              source:"sorare-lineup",
+              updated_at:new Date().toISOString()
+            });
+          }
+        }else{
+          // Tot de officiële XI beschikbaar is blijven de gewone Sorare-odds gelden.
+          for(const {player,rawStats} of rawLineupEntries){
+            const odds = rawStats?.footballPlayingStatusOdds;
+            const rawBasisPoints = odds?.starterOddsBasisPoints;
+            if(rawBasisPoints == null || !player?.slug) continue;
+            const basisPoints = Number(rawBasisPoints);
+            if(!Number.isFinite(basisPoints)) continue;
+
+            predictionRows.push({
+              fixture_id:fixtureDbId(String(game.id)),
+              player_id:playerDbId(String(player.slug)),
+              starter_probability:Math.max(0,Math.min(100,Math.round(basisPoints/100))),
+              reliability:odds?.reliability == null ? null : String(odds.reliability),
+              source:"sorare",
+              updated_at:new Date().toISOString()
+            });
+          }
         }
 
         if(predictionRows.length){
@@ -980,10 +1030,25 @@ Deno.serve(async request => {
       .order("kickoff",{ascending:true});
     if(liveError) throw liveError;
 
+    let preMatchFixtures:any[] = [];
+    if(liveOnly){
+      const {data:preMatch,error:preMatchError} = await db
+        .from("fixtures")
+        .select("id,gameweek_id,kickoff,status,details_processed,home_team,away_team")
+        .in("gameweek_id",seasonGameweekIds)
+        .eq("status","NS")
+        .gte("kickoff",new Date(now - 10*60*1000).toISOString())
+        .lte("kickoff",new Date(now + 90*60*1000).toISOString())
+        .order("kickoff",{ascending:true});
+      if(preMatchError) throw preMatchError;
+      preMatchFixtures = preMatch || [];
+    }
+
     const targetById = new Map<string,any>();
     for(const fixture of pending || []) targetById.set(String(fixture.id),fixture);
     for(const fixture of pendingDetails || []) targetById.set(String(fixture.id),fixture);
     for(const fixture of liveFixtures || []) targetById.set(String(fixture.id),fixture);
+    for(const fixture of preMatchFixtures) targetById.set(String(fixture.id),fixture);
 
     const pendingStatIds = new Set((pending || []).map((f:any)=>String(f.id)));
     const pendingDetailIds = new Set((pendingDetails || []).map((f:any)=>String(f.id)));
@@ -1446,6 +1511,7 @@ Deno.serve(async request => {
       participantDiscoveryWarnings,
       pendingFixtures:(pending || []).length,
       liveFixtures:(liveFixtures || []).length,
+      preMatchFixtures:preMatchFixtures.length,
       lineupBackfillFixtures:pendingDetailIds.size,
       scoringSchemaRefreshFixtures:schemaRefreshIds.size,
       rescoredPlayerRows,
