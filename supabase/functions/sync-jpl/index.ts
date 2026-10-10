@@ -535,12 +535,34 @@ Deno.serve(async request => {
       return Response.json({ok:false,error:"Unauthorized sync request."},{status:401});
     }
 
-    const apiKey = env("SORARE_API_KEY");
+    const primaryApiKey = env("SORARE_API_KEY");
+    const {data:secondaryKeyRow,error:secondaryKeyError} = await db
+      .from("sync_provider_api_keys")
+      .select("secret")
+      .eq("provider","sorare")
+      .eq("slot","secondary")
+      .maybeSingle();
+    if(secondaryKeyError){
+      console.warn("Secondary Sorare API key could not be loaded:",secondaryKeyError.message);
+    }
+    const secondaryApiKey = String(secondaryKeyRow?.secret || "").trim();
+    const apiKeys = [primaryApiKey,secondaryApiKey]
+      .filter((key,index,list) => Boolean(key) && list.indexOf(key) === index);
 
+    let activeApiKeyIndex = 0;
     let apiCalls = 0;
+    let primaryApiCalls = 0;
+    let secondaryApiCalls = 0;
+    let apiFailovers = 0;
+
     const sorare = async (query:string, variables:Record<string,unknown>={}) => {
-      apiCalls += 1;
-      for(let attempt=0;attempt<3;attempt++){
+      for(let attempt=0;attempt<4;attempt++){
+        const keyIndex = Math.min(activeApiKeyIndex,apiKeys.length-1);
+        const apiKey = apiKeys[keyIndex];
+        apiCalls += 1;
+        if(keyIndex === 0) primaryApiCalls += 1;
+        else secondaryApiCalls += 1;
+
         const response = await fetch(SORARE_GRAPHQL,{
           method:"POST",
           headers:{
@@ -551,10 +573,21 @@ Deno.serve(async request => {
           body:JSON.stringify({query,variables})
         });
 
-        if(response.status === 429 && attempt < 2){
-          const waitSeconds = Math.max(1,num(response.headers.get("retry-after")) || 2);
-          await new Promise(resolve => setTimeout(resolve,waitSeconds*1000));
-          continue;
+        if(response.status === 429){
+          // Bij een rate-limit op de primaire sleutel schakelen we voor de rest
+          // van deze sync meteen over op de tweede sleutel. Zo wachten live updates
+          // niet onnodig op Retry-After van de eerste sleutel.
+          if(keyIndex === 0 && apiKeys.length > 1){
+            activeApiKeyIndex = 1;
+            apiFailovers += 1;
+            continue;
+          }
+
+          if(attempt < 3){
+            const waitSeconds = Math.max(1,num(response.headers.get("retry-after")) || 2);
+            await new Promise(resolve => setTimeout(resolve,waitSeconds*1000));
+            continue;
+          }
         }
 
         const body = await response.json();
@@ -564,13 +597,13 @@ Deno.serve(async request => {
         }
         return body.data;
       }
-      throw new Error("Sorare rate limit bleef actief na retries.");
+      throw new Error("Sorare rate limit bleef actief na primaire en secundaire retries.");
     };
 
     let body:any = {};
     try{ body = await request.json(); }catch{ /* lege POST is geldig */ }
     const forcePlayers = body?.refreshPlayers === true;
-    // De 3-minuten live-cron gebruikt liveOnly. Die route houdt dezelfde
+    // De 1-minuut live-cron gebruikt liveOnly. Die route houdt dezelfde
     // Sorare-statussync, maar beperkt de zware spelerstat-query tot de clubs
     // die op dat moment spelen of net klaar zijn.
     const liveOnly = body?.liveOnly === true;
@@ -861,10 +894,10 @@ Deno.serve(async request => {
       .filter((game:any) => {
         const kickoff = new Date(game.date).getTime();
         if(!Number.isFinite(kickoff) || kickoff <= now) return false;
-        // De 2-minuten live-sync begint al 75 minuten vóór de aftrap.
+        // De 1-minuut live-sync begint 30 minuten vóór de aftrap.
         // In die modus hoeven we alleen de wedstrijden te controleren waarvan
         // de officiële opstelling elk moment gepubliceerd kan worden.
-        return !liveOnly || kickoff <= now + 90*60*1000;
+        return !liveOnly || kickoff <= now + 30*60*1000;
       })
       .sort((a:any,b:any) => new Date(a.date).getTime()-new Date(b.date).getTime())
       .slice(0,liveOnly ? 4 : 9);
@@ -1040,7 +1073,7 @@ Deno.serve(async request => {
         .in("gameweek_id",seasonGameweekIds)
         .eq("status","NS")
         .gte("kickoff",new Date(now - 10*60*1000).toISOString())
-        .lte("kickoff",new Date(now + 90*60*1000).toISOString())
+        .lte("kickoff",new Date(now + 30*60*1000).toISOString())
         .order("kickoff",{ascending:true});
       if(preMatchError) throw preMatchError;
       preMatchFixtures = preMatch || [];
@@ -1626,6 +1659,10 @@ Deno.serve(async request => {
       importedPlayerRows,
       unsupportedScoringStats:["keyPass"],
       apiCalls,
+      primaryApiCalls,
+      secondaryApiCalls,
+      apiFailovers,
+      activeApiKey:activeApiKeyIndex === 0 ? "primary" : "secondary",
       durationMs:Date.now()-started
     });
   }catch(error){
