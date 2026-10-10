@@ -408,10 +408,26 @@
     renderHeader = function(){
       original.renderHeader();
       if(cloud.enabled && cloud.user && cloud.totalPoints != null){
-        const value = Number(cloud.totalPoints).toFixed(1).replace(".0","");
-        document.getElementById("pointsDisplay").textContent = value;
+        const numeric = Number(cloud.totalPoints || 0);
+        const value = numeric.toFixed(1).replace(".0","");
+        const pointsDisplay = document.getElementById("pointsDisplay");
+        if(pointsDisplay){
+          pointsDisplay.textContent = value;
+          pointsDisplay.setAttribute("data-animate-score","1");
+          pointsDisplay.setAttribute("data-score-key","header-total");
+          pointsDisplay.setAttribute("data-score-value",String(numeric));
+          pointsDisplay.setAttribute("data-score-suffix","");
+          animateFantasyScoreElement(pointsDisplay);
+        }
         const leader = document.getElementById("leaderPoints");
-        if(leader) leader.textContent = value + " pts";
+        if(leader){
+          leader.textContent = value + " pts";
+          leader.setAttribute("data-animate-score","1");
+          leader.setAttribute("data-score-key","leader-total");
+          leader.setAttribute("data-score-value",String(numeric));
+          leader.setAttribute("data-score-suffix"," pts");
+          animateFantasyScoreElement(leader);
+        }
       }
     };
 
@@ -1114,6 +1130,8 @@
     const displayScore = isCaptain ? Number(score)*1.5 : Number(score);
     return {
       text:fantasyDisplayNumber(displayScore),
+      value:displayScore,
+      animated:true,
       className:scoreBandClass(displayScore),
       title:isCaptain
         ? "Captain: " + fantasyDisplayNumber(score) + " × 1,5 = " + fantasyDisplayNumber(displayScore) + " punten"
@@ -1125,8 +1143,11 @@
     const displayedCaptainId = String(lineup?.effective_captain_id || captainId || "");
     const isCaptain = displayedCaptainId === String(player.id || "");
     const metric = visibleLineupMetric(player,lineup);
+    const metricScope = String(lineup?.team_name || lineup?.manager_name || "team") + ":" + String(lineup?.gameweek_number || "");
     const metricHtml = metric
-      ? '<span class="leaderboard-preview-metric ' + escapeHtml(metric.className) + '" title="' + escapeHtml(metric.title) + '">' + escapeHtml(metric.text) + '</span>'
+      ? '<span class="leaderboard-preview-metric ' + escapeHtml(metric.className) + '" title="' + escapeHtml(metric.title) + '"' +
+          (metric.animated ? fantasyScoreAnimationAttrs("leaderboard-player:" + metricScope + ":" + player.id,metric.value) : "") +
+        '>' + escapeHtml(metric.text) + '</span>'
       : "";
     return '<button type="button" class="leaderboard-preview-player" data-preview-player="' + escapeHtml(String(player.id || "")) + '">' +
       '<span class="leaderboard-preview-avatar role-ring-' + escapeHtml(player.pos || "MID") + '">' + escapeHtml(initials(player.name || "?")) + '</span>' +
@@ -1196,7 +1217,11 @@
     target.innerHTML =
       '<div class="leaderboard-preview-head">' +
         '<div><p class="eyebrow">' + (forDialog ? "PLOEG" : "GESELECTEERDE PLOEG") + '</p><h3>' + escapeHtml(displayTeam) + '</h3><small>' + escapeHtml(displayManager) + '</small></div>' +
-        '<div class="leaderboard-preview-team-score"><span>' + escapeHtml(gameweekLabel) + '</span><strong>' + scoreText(gameweekPoints) + ' pts</strong><small>Totaal ' + scoreText(totalPoints) + ' pts</small></div>' +
+        '<div class="leaderboard-preview-team-score"><span>' + escapeHtml(gameweekLabel) + '</span><strong' +
+          fantasyScoreAnimationAttrs("leaderboard-gameweek:" + displayTeam + ":" + Number(lineup.gameweek_number || 0),gameweekPoints," pts") +
+        '>' + scoreText(gameweekPoints) + ' pts</strong><small>Totaal <span' +
+          fantasyScoreAnimationAttrs("leaderboard-total:" + displayTeam,totalPoints," pts") +
+        '>' + scoreText(totalPoints) + ' pts</span></small></div>' +
         '<span class="leaderboard-visibility-pill">' + escapeHtml(lineupVisibilityText(lineup)) + '</span>' +
       '</div>' +
       '<div class="leaderboard-preview-stage">' +
