@@ -1547,3 +1547,34 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
   font-weight:900;
 }
 .match-captain-bonus span{color:#f3d13f}
+
+
+/* Live punten: soepel tellen i.p.v. plots verspringen. */
+[data-animate-score]{
+  font-variant-numeric:tabular-nums;
+  will-change:transform,filter;
+}
+.fantasy-score-counting{
+  animation-duration:.52s;
+  animation-timing-function:cubic-bezier(.2,.8,.2,1);
+  animation-fill-mode:both;
+}
+.fantasy-score-up{
+  animation-name:fantasy-score-rise;
+}
+.fantasy-score-down{
+  animation-name:fantasy-score-fall;
+}
+@keyframes fantasy-score-rise{
+  0%{transform:translateY(4px);filter:brightness(1)}
+  45%{transform:translateY(-2px);filter:brightness(1.18)}
+  100%{transform:translateY(0);filter:brightness(1)}
+}
+@keyframes fantasy-score-fall{
+  0%{transform:translateY(-4px);filter:brightness(1)}
+  45%{transform:translateY(2px);filter:brightness(.9)}
+  100%{transform:translateY(0);filter:brightness(1)}
+}
+@media (prefers-reduced-motion:reduce){
+  .fantasy-score-counting{animation:none!important}
+}
