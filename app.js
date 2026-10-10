@@ -330,7 +330,11 @@ function fantasyDisplayNumber(value){
 
 const fantasyScoreAnimationValues = window.FANTASY_SCORE_ANIMATION_VALUES || new Map();
 window.FANTASY_SCORE_ANIMATION_VALUES = fantasyScoreAnimationValues;
-const fantasyScoreAnimations = new WeakMap();
+// Live score changes appear one player at a time, in exact 0.1-point steps.
+const fantasyScoreQueue = [];
+const fantasyScoreQueued = new Map();
+let fantasyScoreQueueRunning = false;
+const fantasyScoreStepMs = 34;
 
 function fantasyScoreAnimationAttrs(key,value,suffix=""){
   const numeric = Number(value || 0);
@@ -339,49 +343,85 @@ function fantasyScoreAnimationAttrs(key,value,suffix=""){
     '" data-score-suffix="' + escapeHtml(String(suffix || "")) + '"';
 }
 
+function fantasyScoreElementForKey(key){
+  return [...document.querySelectorAll("[data-animate-score][data-score-key]")]
+    .find(node => node.dataset.scoreKey === key) || null;
+}
+
+function fantasyScoreIsPlayer(key){
+  return /^(team-player:|match-desktop:|match-mobile:|match-bench:|leaderboard-player:)/.test(key);
+}
+
 function animateFantasyScoreElement(element){
   if(!element || element.nodeType !== 1 || !element.matches?.("[data-animate-score]")) return;
-  if(fantasyScoreAnimations.has(element)) return;
-
   const key = String(element.dataset.scoreKey || "");
   const target = Number(element.dataset.scoreValue);
   const suffix = String(element.dataset.scoreSuffix || "");
   if(!key || !Number.isFinite(target)) return;
 
   const previous = fantasyScoreAnimationValues.has(key)
-    ? Number(fantasyScoreAnimationValues.get(key))
-    : target;
+    ? Number(fantasyScoreAnimationValues.get(key)) : target;
   fantasyScoreAnimationValues.set(key,target);
-
   const format = value => fantasyDisplayNumber(value) + suffix;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  if(!Number.isFinite(previous) || Math.abs(target-previous) < 0.001 || reducedMotion){
-    if(element.textContent !== format(target)) element.textContent = format(target);
+
+  // Don't animate initial loads, unchanged scores, or non-player totals.
+  if(!fantasyScoreIsPlayer(key) || !Number.isFinite(previous) ||
+     Math.round(previous*10) === Math.round(target*10) || reducedMotion){
+    fantasyScoreQueued.delete(key);
+    element.textContent = format(target);
     return;
   }
 
-  const delta = target-previous;
-  const duration = Math.max(450,Math.min(1150,520 + Math.abs(delta)*28));
-  const start = performance.now();
-  element.classList.add("fantasy-score-counting",delta > 0 ? "fantasy-score-up" : "fantasy-score-down");
-  fantasyScoreAnimations.set(element,true);
+  if(fantasyScoreQueued.has(key)){
+    // Keep only the latest value for a player if another API update arrives.
+    const task = fantasyScoreQueued.get(key);
+    task.target = target;
+    task.suffix = suffix;
+  }else{
+    const task = {key,target,suffix,from:previous};
+    fantasyScoreQueued.set(key,task);
+    fantasyScoreQueue.push(task);
+  }
+  void runFantasyScoreQueue();
+}
 
-  const frame = now => {
-    const progress = Math.min(1,(now-start)/duration);
-    const eased = 1-Math.pow(1-progress,3);
-    const value = previous + delta*eased;
-    element.textContent = format(value);
+async function runFantasyScoreQueue(){
+  if(fantasyScoreQueueRunning) return;
+  fantasyScoreQueueRunning = true;
+  try{
+    while(fantasyScoreQueue.length){
+      const task = fantasyScoreQueue.shift();
+      const key = task.key;
+      if(fantasyScoreQueued.get(key) !== task) continue;
+      let node = fantasyScoreElementForKey(key);
+      if(!node){ fantasyScoreQueued.delete(key); continue; }
+      let current = Math.round(task.from*10);
+      let final = Math.round(task.target*10);
+      const direction = Math.sign(final-current);
+      if(!direction){ fantasyScoreQueued.delete(key); continue; }
+      node.classList.add("fantasy-score-counting",direction>0?"fantasy-score-up":"fantasy-score-down");
 
-    if(progress < 1){
-      requestAnimationFrame(frame);
-      return;
+      // One tick changes one tenth exactly; never interpolate past an intermediate value.
+      while(current !== final){
+        if(!fantasyScoreQueued.has(key)) break;
+        current += Math.sign(final-current);
+        node = fantasyScoreElementForKey(key);
+        if(!node) break;
+        node.textContent = fantasyDisplayNumber(current/10) + task.suffix;
+        await new Promise(resolve => setTimeout(resolve,fantasyScoreStepMs));
+        final = Math.round(task.target*10);
+      }
+      node = fantasyScoreElementForKey(key);
+      if(node){
+        node.textContent = fantasyDisplayNumber(task.target) + task.suffix;
+        node.classList.remove("fantasy-score-counting","fantasy-score-up","fantasy-score-down");
+      }
+      fantasyScoreQueued.delete(key);
     }
-
-    element.textContent = format(target);
-    element.classList.remove("fantasy-score-counting","fantasy-score-up","fantasy-score-down");
-    fantasyScoreAnimations.delete(element);
-  };
-  requestAnimationFrame(frame);
+  }finally{
+    fantasyScoreQueueRunning = false;
+  }
 }
 
 function scanFantasyScoreAnimations(root=document){
