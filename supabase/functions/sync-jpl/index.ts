@@ -9,7 +9,7 @@ const GAME_PAGE_SIZE = 50;
 const PLAYER_BATCH_SIZE = 8;
 const PLAYER_STATS_LAST = 30;
 const STAT_SCHEMA_VERSION = 3;
-const SCORING_VERSION = 4;
+const SCORING_VERSION = 5;
 const PRICE_MODEL_VERSION = 1;
 
 const weights: Record<string,Record<string,number>> = {
@@ -1125,6 +1125,10 @@ Deno.serve(async request => {
 
     let participantCardsCreated = 0;
     const participantDiscoveryWarnings:string[] = [];
+    const statRows:any[] = [];
+    const statRowKeys = new Set<string>();
+    const rowCountByFixture = new Map<string,number>();
+    const starterCountByFixtureTeam = new Map<string,number>();
 
     if(targetById.size){
       const targetClubs = [...new Set(
@@ -1164,9 +1168,43 @@ Deno.serve(async request => {
                     }
                     anyPlayerGameStats {
                       ... on PlayerGameStats {
+                        id
+                        minsPlayed
+                        fieldStatus
+                        formationPlace
                         gameStarted
                         onGameSheet
                         playedInGame
+                        saves
+                        savedIbox
+                        punches
+                        cleanSheet
+                        goalsConceded
+                        fouls
+                        wasFouled
+                        yellowCard
+                        redCard
+                        goals
+                        goalAssist
+                        wonTackle
+                        duelWon
+                        duelLost
+                        totalClearance
+                        interceptionWon
+                        possWon
+                        possLostCtrl
+                        accuratePass
+                        accurateLongBalls
+                        missedPass
+                        wonContest
+                        ontargetScoringAtt
+                        bigChanceCreated
+                        successfulFinalThirdPasses
+                        bigChanceMissed
+                        penaltyWon
+                        totalScoringAtt
+                        penAreaEntries
+                        errorLeadToGoal
                         anyTeam {
                           __typename
                           ... on Club { id name slug }
@@ -1232,6 +1270,66 @@ Deno.serve(async request => {
               participantCardsCreated += 1;
               knownPlayerIds.add(id);
             }
+
+            // playerGameScores wordt bij aftrap sneller gevuld dan player.gameStats.
+            // Gebruik deze directe wedstrijddata daarom meteen voor LIVE/FT stats.
+            const sourceStatus = String(providerGame?.statusTyped || "").toLowerCase();
+            if(["played","playing","live"].includes(sourceStatus)){
+              const fixtureId = String(fixture.id);
+              const statKey = fixtureId + "::" + id;
+              if(!statRowKeys.has(statKey)){
+                const stats = mapSorareStats(rawStats || {});
+                const previousStats = existingStatsByFixturePlayer.get(statKey) || {};
+                const sourceMinute = num(providerGame?.minute);
+                const fieldStatus = String(rawStats?.fieldStatus || "UNKNOWN");
+                const kickoffStarter =
+                  previousStats.kickoffStarter === true ||
+                  (
+                    ["playing","live"].includes(sourceStatus) &&
+                    sourceMinute > 0 &&
+                    sourceMinute <= 15 &&
+                    Number(stats.minutes || 0) > 0 &&
+                    fieldStatus === "ON_FIELD"
+                  );
+
+                statRows.push({
+                  fixture_id:fixtureId,
+                  player_id:id,
+                  minutes:stats.minutes,
+                  stats:{
+                    ...previousStats,
+                    ...stats,
+                    provider:"sorare",
+                    sorareStatId:rawStats?.id || null,
+                    sorareGameId:providerGame?.id || null,
+                    gameMinute:sourceMinute,
+                    gameStarted:num(rawStats?.gameStarted),
+                    kickoffStarter,
+                    formationPlace:rawStats?.formationPlace == null ? null : num(rawStats.formationPlace),
+                    preferredFormationPlace:previousStats.preferredFormationPlace ?? null,
+                    fieldStatus,
+                    onGameSheet:Boolean(rawStats?.onGameSheet),
+                    playedInGame:Boolean(rawStats?.playedInGame),
+                    teamId:team?.id || null,
+                    teamName:team?.name || null,
+                    teamSlug:team?.slug || null,
+                    statSchemaVersion:STAT_SCHEMA_VERSION,
+                    scoringVersion:SCORING_VERSION
+                  },
+                  fantasy_points:fantasyScore(position,stats),
+                  updated_at:new Date().toISOString()
+                });
+                statRowKeys.add(statKey);
+                rowCountByFixture.set(fixtureId,(rowCountByFixture.get(fixtureId)||0)+1);
+                if(num(rawStats?.gameStarted) > 0 && team?.name){
+                  const starterKey = fixtureId + "::" + String(team.name);
+                  starterCountByFixtureTeam.set(
+                    starterKey,
+                    (starterCountByFixtureTeam.get(starterKey) || 0) + 1
+                  );
+                }
+              }
+            }
           }
 
           if(participantRows.length){
@@ -1270,9 +1368,6 @@ Deno.serve(async request => {
       }
 
       const positionByPlayerId = new Map((activePlayers || []).map((p:any)=>[String(p.id),String(p.position)]));
-      const statRows:any[] = [];
-      const rowCountByFixture = new Map<string,number>();
-      const starterCountByFixtureTeam = new Map<string,number>();
 
       for(const batch of chunks(slugs,PLAYER_BATCH_SIZE)){
         const data = await sorare(`
@@ -1366,8 +1461,11 @@ Deno.serve(async request => {
             const sourceStatus = String(sourceGame?.statusTyped || "").toLowerCase();
             if(!["played","playing","live"].includes(sourceStatus)) continue;
 
+            const statKey = fixtureId + "::" + playerId;
+            if(statRowKeys.has(statKey)) continue;
+
             const stats = mapSorareStats(raw);
-            const previousStats = existingStatsByFixturePlayer.get(fixtureId + "::" + playerId) || {};
+            const previousStats = existingStatsByFixturePlayer.get(statKey) || {};
             const sourceMinute = num(sourceGame.minute);
             const fieldStatus = String(raw.fieldStatus || "UNKNOWN");
             const kickoffStarter =
@@ -1406,6 +1504,7 @@ Deno.serve(async request => {
               fantasy_points:fantasyScore(position,stats),
               updated_at:new Date().toISOString()
             });
+            statRowKeys.add(statKey);
             rowCountByFixture.set(fixtureId,(rowCountByFixture.get(fixtureId)||0)+1);
             if(num(raw.gameStarted) > 0 && raw.anyTeam?.name){
               const starterKey = fixtureId + "::" + String(raw.anyTeam.name);
