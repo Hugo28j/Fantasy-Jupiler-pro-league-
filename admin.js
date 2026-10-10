@@ -105,8 +105,29 @@
       .slice()
       .sort((a,b) => Number(a.order || 0)-Number(b.order || 0))
       .map(slot => {
-        const row = byId.get(String(slot.player_id));
-        if(!row) return null;
+        let row = byId.get(String(slot.player_id));
+        if(!row){
+          // Een echte basisspeler kan al in de spelersdatabase staan terwijl
+          // Sorare zijn wedstrijdstatregel nog niet heeft doorgestuurd.
+          // Toon dan toch zijn kaart in de opstelling met 0 tijdelijke punten.
+          const known = playerById(String(slot.player_id));
+          if(!known) return null;
+          row = {
+            player_id:String(known.id),
+            minutes:0,
+            fantasy_points:0,
+            stats:{
+              teamName:side === "away" ? match.away : match.home,
+              lineupPlaceholder:true
+            },
+            player:{
+              id:known.id,
+              name:known.name,
+              club_name:known.club,
+              position:known.pos
+            }
+          };
+        }
         return {
           ...row,
           _layoutZone:String(slot.zone || row.player?.position || "MID"),
