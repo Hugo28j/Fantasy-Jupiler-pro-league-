@@ -1864,6 +1864,8 @@
       clearInterval(cloud.liveScoreTimer);
       window.FANTASY_LIVE_SCORE_MODE = false;
       window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
+      window.FANTASY_AUTO_SUBSTITUTIONS = {swaps:{},incoming:[],outgoing:[]};
+      cloud.lastLiveScoreSnapshot = null;
       window.FANTASY_EFFECTIVE_CAPTAIN_ID = null;
       window.FANTASY_IS_ADMIN = false;
       window.FANTASY_FIXTURE_START_PREDICTIONS = {};
