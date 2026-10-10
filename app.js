@@ -371,8 +371,7 @@ function animateFantasyScoreElement(element){
     const task = fantasyScoreQueued.get(key);
     task.target = target;
     task.suffix = suffix;
-    const visible = fantasyScoreElementForKey(key);
-    if(visible && visible !== element) element.textContent = visible.textContent;
+    element.textContent = fantasyDisplayNumber((task.current ?? Math.round(task.from*10))/10) + task.suffix;
     return;
   }
 
@@ -409,6 +408,7 @@ async function runFantasyScoreQueue(){
       while(current !== final){
         if(!fantasyScoreQueued.has(key)) break;
         current += Math.sign(final-current);
+        task.current = current;
         node = fantasyScoreElementForKey(key);
         if(!node) break;
         node.textContent = fantasyDisplayNumber(current/10) + task.suffix;
