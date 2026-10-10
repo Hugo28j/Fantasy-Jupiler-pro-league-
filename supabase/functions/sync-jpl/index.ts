@@ -897,6 +897,10 @@ Deno.serve(async request => {
       }];
     });
 
+    // Queries for target fixtures omit scores; use this current Sorare-derived
+    // full fixture snapshot when deciding provisional live clean sheets.
+    const fixtureScoreById = new Map(fixtureRows.map((fixture:any)=>[String(fixture.id),fixture]));
+
     for(const part of chunks(fixtureRows,200)){
       const {error} = await db.from("fixtures").upsert(part,{onConflict:"id"});
       if(error) throw error;
@@ -1346,7 +1350,7 @@ Deno.serve(async request => {
               const statKey = fixtureId + "::" + id;
               if(!statRowKeys.has(statKey)){
                 const stats = mapSorareStats(rawStats || {});
-                stats.cleanSheet = liveCleanSheet(rawStats,position,fixture,team?.name,sourceStatus);
+                stats.cleanSheet = liveCleanSheet(rawStats,position,fixtureScoreById.get(fixtureId) || fixture,team?.name,sourceStatus);
                 const previousStats = existingStatsByFixturePlayer.get(statKey) || {};
                 const sourceMinute = num(providerGame?.minute);
                 const fieldStatus = String(rawStats?.fieldStatus || "UNKNOWN");
@@ -1534,7 +1538,7 @@ Deno.serve(async request => {
             if(statRowKeys.has(statKey)) continue;
 
             const stats = mapSorareStats(raw);
-            stats.cleanSheet = liveCleanSheet(raw,position,targetFixture,raw.anyTeam?.name,sourceStatus);
+            stats.cleanSheet = liveCleanSheet(raw,position,fixtureScoreById.get(fixtureId) || targetFixture,raw.anyTeam?.name,sourceStatus);
             const previousStats = existingStatsByFixturePlayer.get(statKey) || {};
             const sourceMinute = num(sourceGame.minute);
             const fieldStatus = String(raw.fieldStatus || "UNKNOWN");
