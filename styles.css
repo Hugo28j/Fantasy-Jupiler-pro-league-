@@ -1452,7 +1452,13 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 
 
 @media(max-width:1060px){
-  .leaderboard-preview-metric{display:none}
+  #managerDialog .leaderboard-preview-metric{
+    display:inline-flex;
+    min-width:30px;
+    margin-top:-7px;
+    padding:2px 5px;
+    font-size:9px;
+  }
 }
 
 
