@@ -365,24 +365,27 @@ function animateFantasyScoreElement(element){
   const format = value => fantasyDisplayNumber(value) + suffix;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
+  // A redraw must not cancel a player already queued or being animated.
+  // Keep the existing number until this player's turn in the queue.
+  if(fantasyScoreQueued.has(key)){
+    const task = fantasyScoreQueued.get(key);
+    task.target = target;
+    task.suffix = suffix;
+    const visible = fantasyScoreElementForKey(key);
+    if(visible && visible !== element) element.textContent = visible.textContent;
+    return;
+  }
+
   // Don't animate initial loads, unchanged scores, or non-player totals.
   if(!fantasyScoreIsPlayer(key) || !Number.isFinite(previous) ||
      Math.round(previous*10) === Math.round(target*10) || reducedMotion){
-    fantasyScoreQueued.delete(key);
     element.textContent = format(target);
     return;
   }
 
-  if(fantasyScoreQueued.has(key)){
-    // Keep only the latest value for a player if another API update arrives.
-    const task = fantasyScoreQueued.get(key);
-    task.target = target;
-    task.suffix = suffix;
-  }else{
-    const task = {key,target,suffix,from:previous};
-    fantasyScoreQueued.set(key,task);
-    fantasyScoreQueue.push(task);
-  }
+  const task = {key,target,suffix,from:previous};
+  fantasyScoreQueued.set(key,task);
+  fantasyScoreQueue.push(task);
   void runFantasyScoreQueue();
 }
 
