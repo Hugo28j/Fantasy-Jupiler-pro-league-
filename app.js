@@ -13,6 +13,7 @@ const state = {
 };
 
 let selectedMatchweek = null;
+let matchweekManuallySelected = false;
 
 const marketPriceFilter = {
   min:null,
@@ -79,6 +80,17 @@ function escapeHtml(value){
 }
 function points(value){
   return Number(value || 0).toFixed(1).replace(".0","").replace(".",",") + " pts";
+}
+
+function canonicalFantasyScore(position,stats={},minutesOverride=null){
+  const weights = SCORING.rows[position] || {};
+  const merged = {...(stats || {})};
+  if(minutesOverride != null) merged.minutes = Number(minutesOverride) || 0;
+  const total = Object.entries(weights).reduce((sum,[key,weight]) => {
+    if(weight == null || Number(weight) === 0) return sum;
+    return sum + (Number(merged[key]) || 0) * Number(weight);
+  },0);
+  return Math.round(total*100)/100;
 }
 
 function scoreBandClass(value){
@@ -693,24 +705,21 @@ function renderPlayerProfile(player,matchRows=[]){
   const total = key => rows.reduce((sum,row) => sum + Number((row.stats || {})[key] || 0),0);
   const totalMinutes = rows.length ? rows.reduce((sum,row) => sum + Number(row.minutes || 0),0) : Number(player.minutes || 0);
   const totalPoints = rows.length ? rows.reduce((sum,row) => sum + Number(row.fantasy_points || 0),0) : Number(player.score || 0);
-  const metrics = [
-    ["Goals","goal"],["Assists","assist"],["Schoten op doel","shotOnTarget"],["Doelpogingen","totalScoringAtt"],
-    ["Grote kansen gecreëerd","bigChanceCreated"],["Grote kansen gemist","bigChanceMissed"],
-    ["Penalty area entries","penAreaEntries"],["Penalty afgedwongen","penaltyWon"],
-    ["Fout leidend tot goal","errorLeadToGoal"],["Geslaagde passes laatste derde","successfulFinalThirdPasses"],
-    ["Geslaagde dribbels","successfulDribble"],
-    ["Tackles gewonnen","successfulTackles"],["Duels gewonnen","duelWon"],["Duels verloren","duelLost"],
-    ["Clearances","clearances"],["Intercepties","interceptions"],["Bal gewonnen","possessionWon"],["Bal verloren","possessionLost"],
-    ["Geslaagde passes","successfulPass"],["Geslaagde lange passes","successfulLongPass"],["Gemiste passes","passMissed"],
-    ["Overtredingen gemaakt","foulsMade"],["Overtredingen meegekregen","foulsDrawn"],["Gele kaarten","yellow"],["Rode kaarten","red"],
-    ["Reddingen","save"],["Reddingen in strafschopgebied","savesInsideBox"],["Punches","punches"],
-    ["Clean sheets","cleanSheet"],["Tegendoelpunten","goalsConceded"]
-  ].map(([label,key]) => {
-    const value = total(key);
+  const scoreKeys = [
+    ...SCORING.columns.map(([key]) => key),
+    ...Object.keys(SCORING.rows[player.pos] || {}).filter(key => !SCORING.columns.some(([columnKey]) => columnKey === key))
+  ];
+  const metrics = [...new Set(scoreKeys)].map(key => {
+    const value = key === "minutes" ? totalMinutes : total(key);
     const weight = SCORING.rows[player.pos]?.[key];
     const contribution = weight == null ? 0 : Math.round(value * Number(weight) * 100) / 100;
+    const label = MATCH_STAT_LABELS[key] || SCORING.columns.find(([columnKey]) => columnKey === key)?.[1] || key;
     return {label,key,value,contribution,weight};
-  }).filter(metric => metric.weight != null && Number(metric.weight) !== 0);
+  }).filter(metric =>
+    metric.weight != null &&
+    Number(metric.weight) !== 0 &&
+    (metric.key !== "keyPass" || Number(metric.value) !== 0)
+  );
   const chartRows = rows.slice().sort((a,b) => {
     const af = Array.isArray(a.fixtures) ? a.fixtures[0] : (a.fixtures || {});
     const bf = Array.isArray(b.fixtures) ? b.fixtures[0] : (b.fixtures || {});
@@ -781,6 +790,31 @@ function openFixtureDetail(fixtureId,fallbackMatch){
   window.dispatchEvent(new CustomEvent("fantasy:match-detail",{detail:{fixtureId:id,match}}));
 }
 
+function automaticMatchweekForNow(weeks){
+  if(!weeks.length) return null;
+  const now = Date.now();
+  const starts = weeks.map(week => {
+    const kickoffs = MATCHES
+      .filter(match => matchweekNumber(match) === week)
+      .map(match => new Date(match.kickoff || 0).getTime())
+      .filter(Number.isFinite);
+    return {
+      week,
+      firstKickoff:kickoffs.length ? Math.min(...kickoffs) : Number.POSITIVE_INFINITY
+    };
+  }).filter(item => Number.isFinite(item.firstKickoff));
+
+  if(!starts.length) return weeks[0];
+
+  const activeWindow = starts
+    .filter(item => now >= item.firstKickoff - 24*60*60*1000)
+    .sort((a,b) => b.firstKickoff-a.firstKickoff);
+
+  if(activeWindow.length) return activeWindow[0].week;
+
+  return starts.sort((a,b) => a.firstKickoff-b.firstKickoff)[0].week;
+}
+
 function renderMatches(){
   const target = document.getElementById("matchesList");
   const select = document.getElementById("matchweekSelect");
@@ -788,11 +822,9 @@ function renderMatches(){
 
   if(weeks.length){
     const stillValid = weeks.includes(Number(selectedMatchweek));
-    if(!stillValid){
-      const liveWeek = weeks.find(week => MATCHES.some(m => matchweekNumber(m) === week && m.status === "LIVE"));
-      const nextWeek = weeks.find(week => MATCHES.some(m => matchweekNumber(m) === week && !["FT","CANC"].includes(String(m.status || ""))));
-      const played = weeks.filter(week => MATCHES.some(m => matchweekNumber(m) === week && m.status === "FT"));
-      selectedMatchweek = liveWeek ?? nextWeek ?? (played.length ? played[played.length-1] : weeks[0]);
+    if(!matchweekManuallySelected || !stillValid){
+      selectedMatchweek = automaticMatchweekForNow(weeks);
+      matchweekManuallySelected = false;
     }
   }
 
@@ -801,6 +833,7 @@ function renderMatches(){
     if(selectedMatchweek != null) select.value = String(selectedMatchweek);
     select.onchange = () => {
       selectedMatchweek = Number(select.value);
+      matchweekManuallySelected = true;
       renderMatches();
     };
   }
@@ -1344,7 +1377,10 @@ function renderMatchPlayerDetail(match,row){
   const position = player.position || "MID";
   const stats = {...(row.stats || {}),minutes:Number(row.minutes || 0)};
   const weights = SCORING.rows[position] || {};
-  const orderedKeys = SCORING.columns.map(([key]) => key).filter(key => key !== "keyPass");
+  const orderedKeys = [...new Set([
+    ...SCORING.columns.map(([key]) => key),
+    ...Object.keys(weights)
+  ])].filter(key => key !== "keyPass" || Number(stats[key] || 0) !== 0);
   const breakdown = orderedKeys.map(key => {
     const rawWeight = weights[key];
     if(rawWeight == null || Number(rawWeight) === 0) return null;
@@ -1355,41 +1391,17 @@ function renderMatchPlayerDetail(match,row){
   }).filter(item => item && (item.amount !== 0 || item.key === "minutes"));
 
   const rowsHtml = renderMatchStatGroups(breakdown,position);
-  const totalScoreClass = scoreContributionClass(row.fantasy_points);
-
-  // Controleer dat de opgeslagen fantasy_points exact overeenkomt met alle
-  // scorende stats. Zo wordt een oude/stale score nooit stilletjes verborgen.
-  const visibleKeys = new Set(orderedKeys);
-  const hiddenBreakdown = Object.entries(weights).map(([key,rawWeight]) => {
-    if(visibleKeys.has(key) || rawWeight == null || Number(rawWeight) === 0) return null;
-    const amount = Number(stats[key] || 0);
-    if(amount === 0) return null;
-    const contribution = Math.round(amount * Number(rawWeight) * 100) / 100;
-    return {key,amount,contribution};
-  }).filter(Boolean);
-  const calculatedScore = Math.round((
-    breakdown.reduce((sum,item) => sum + Number(item.contribution || 0),0) +
-    hiddenBreakdown.reduce((sum,item) => sum + Number(item.contribution || 0),0)
-  ) * 100) / 100;
-  const storedScore = Number(row.fantasy_points || 0);
-  const scoreMismatch = Math.abs(calculatedScore-storedScore) > 0.005;
-  const hiddenStatsHtml = hiddenBreakdown.length
-    ? '<div class="match-score-audit-warning"><strong>Niet-zichtbare scoringsdata gevonden:</strong> ' +
-      hiddenBreakdown.map(item => escapeHtml(MATCH_STAT_LABELS[item.key] || item.key) + ' (' + item.amount + ', ' + scoreLabel(item.contribution) + ' pts)').join(', ') +
-      '</div>'
-    : '';
-  const scoreAuditHtml = scoreMismatch
-    ? '<div class="match-score-audit-warning"><strong>Score niet up-to-date:</strong> de zichtbare/gekende stats tellen op tot ' +
-      points(calculatedScore) + ', maar de database bevat ' + points(storedScore) + '.</div>'
-    : '';
+  const calculatedScore = Math.round(
+    breakdown.reduce((sum,item) => sum + Number(item.contribution || 0),0) * 100
+  ) / 100;
+  const totalScoreClass = scoreContributionClass(calculatedScore);
 
   const dialog = document.getElementById("matchPlayerDialog");
   document.getElementById("matchPlayerDetail").innerHTML =
     '<p class="eyebrow">WEDSTRIJDSTATISTIEKEN</p>' +
-    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2><button type="button" class="match-player-profile-link" data-profile-player="' + escapeHtml(String(row.player_id || player.id || "")) + '">' + escapeHtml(player.name || "Onbekend") + '</button></h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>' +
-    hiddenStatsHtml + scoreAuditHtml +
+    '<div class="match-player-profile-head"><div><span class="role-badge role-' + escapeHtml(position) + '">' + escapeHtml(position) + '</span><h2><button type="button" class="match-player-profile-link" data-profile-player="' + escapeHtml(String(row.player_id || player.id || "")) + '">' + escapeHtml(player.name || "Onbekend") + '</button></h2><p>' + escapeHtml(match.home + " – " + match.away) + '</p></div><strong class="' + totalScoreClass + '">' + points(calculatedScore) + '</strong></div>' +
     '<div class="stat-groups match-stat-groups">' + rowsHtml + '</div>' +
-    '<div class="match-stat-total"><span>Totaal deze wedstrijd</span><strong class="' + totalScoreClass + '">' + points(row.fantasy_points) + '</strong></div>';
+    '<div class="match-stat-total"><span>Totaal deze wedstrijd</span><strong class="' + totalScoreClass + '">' + points(calculatedScore) + '</strong></div>';
   const profileLink = document.querySelector("#matchPlayerDetail [data-profile-player]");
   profileLink?.addEventListener("click",() => {
     const playerId = profileLink.dataset.profilePlayer;
@@ -1511,13 +1523,7 @@ function resolveAutomaticSubstitution(starters,bench,didPlay){
 }
 
 function calculatePlayerScore(position,stats){
-  const weights = SCORING.rows[position];
-  if(!weights) return 0;
-  return SCORING.columns.reduce((total,[key]) => {
-    const weight = weights[key];
-    if(weight == null) return total;
-    return total + (Number(stats[key]) || 0) * weight;
-  },0);
+  return canonicalFantasyScore(position,stats,stats?.minutes);
 }
 
 loadState();
@@ -1546,6 +1552,10 @@ function activateFantasyTab(tabId,force=false){
   if(!force && locked && requestedId !== "team") toast("Kies eerst je 8 spelers.");
   document.querySelectorAll(".tab").forEach(button => button.classList.toggle("active",button.dataset.tab === targetId));
   document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.toggle("active",panel.id === targetId));
+  if(targetId === "matches"){
+    matchweekManuallySelected = false;
+    renderMatches();
+  }
   updateInitialSetupTabs();
 }
 
