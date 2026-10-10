@@ -1577,3 +1577,26 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 @media (prefers-reduced-motion:reduce){
   .fantasy-score-counting{animation:none!important}
 }
+
+/* Show confirmed automatic substitutions on the effective fantasy lineup. */
+.sorare-player{position:relative}
+.fantasy-auto-sub-marker{
+  position:absolute;
+  z-index:5;
+  top:-9px;
+  right:-13px;
+  border-radius:999px;
+  padding:3px 6px;
+  font-size:10px;
+  line-height:1.2;
+  font-weight:900;
+  white-space:nowrap;
+  border:1px solid rgba(255,255,255,.35);
+  box-shadow:0 2px 8px rgba(0,0,0,.35);
+  pointer-events:none;
+}
+.fantasy-auto-sub-in{background:#116b40;color:#fff}
+.fantasy-auto-sub-out{background:#7e3038;color:#fff}
+.fantasy-auto-sub-active .sorare-avatar{
+  box-shadow:0 0 0 2px #40d58b,0 0 12px rgba(64,213,139,.4);
+}
