@@ -334,7 +334,14 @@ window.FANTASY_SCORE_ANIMATION_VALUES = fantasyScoreAnimationValues;
 const fantasyScoreQueue = [];
 const fantasyScoreQueued = new Map();
 let fantasyScoreQueueRunning = false;
-const fantasyScoreStepMs = 34;
+// Kleine scoreverschillen rustig afspelen; grote verschillen sneller houden.
+function fantasyScoreStepMs(changeInPoints){
+  const change = Math.abs(changeInPoints);
+  if(change <= 2) return 95;
+  if(change <= 5) return 70;
+  if(change <= 10) return 48;
+  return 30;
+}
 
 function fantasyScoreAnimationAttrs(key,value,suffix=""){
   const numeric = Number(value || 0);
@@ -412,7 +419,7 @@ async function runFantasyScoreQueue(){
         node = fantasyScoreElementForKey(key);
         if(!node) break;
         node.textContent = fantasyDisplayNumber(current/10) + task.suffix;
-        await new Promise(resolve => setTimeout(resolve,fantasyScoreStepMs));
+        await new Promise(resolve => setTimeout(resolve,fantasyScoreStepMs((task.target-task.from))));
         final = Math.round(task.target*10);
       }
       node = fantasyScoreElementForKey(key);
