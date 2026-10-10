@@ -1454,3 +1454,72 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
 @media(max-width:1060px){
   .leaderboard-preview-metric{display:none}
 }
+
+
+/* 033 — klassement-opstelling: actuele speeldag- en totaalpunten */
+.leaderboard-preview-team-score{
+  display:grid;
+  justify-items:end;
+  align-content:center;
+  gap:1px;
+  margin-left:auto;
+  padding:6px 10px;
+  border:1px solid rgba(97,215,255,.2);
+  border-radius:12px;
+  background:rgba(4,22,34,.55);
+  white-space:nowrap;
+}
+.leaderboard-preview-team-score>span{
+  color:var(--muted);
+  font-size:9px;
+  font-weight:850;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+}
+.leaderboard-preview-team-score>strong{
+  color:var(--accent);
+  font-size:18px;
+  line-height:1.05;
+}
+.leaderboard-preview-team-score>small{
+  color:#b7cddd;
+  font-size:9px;
+  font-weight:800;
+}
+
+@media(min-width:1061px){
+  .leaderboard-preview-team-score{
+    padding:4px 8px;
+  }
+  .leaderboard-preview-team-score>strong{
+    font-size:16px;
+  }
+  .leaderboard-preview-head .leaderboard-preview-team-score small{
+    display:block;
+  }
+}
+
+@media(max-width:1060px){
+  #managerDialog .leaderboard-preview-head{
+    align-items:center;
+  }
+  #managerDialog .leaderboard-preview-team-score{
+    margin-left:auto;
+  }
+}
+
+@media(max-width:500px){
+  #managerDialog .leaderboard-preview-team-score{
+    width:100%;
+    grid-template-columns:auto 1fr auto;
+    justify-items:start;
+    align-items:center;
+    gap:8px;
+  }
+  #managerDialog .leaderboard-preview-team-score>strong{
+    justify-self:center;
+  }
+  #managerDialog .leaderboard-preview-team-score>small{
+    justify-self:end;
+  }
+}
