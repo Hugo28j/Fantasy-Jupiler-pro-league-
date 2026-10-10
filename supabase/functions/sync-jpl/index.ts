@@ -1300,21 +1300,34 @@ Deno.serve(async request => {
             if(!["played","playing","live"].includes(sourceStatus)) continue;
 
             const stats = mapSorareStats(raw);
+            const previousStats = existingStatsByFixturePlayer.get(fixtureId + "::" + playerId) || {};
+            const sourceMinute = num(sourceGame.minute);
+            const fieldStatus = String(raw.fieldStatus || "UNKNOWN");
+            const kickoffStarter =
+              previousStats.kickoffStarter === true ||
+              (
+                ["playing","live"].includes(sourceStatus) &&
+                sourceMinute > 0 &&
+                sourceMinute <= 15 &&
+                Number(stats.minutes || 0) > 0 &&
+                fieldStatus === "ON_FIELD"
+              );
             statRows.push({
               fixture_id:fixtureId,
               player_id:playerId,
               minutes:stats.minutes,
               stats:{
-                ...(existingStatsByFixturePlayer.get(fixtureId + "::" + playerId) || {}),
+                ...previousStats,
                 ...stats,
                 provider:"sorare",
                 sorareStatId:raw.id,
                 sorareGameId:sourceGame.id,
-                gameMinute:num(sourceGame.minute),
+                gameMinute:sourceMinute,
                 gameStarted:num(raw.gameStarted),
+                kickoffStarter,
                 formationPlace:raw.formationPlace == null ? null : num(raw.formationPlace),
                 preferredFormationPlace,
-                fieldStatus:String(raw.fieldStatus || "UNKNOWN"),
+                fieldStatus,
                 onGameSheet:Boolean(raw.onGameSheet),
                 playedInGame:Boolean(raw.playedInGame),
                 teamId:raw.anyTeam?.id || null,
