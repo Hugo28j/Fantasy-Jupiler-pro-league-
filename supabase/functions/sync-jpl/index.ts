@@ -701,6 +701,7 @@ Deno.serve(async request => {
                     id
                     date
                     statusTyped
+                    minute
                     homeScore
                     awayScore
                     homeTeam {
@@ -835,6 +836,7 @@ Deno.serve(async request => {
         gameweek_id:gameweekId,
         kickoff:game.date,
         status:statusCode(game.statusTyped),
+        live_minute:["playing","live"].includes(String(game.statusTyped).toLowerCase()) ? num(game.minute) : null,
         home_team:game.homeTeam?.name || "Onbekend",
         away_team:game.awayTeam?.name || "Onbekend",
         home_score:["played","playing","live"].includes(String(game.statusTyped).toLowerCase()) ? num(game.homeScore) : null,
