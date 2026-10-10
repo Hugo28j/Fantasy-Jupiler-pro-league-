@@ -707,7 +707,7 @@
 
     const nextByPlayer = {};
     const futureMatches = MATCHES
-      .filter(match => !["FT","CANC"].includes(String(match.status || "")) && new Date(match.kickoff).getTime() > Date.now())
+      .filter(match => !["LIVE","FT","CANC"].includes(String(match.status || "")))
       .slice()
       .sort((a,b) => new Date(a.kickoff).getTime()-new Date(b.kickoff).getTime());
 
@@ -733,7 +733,7 @@
   async function loadStartPredictions(){
     let rows = [];
     const futureFixtureIds = MATCHES
-      .filter(match => !["FT","CANC"].includes(String(match.status || "")) && new Date(match.kickoff).getTime() > Date.now())
+      .filter(match => !["LIVE","FT","CANC"].includes(String(match.status || "")))
       .slice()
       .sort((a,b) => new Date(a.kickoff).getTime()-new Date(b.kickoff).getTime())
       .slice(0,36)
@@ -1294,6 +1294,7 @@
     cloud.locked = Boolean(row && row.locked);
     cloud.currentGameweekId = row?.gameweek_id ?? null;
     cloud.currentGameweekNumber = row?.gameweek_number ?? null;
+    window.FANTASY_CURRENT_GAMEWEEK_NUMBER = cloud.currentGameweekNumber;
     cloud.deadline = row && row.lock_at ? new Date(row.lock_at) : null;
     const card = document.getElementById("deadlineCard");
     card.classList.toggle("is-locked",cloud.locked);
@@ -1593,6 +1594,7 @@
       cloud.totalPoints = null;
       cloud.currentGameweekId = null;
       cloud.currentGameweekNumber = null;
+      window.FANTASY_CURRENT_GAMEWEEK_NUMBER = null;
       clearInterval(cloud.liveScoreTimer);
       window.FANTASY_LIVE_SCORE_MODE = false;
       window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
