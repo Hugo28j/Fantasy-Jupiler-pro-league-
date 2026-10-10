@@ -849,14 +849,29 @@
     renderMatchDetail(match,rows);
   }
 
-  async function loadGameweekBalance(){
-    const {data,error} = await cloud.client.rpc("latest_gameweek_balance");
-    if(error){
-      console.warn("Balansdata nog niet beschikbaar",error.message);
-      renderGameweekBalance([]);
+  async function loadGameweekBalance(gameweek=window.FANTASY_SELECTED_MATCHWEEK){
+    const week = Number(gameweek);
+    const requestId = (cloud.balanceRequestId || 0) + 1;
+    cloud.balanceRequestId = requestId;
+
+    let result;
+    if(Number.isFinite(week) && week > 0){
+      result = await cloud.client.rpc("gameweek_balance",{p_gameweek:week});
+      if(result.error && /gameweek_balance|schema cache|function/i.test(result.error.message || "")){
+        // Tijdelijke fallback totdat migratie 030 in Supabase is uitgevoerd.
+        result = await cloud.client.rpc("latest_gameweek_balance");
+      }
+    }else{
+      result = await cloud.client.rpc("latest_gameweek_balance");
+    }
+
+    if(requestId !== cloud.balanceRequestId) return;
+    if(result.error){
+      console.warn("Balansdata nog niet beschikbaar",result.error.message);
+      renderGameweekBalance([],Number.isFinite(week) ? week : null);
       return;
     }
-    renderGameweekBalance(data || []);
+    renderGameweekBalance(result.data || [],Number.isFinite(week) ? week : null);
   }
 
   async function loadTeam(){
@@ -1618,6 +1633,11 @@
   });
   window.addEventListener("fantasy:match-detail",event => {
     if(cloud.enabled && cloud.client && event.detail?.fixtureId) loadMatchDetail(event.detail.fixtureId,event.detail.match);
+  });
+  window.addEventListener("fantasy:matchweek-change",event => {
+    if(cloud.enabled && cloud.client && Number.isFinite(Number(event.detail?.gameweek))){
+      loadGameweekBalance(Number(event.detail.gameweek));
+    }
   });
 
   if(!cloud.enabled){
