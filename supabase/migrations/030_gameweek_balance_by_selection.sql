@@ -164,9 +164,18 @@ as $$
       round(max(score),2) as maximum_score
     from appearances_source
   )
-  select * from by_position
-  union all
-  select * from overall
+  ,combined as (
+    select * from by_position
+    union all
+    select * from overall
+  )
+  select
+    position,
+    appearances,
+    average_score,
+    minimum_score,
+    maximum_score
+  from combined
   order by
     case position
       when 'GK' then 1
@@ -175,7 +184,7 @@ as $$
       when 'FWD' then 4
       else 5
     end;
-$$;
+$;
 
 revoke all on function public.season_score_averages() from public;
 grant execute on function public.season_score_averages() to anon,authenticated;
