@@ -1497,12 +1497,47 @@
     updateEditability();
   }
 
+  // Only the server-confirmed substitutions change the displayed XI.
+  // The manager's saved starting team and bench remain untouched.
+  function resolveCurrentAutoSubstitutions(statRows,breakdown){
+    const result = {swaps:{},incoming:[],outgoing:[]};
+    const starters = lineupPlayers();
+    const reserves = benchPlayers();
+    const minutes = new Map();
+    for(const row of statRows || []){
+      const id = String(row.player_id);
+      minutes.set(id,(minutes.get(id) || 0) + Number(row.minutes || 0));
+    }
+    const completeClubs = new Set();
+    for(const match of MATCHES){
+      if(Number(match.gameweek) !== Number(cloud.currentGameweekNumber) || match.status !== "FT") continue;
+      completeClubs.add(String(match.home || "").toLowerCase());
+      completeClubs.add(String(match.away || "").toLowerCase());
+    }
+    for(const [positionKey,reserveType] of [["keeper_substitution","GK"],["outfield_substitution","FIELD"]]){
+      if(breakdown[positionKey] !== true) continue;
+      const reserve = reserves.find(player => reserveType === "GK" ? player.pos === "GK" : player.pos !== "GK");
+      if(!reserve || (minutes.get(String(reserve.id)) || 0) <= 0) continue;
+      const outgoing = starters.find(player =>
+        (reserveType === "GK" ? player.pos === "GK" : player.pos !== "GK") &&
+        (minutes.get(String(player.id)) || 0) === 0 &&
+        completeClubs.has(String(player.club || "").toLowerCase())
+      );
+      if(!outgoing) continue;
+      result.swaps[String(outgoing.id)] = String(reserve.id);
+      result.incoming.push(String(reserve.id));
+      result.outgoing.push(String(outgoing.id));
+    }
+    return result;
+  }
+
   async function loadCurrentGameweekPlayerScores(){
     const active = Boolean(cloud.locked && cloud.currentGameweekId);
 
     window.FANTASY_LIVE_SCORE_MODE = active;
     if(!active){
       window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
+      window.FANTASY_AUTO_SUBSTITUTIONS = {swaps:{},incoming:[],outgoing:[]};
       window.FANTASY_EFFECTIVE_CAPTAIN_ID = null;
       renderTeam();
       return;
@@ -1550,14 +1585,17 @@
       scores[id] = Number(scores[id] || 0) + Number(score || 0);
     }
 
+    const automaticSubstitutions = resolveCurrentAutoSubstitutions(data,ownBreakdown);
     const liveScoreSnapshot = JSON.stringify({
       scores,
+      substitutions:automaticSubstitutions.swaps,
       captain:window.FANTASY_EFFECTIVE_CAPTAIN_ID,
       total:cloud.totalPoints
     });
     if(cloud.lastLiveScoreSnapshot !== liveScoreSnapshot){
       cloud.lastLiveScoreSnapshot = liveScoreSnapshot;
       window.FANTASY_GAMEWEEK_PLAYER_SCORES = scores;
+      window.FANTASY_AUTO_SUBSTITUTIONS = automaticSubstitutions;
       renderTeam();
       renderHeader();
     }
