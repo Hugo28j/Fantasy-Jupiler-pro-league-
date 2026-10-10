@@ -867,6 +867,7 @@ function openFixtureDetail(fixtureId,fallbackMatch){
   if(!id) return;
   const match = fallbackMatch || MATCHES.find(item => String(item.id) === id);
   const dialog = document.getElementById("matchDialog");
+  dialog.dataset.fixtureId = id;
   document.getElementById("matchDetail").innerHTML = '<div class="empty-state match-loading">Wedstrijdopstelling laden…</div>';
   if(!dialog.open) dialog.showModal();
   window.dispatchEvent(new CustomEvent("fantasy:match-detail",{detail:{fixtureId:id,match}}));
