@@ -20,6 +20,43 @@
     return sameClubName(teamName,match.away) ? "away" : "home";
   }
 
+  function actualStarterRows(rows,match){
+    if(!["LIVE","FT"].includes(String(match?.status || ""))) return null;
+
+    // Sorare levert gameStarted=1 voor de echte basis. Zodra we exact elf
+    // spelers hebben, is dit altijd belangrijker dan een oude prediction/admin override.
+    const explicit = (rows || []).filter(row => Number((row.stats || {}).gameStarted || 0) > 0);
+    if(explicit.length === 11){
+      return explicit.map((row,index) => ({
+        ...row,
+        _layoutZone:String(matchVisualZone(row) || row.player?.position || "MID"),
+        _layoutOrder:index,
+        _layoutSource:"actual"
+      }));
+    }
+
+    // In de eerste minuten kan gameStarted nog even achterlopen. Op dat moment
+    // zijn de elf spelers met minuten + ON_FIELD de basiself. We gebruiken dit
+    // alleen vroeg in een LIVE-match en alleen als het exact elf spelers zijn.
+    if(String(match?.status || "") === "LIVE"){
+      const gameMinute = Math.max(0,...(rows || []).map(row => Number((row.stats || {}).gameMinute || 0)));
+      const earlyOnField = (rows || []).filter(row =>
+        Number(row.minutes || 0) > 0 &&
+        String((row.stats || {}).fieldStatus || "") === "ON_FIELD"
+      );
+      if(gameMinute > 0 && gameMinute <= 15 && earlyOnField.length === 11){
+        return earlyOnField.map((row,index) => ({
+          ...row,
+          _layoutZone:String(matchVisualZone(row) || row.player?.position || "MID"),
+          _layoutOrder:index,
+          _layoutSource:"early-live"
+        }));
+      }
+    }
+
+    return null;
+  }
+
   function confirmedStarterRows(rows){
     const confirmed = (rows || []).filter(row => Boolean((row.stats || {}).confirmedStarter));
     if(confirmed.length !== 11) return null;
@@ -27,13 +64,23 @@
     return confirmed.map((row,index) => ({
       ...row,
       _layoutZone:String(row.player?.position || matchVisualZone(row) || "MID"),
-      _layoutOrder:index
+      _layoutOrder:index,
+      _layoutSource:"confirmed"
     }));
   }
 
+  function manualOverrideApplies(rows,match,side){
+    if(actualStarterRows(rows,match) || confirmedStarterRows(rows)) return false;
+    const override = getOverride(match,side);
+    return Array.isArray(override?.slots) && override.slots.length === 11;
+  }
+
   function overrideStarterRows(rows,match,side){
-    // Zodra we een echte bevestigde XI hebben, mag een oudere handmatige
-    // prediction-layout nooit nog een 0%-bankspeler op het veld houden.
+    // Echte wedstrijddata heeft altijd voorrang. Daarna komt een bevestigde
+    // prediction-XI; pas als geen van beide bestaat gebruiken we een admin override.
+    const actual = actualStarterRows(rows,match);
+    if(actual) return actual;
+
     const confirmed = confirmedStarterRows(rows);
     if(confirmed) return confirmed;
 
@@ -68,9 +115,8 @@
   }
 
   function effectiveFormation(rows,match,side){
-    // Een bevestigde basiself heeft voorrang op een opgeslagen prediction-override.
-    // Zo verdwijnt bv. een oude 3-5-2 zodra de echte 4-5-1 bekend is.
-    if(confirmedStarterRows(rows)) return naturalInferredFormation(rows);
+    // Echte basiself of bevestigde prediction heeft voorrang op een oude override.
+    if(actualStarterRows(rows,match) || confirmedStarterRows(rows)) return naturalInferredFormation(rows);
     const override = getOverride(match,side);
     return override?.formation || naturalInferredFormation(rows);
   }
@@ -95,7 +141,7 @@
 
     return ["GK","DEF","MID","FWD"].flatMap(zone => {
       const group = groups[zone];
-      const hasOverride = Boolean(getOverride(match,side));
+      const hasOverride = manualOverrideApplies(rows,match,side);
       group.sort((a,b) => {
         if(hasOverride) return Number(a._layoutOrder || 0)-Number(b._layoutOrder || 0);
         const rankDiff = formationSideRank(a,zone,group.length)-formationSideRank(b,zone,group.length);
@@ -118,7 +164,7 @@
 
     return ["GK","DEF","MID","FWD"].flatMap(zone => {
       const group = groups[zone];
-      const hasOverride = Boolean(getOverride(match,side));
+      const hasOverride = manualOverrideApplies(rows,match,side);
       group.sort((a,b) => hasOverride
         ? Number(a._layoutOrder || 0)-Number(b._layoutOrder || 0)
         : formationSideRank(a,zone,group.length)-formationSideRank(b,zone,group.length)
