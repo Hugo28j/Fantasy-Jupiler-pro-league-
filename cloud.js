@@ -856,11 +856,10 @@
 
     let result;
     if(Number.isFinite(week) && week > 0){
+      // Een expliciet gekozen speeldag mag NOOIT terugvallen op de laatste
+      // verwerkte speeldag. Anders kan de titel "speeldag 5" tonen terwijl
+      // de cijfers eigenlijk van speeldag 7 zijn.
       result = await cloud.client.rpc("gameweek_balance",{p_gameweek:week});
-      if(result.error && /gameweek_balance|schema cache|function/i.test(result.error.message || "")){
-        // Tijdelijke fallback totdat migratie 030 in Supabase is uitgevoerd.
-        result = await cloud.client.rpc("latest_gameweek_balance");
-      }
     }else{
       result = await cloud.client.rpc("latest_gameweek_balance");
     }
@@ -871,7 +870,13 @@
       renderGameweekBalance([],Number.isFinite(week) ? week : null);
       return;
     }
-    renderGameweekBalance(result.data || [],Number.isFinite(week) ? week : null);
+
+    const rows = result.data || [];
+    // Extra bescherming: toon alleen data van de aangevraagde speeldag.
+    const validRows = Number.isFinite(week) && week > 0
+      ? rows.filter(row => Number(row.gameweek_number) === week)
+      : rows;
+    renderGameweekBalance(validRows,Number.isFinite(week) ? week : null);
   }
 
   async function loadTeam(){
