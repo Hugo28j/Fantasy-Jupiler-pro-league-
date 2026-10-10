@@ -748,6 +748,9 @@ Deno.serve(async request => {
     }
 
     const games = [...gameMap.values()];
+    const providerGameByFixtureId = new Map(
+      games.map((game:any) => [String(fixtureDbId(String(game.id))),game])
+    );
     if(games.length < 100){
       throw new Error(`Sorare gaf slechts ${games.length} wedstrijden voor seizoen 2026/27 terug.`);
     }
@@ -1061,6 +1064,121 @@ Deno.serve(async request => {
           .map((club:any) => String(club))
       )];
 
+      // Een speler kan in een echte wedstrijd opduiken vóór hij in onze opgeslagen
+      // activePlayers-roster staat (transfer, jeugdspeler, late registratie, ...).
+      // Lees daarom de gamesheet van elke LIVE/recent-FT match en maak ontbrekende
+      // spelerkaarten automatisch aan vóór we gameStats per speler ophalen.
+      let participantCardsCreated = 0;
+      const participantDiscoveryWarnings:string[] = [];
+      const knownPlayerIds = new Set((existingPlayers || []).map((p:any)=>String(p.id)));
+
+      for(const fixture of [...targetById.values()]){
+        const providerGame = providerGameByFixtureId.get(String(fixture.id));
+        const providerGameId = String(providerGame?.id || "").replace(/["\\]/g,"");
+        if(!providerGameId) continue;
+
+        try{
+          const participantData = await sorare(`
+            query {
+              football {
+                game(id:"${providerGameId}") {
+                  playerGameScores {
+                    anyPlayer {
+                      __typename
+                      ... on Player {
+                        id
+                        slug
+                        displayName
+                        position
+                        gameplayTierStars
+                        lastFifteenSo5Appearances
+                      }
+                    }
+                    anyPlayerGameStats {
+                      ... on PlayerGameStats {
+                        gameStarted
+                        onGameSheet
+                        playedInGame
+                        anyTeam {
+                          __typename
+                          ... on Club { id name slug }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          `);
+
+          const rawScores = participantData?.football?.game?.playerGameScores;
+          const scores = Array.isArray(rawScores)
+            ? rawScores
+            : Array.isArray(rawScores?.nodes) ? rawScores.nodes : [];
+
+          const participantRows:any[] = [];
+          for(const score of scores){
+            const player = score?.anyPlayer;
+            const rawStats = Array.isArray(score?.anyPlayerGameStats)
+              ? score.anyPlayerGameStats[0]
+              : score?.anyPlayerGameStats;
+            const team = rawStats?.anyTeam;
+            const position = positionCode(player?.position);
+            if(
+              player?.__typename !== "Player" ||
+              !player?.slug ||
+              !player?.displayName ||
+              !position ||
+              team?.__typename !== "Club" ||
+              !team?.name
+            ) continue;
+
+            const belongsToFixture =
+              String(team.name) === String(fixture.home_team) ||
+              String(team.name) === String(fixture.away_team);
+            const relevantParticipant =
+              Boolean(rawStats?.onGameSheet) ||
+              Boolean(rawStats?.playedInGame) ||
+              num(rawStats?.gameStarted) > 0;
+            if(!belongsToFixture || !relevantParticipant) continue;
+
+            const id = playerDbId(String(player.slug));
+            const existingPrice = priceByName.get(normalizeName(player.displayName));
+            participantRows.push({
+              id,
+              provider_player_id:stableBigint(`sorare-player:${player.id || player.slug}`),
+              name:String(player.displayName),
+              club_id:stableBigint(`sorare-club:${team.id || team.slug || team.name}`),
+              club_name:String(team.name),
+              position,
+              price:existingPrice ?? startingPrice(
+                position,
+                String(player.displayName),
+                player.lastFifteenSo5Appearances,
+                player.gameplayTierStars
+              ),
+              active:true,
+              updated_at:new Date().toISOString()
+            });
+            if(!knownPlayerIds.has(id)){
+              participantCardsCreated += 1;
+              knownPlayerIds.add(id);
+            }
+          }
+
+          if(participantRows.length){
+            const {error:participantUpsertError} = await db
+              .from("players")
+              .upsert(participantRows,{onConflict:"id"});
+            if(participantUpsertError) throw participantUpsertError;
+          }
+        }catch(error){
+          participantDiscoveryWarnings.push(
+            String(fixture.id) + ": " + (error instanceof Error ? error.message : String(error))
+          );
+        }
+      }
+
       let activePlayersQuery:any = db
         .from("players")
         .select("id,name,position,club_name")
@@ -1086,6 +1204,7 @@ Deno.serve(async request => {
       const positionByPlayerId = new Map((activePlayers || []).map((p:any)=>[String(p.id),String(p.position)]));
       const statRows:any[] = [];
       const rowCountByFixture = new Map<string,number>();
+      const starterCountByFixtureTeam = new Map<string,number>();
 
       for(const batch of chunks(slugs,PLAYER_BATCH_SIZE)){
         const data = await sorare(`
@@ -1207,6 +1326,13 @@ Deno.serve(async request => {
               updated_at:new Date().toISOString()
             });
             rowCountByFixture.set(fixtureId,(rowCountByFixture.get(fixtureId)||0)+1);
+            if(num(raw.gameStarted) > 0 && raw.anyTeam?.name){
+              const starterKey = fixtureId + "::" + String(raw.anyTeam.name);
+              starterCountByFixtureTeam.set(
+                starterKey,
+                (starterCountByFixtureTeam.get(starterKey) || 0) + 1
+              );
+            }
           }
         }
       }
@@ -1232,7 +1358,9 @@ Deno.serve(async request => {
         if(String(fixture.status) !== "FT") continue;
         const id = String(fixture.id);
         const count = rowCountByFixture.get(id) || 0;
-        if(count < 18){
+        const homeStarters = starterCountByFixtureTeam.get(id + "::" + String(fixture.home_team)) || 0;
+        const awayStarters = starterCountByFixtureTeam.get(id + "::" + String(fixture.away_team)) || 0;
+        if(count < 18 || homeStarters < 11 || awayStarters < 11){
           incompleteFixtures.push(id);
           continue;
         }
@@ -1300,6 +1428,8 @@ Deno.serve(async request => {
       pendingGameweeks:[...new Set((pending || []).map((f:any)=>Number(f.gameweek_id)))].length,
       playerRefresh:playersNeedRefresh,
       playersImported:importedPlayers,
+      participantCardsCreated,
+      participantDiscoveryWarnings,
       pendingFixtures:(pending || []).length,
       liveFixtures:(liveFixtures || []).length,
       lineupBackfillFixtures:pendingDetailIds.size,
