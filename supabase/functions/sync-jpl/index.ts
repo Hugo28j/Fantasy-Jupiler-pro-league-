@@ -1217,6 +1217,16 @@ Deno.serve(async request => {
       }
       importedPlayerRows = statRows.length;
 
+      // Ook tijdens LIVE-wedstrijden moet het fantasyklassement opnieuw worden
+      // berekend. Anders verschijnen nieuwe spelerpunten wel op het veld, maar
+      // blijft de speeldagscore in het klassement staan tot de match FT is.
+      for(const fixture of [...targetById.values()]){
+        const id = String(fixture.id);
+        if((rowCountByFixture.get(id) || 0) > 0){
+          touchedGameweeks.add(Number(fixture.gameweek_id));
+        }
+      }
+
       // Afgewerkte wedstrijden krijgen éénmalig zowel score- als opstellingsstatus.
       for(const fixture of [...targetById.values()]){
         if(String(fixture.status) !== "FT") continue;
