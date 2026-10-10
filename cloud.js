@@ -1053,15 +1053,21 @@
       score = 0;
     }
 
+    const effectiveCaptainId = String(lineup?.effective_captain_id || lineup?.captain_id || "");
+    const isCaptain = effectiveCaptainId && effectiveCaptainId === String(player.id);
+    const displayScore = isCaptain ? Number(score)*1.5 : Number(score);
     return {
-      text:Number(score).toFixed(Number(score) % 1 ? 1 : 0).replace(".",","),
-      className:scoreBandClass(score),
-      title:"Fantasy-punten in deze speeldag: " + Number(score).toFixed(1).replace(".",",")
+      text:fantasyDisplayNumber(displayScore),
+      className:scoreBandClass(displayScore),
+      title:isCaptain
+        ? "Captain: " + fantasyDisplayNumber(score) + " × 1,5 = " + fantasyDisplayNumber(displayScore) + " punten"
+        : "Fantasy-punten in deze speeldag: " + fantasyDisplayNumber(displayScore)
     };
   }
 
   function visibleLineupPlayerHtml(player,captainId,lineup){
-    const isCaptain = String(captainId || "") === String(player.id || "");
+    const displayedCaptainId = String(lineup?.effective_captain_id || captainId || "");
+    const isCaptain = displayedCaptainId === String(player.id || "");
     const metric = visibleLineupMetric(player,lineup);
     const metricHtml = metric
       ? '<span class="leaderboard-preview-metric ' + escapeHtml(metric.className) + '" title="' + escapeHtml(metric.title) + '">' + escapeHtml(metric.text) + '</span>'
@@ -1145,18 +1151,64 @@
     target.querySelectorAll("[data-preview-player]").forEach(button => button.addEventListener("click",() => {
       const id = button.dataset.previewPlayer;
       if(!id) return;
+      const player = playerById(id);
+      const fixture = player ? visibleLineupFixture(player,lineup) : null;
+      const kickoffMs = fixture?.kickoff ? new Date(fixture.kickoff).getTime() : NaN;
+      const started = ["LIVE","FT"].includes(String(fixture?.status || "")) ||
+        (Number.isFinite(kickoffMs) && Date.now() >= kickoffMs);
+      const effectiveCaptainId = String(lineup?.effective_captain_id || lineup?.captain_id || "");
       if(forDialog){
         const dialog = document.getElementById("managerDialog");
         if(dialog?.open) dialog.close();
       }
-      openPlayerProfile(id);
+      openPlayerProfile(id,{
+        fixtureId:started ? fixture?.id || null : null,
+        gameweek:Number(lineup?.gameweek_number || 0) || null,
+        captainMultiplier:started && effectiveCaptainId === String(id) ? 1.5 : 1
+      });
     }));
   }
 
   async function fetchVisibleManagerLineup(managerId){
     const {data,error} = await cloud.client.rpc("public_manager_visible_lineup",{p_manager:managerId});
     if(error) throw error;
-    return Array.isArray(data) ? (data[0] || null) : (data || null);
+    const lineup = Array.isArray(data) ? (data[0] || null) : (data || null);
+    if(!lineup) return null;
+
+    try{
+      let gameweekId = null;
+      if(
+        Number(lineup.gameweek_number || 0) === Number(cloud.currentGameweekNumber || 0) &&
+        cloud.currentGameweekId
+      ){
+        gameweekId = cloud.currentGameweekId;
+      }else if(Number(lineup.gameweek_number || 0) > 0){
+        const {data:weeks} = await cloud.client
+          .from("gameweeks")
+          .select("id,season")
+          .eq("number",Number(lineup.gameweek_number))
+          .order("season",{ascending:false})
+          .limit(1);
+        gameweekId = weeks?.[0]?.id || null;
+      }
+
+      if(gameweekId){
+        const {data:scoreRow} = await cloud.client
+          .from("gameweek_scores")
+          .select("breakdown")
+          .eq("user_id",managerId)
+          .eq("gameweek_id",gameweekId)
+          .maybeSingle();
+        const breakdown = scoreRow?.breakdown || {};
+        lineup.effective_captain_id = breakdown.effective_captain_id || lineup.captain_id || null;
+        lineup.captain_multiplier = Number(breakdown.captain_multiplier || 1.5);
+      }
+    }catch(error){
+      console.warn("Effectieve captain kon niet worden geladen",error?.message || error);
+      lineup.effective_captain_id = lineup.captain_id || null;
+      lineup.captain_multiplier = 1.5;
+    }
+    return lineup;
   }
 
   function markSelectedLeaderboardManager(managerId){
@@ -1268,12 +1320,12 @@
     if(own) showLeaderboardManager(own.manager_id,own.manager_name,own.team_name);
   });
 
-  async function loadPlayerStats(playerId){
+  async function loadPlayerStats(playerId,context={}){
     const player = playerById(playerId);
     if(!player) return;
     const {data,error} = await cloud.client
       .from("player_match_stats")
-      .select("minutes,stats,fantasy_points,fixtures(id,kickoff,status,home_team,away_team,home_score,away_score,gameweeks(number))")
+      .select("fixture_id,player_id,minutes,stats,fantasy_points,fixtures(id,kickoff,status,home_team,away_team,home_score,away_score,gameweeks(number))")
       .eq("player_id",playerId)
       .limit(100);
     if(error){
@@ -1284,6 +1336,54 @@
       ...row,
       fantasy_points:canonicalFantasyScore(player.pos,row.stats || {},row.minutes)
     }));
+
+    const fixtureId = context?.fixtureId == null ? "" : String(context.fixtureId);
+    if(fixtureId){
+      const exact = normalizedRows.find(row => {
+        const fixture = Array.isArray(row.fixtures) ? row.fixtures[0] : row.fixtures;
+        return String(row.fixture_id || fixture?.id || "") === fixtureId;
+      });
+      const fixtureData = exact
+        ? (Array.isArray(exact.fixtures) ? exact.fixtures[0] : exact.fixtures)
+        : null;
+      const match = MATCHES.find(item => String(item.id) === fixtureId) || (fixtureData ? {
+        id:fixtureId,
+        home:fixtureData.home_team,
+        away:fixtureData.away_team,
+        status:fixtureData.status,
+        kickoff:fixtureData.kickoff,
+        gameweek:fixtureData.gameweeks?.number
+      } : null);
+
+      if(match){
+        const kickoffMs = match.kickoff ? new Date(match.kickoff).getTime() : NaN;
+        const started = ["LIVE","FT"].includes(String(match.status || "")) ||
+          (Number.isFinite(kickoffMs) && Date.now() >= kickoffMs);
+        if(started){
+          const playerDialog = document.getElementById("playerDialog");
+          if(playerDialog?.open) playerDialog.close();
+          renderMatchPlayerDetail(match,{
+            ...(exact || {
+              fixture_id:fixtureId,
+              player_id:playerId,
+              minutes:0,
+              stats:{},
+              fantasy_points:0
+            }),
+            player:{
+              id:player.id,
+              name:player.name,
+              club_name:player.club,
+              position:player.pos
+            }
+          },{
+            captainMultiplier:Number(context?.captainMultiplier || 1)
+          });
+          return;
+        }
+      }
+    }
+
     renderPlayerProfile(player,normalizedRows);
   }
 
@@ -1318,20 +1418,42 @@
     window.FANTASY_LIVE_SCORE_MODE = active;
     if(!active){
       window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
+      window.FANTASY_EFFECTIVE_CAPTAIN_ID = null;
       renderTeam();
       return;
     }
 
-    const {data,error} = await cloud.client
-      .from("player_match_stats")
-      .select("player_id,minutes,stats,fantasy_points,players(position),fixtures!inner(gameweek_id,status)")
-      .eq("fixtures.gameweek_id",cloud.currentGameweekId)
-      .in("fixtures.status",["LIVE","FT"])
-      .limit(1000);
+    const [playerScoreResult,teamScoreResult,totalResult] = await Promise.all([
+      cloud.client
+        .from("player_match_stats")
+        .select("player_id,minutes,stats,fantasy_points,players(position),fixtures!inner(gameweek_id,status)")
+        .eq("fixtures.gameweek_id",cloud.currentGameweekId)
+        .in("fixtures.status",["LIVE","FT"])
+        .limit(1000),
+      cloud.client
+        .from("gameweek_scores")
+        .select("breakdown,points")
+        .eq("gameweek_id",cloud.currentGameweekId)
+        .eq("user_id",cloud.user.id)
+        .maybeSingle(),
+      cloud.client
+        .from("teams")
+        .select("total_points")
+        .eq("user_id",cloud.user.id)
+        .maybeSingle()
+    ]);
+    const {data,error} = playerScoreResult;
 
     if(error){
       console.warn("Speeldagscore kon niet worden geladen",error.message);
       return;
+    }
+
+    const ownBreakdown = teamScoreResult.data?.breakdown || {};
+    window.FANTASY_EFFECTIVE_CAPTAIN_ID =
+      ownBreakdown.effective_captain_id || state.captainId || null;
+    if(totalResult.data?.total_points != null){
+      cloud.totalPoints = Number(totalResult.data.total_points || 0);
     }
 
     const scores = {};
@@ -1345,6 +1467,7 @@
 
     window.FANTASY_GAMEWEEK_PLAYER_SCORES = scores;
     renderTeam();
+    renderHeader();
 
     // Op desktop toont het klassement dezelfde live punten. De browser controleert
     // dit elke minuut; vóór de aftrap blijft de basisprognose zichtbaar.
@@ -1598,6 +1721,7 @@
       clearInterval(cloud.liveScoreTimer);
       window.FANTASY_LIVE_SCORE_MODE = false;
       window.FANTASY_GAMEWEEK_PLAYER_SCORES = {};
+      window.FANTASY_EFFECTIVE_CAPTAIN_ID = null;
       window.FANTASY_IS_ADMIN = false;
       window.FANTASY_FIXTURE_START_PREDICTIONS = {};
       window.FANTASY_PLAYER_NEXT_START_ODDS = {};
@@ -1648,7 +1772,9 @@
   wrapMutations();
   bindCompetitionUi();
   window.addEventListener("fantasy:player-profile",event => {
-    if(cloud.enabled && cloud.client && event.detail?.playerId) loadPlayerStats(event.detail.playerId);
+    if(cloud.enabled && cloud.client && event.detail?.playerId){
+      loadPlayerStats(event.detail.playerId,event.detail || {});
+    }
   });
   window.addEventListener("fantasy:match-detail",event => {
     if(cloud.enabled && cloud.client && event.detail?.fixtureId) loadMatchDetail(event.detail.fixtureId,event.detail.match);
