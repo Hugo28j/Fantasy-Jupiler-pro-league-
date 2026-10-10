@@ -1529,3 +1529,21 @@ td.positive{color:#8df0b5}td.negative{color:#ff9ba7}
     justify-self:end;
   }
 }
+
+
+/* Captainbonus in wedstrijdpuntenverdeling */
+.captain-static{pointer-events:none}
+.match-captain-bonus{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-top:10px;
+  padding:10px 12px;
+  border:1px solid rgba(243,209,63,.38);
+  border-radius:11px;
+  background:rgba(243,209,63,.08);
+  font-size:12px;
+  font-weight:900;
+}
+.match-captain-bonus span{color:#f3d13f}
